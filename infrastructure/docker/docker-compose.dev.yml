@@ -1,0 +1,143 @@
+version: '3.8'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:15-alpine
+    container_name: copil-postgres-dev
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: copil_db
+      POSTGRES_USER: copil_user
+      POSTGRES_PASSWORD: copil_password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql
+    networks:
+      - copil-network
+
+  # Redis cache
+  redis:
+    image: redis:7-alpine
+    container_name: copil-redis-dev
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes
+    volumes:
+      - redis_data:/data
+    networks:
+      - copil-network
+
+  # TimescaleDB for time-series data
+  timescaledb:
+    image: timescale/timescaledb:latest-pg15
+    container_name: copil-timescale-dev
+    restart: unless-stopped
+    ports:
+      - "5433:5432"
+    environment:
+      POSTGRES_DB: copil_timeseries
+      POSTGRES_USER: copil_user
+      POSTGRES_PASSWORD: copil_password
+    volumes:
+      - timescale_data:/var/lib/postgresql/data
+    networks:
+      - copil-network
+
+  # ClickHouse for analytics
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    container_name: copil-clickhouse-dev
+    restart: unless-stopped
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    environment:
+      CLICKHOUSE_USER: copil_user
+      CLICKHOUSE_PASSWORD: copil_password
+      CLICKHOUSE_DEFAULT_ACCESS_MANAGEMENT: 1
+    volumes:
+      - clickhouse_data:/var/lib/clickhouse
+      - clickhouse_logs:/var/log/clickhouse-server
+    networks:
+      - copil-network
+
+  # Neo4j for graph data (DEX routing)
+  neo4j:
+    image: neo4j:5-community
+    container_name: copil-neo4j-dev
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      NEO4J_AUTH: neo4j/copil_password
+      NEO4J_PLUGINS: '["graph-data-science"]'
+    volumes:
+      - neo4j_data:/data
+    networks:
+      - copil-network
+
+
+  # Prometheus monitoring
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: copil-prometheus-dev
+    restart: unless-stopped
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus_data:/prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/etc/prometheus/console_libraries'
+      - '--web.console.templates=/etc/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    networks:
+      - copil-network
+
+  # Grafana dashboards
+  grafana:
+    image: grafana/grafana:latest
+    container_name: copil-grafana-dev
+    restart: unless-stopped
+    ports:
+      - "3001:3000"
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: copil_admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    networks:
+      - copil-network
+
+  # Jaeger tracing
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: copil-jaeger-dev
+    restart: unless-stopped
+    ports:
+      - "16686:16686"
+      - "14268:14268"
+    environment:
+      COLLECTOR_OTLP_ENABLED: true
+    networks:
+      - copil-network
+
+volumes:
+  postgres_data:
+  redis_data:
+  timescale_data:
+  clickhouse_data:
+  clickhouse_logs:
+  neo4j_data:
+  prometheus_data:
+  grafana_data:
+
+networks:
+  copil-network:
+    driver: bridge

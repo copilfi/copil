@@ -1,0 +1,317 @@
+// Prisma schema for Copil DeFi Platform
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// Users and authentication
+model User {
+  id                   String    @id @default(cuid())
+  walletAddress        String    @unique @map("wallet_address")
+  smartAccountAddress  String?   @map("smart_account_address")
+  email                String?   @unique
+  username             String?   @unique
+  createdAt            DateTime  @default(now()) @map("created_at")
+  lastLoginAt          DateTime? @map("last_login_at")
+  isActive             Boolean   @default(true) @map("is_active")
+  kycStatus            KYCStatus @default(NONE) @map("kyc_status")
+  
+  // Security fields
+  apiKeyHash           String?   @map("api_key_hash")
+  permissions          Json      @default("[]") @map("permissions")
+  
+  // JSON fields for complex data
+  preferences Json @default("{}")
+  
+  // Relations
+  strategies     Strategy[]
+  transactions   Transaction[]
+  portfolios     Portfolio[]
+  chatMessages   ChatMessage[]
+  sessions       UserSession[]
+  subscriptions  UserSubscription[]
+  smartAccounts  SmartAccount[]
+  
+  @@map("users")
+}
+
+enum KYCStatus {
+  NONE
+  PENDING
+  VERIFIED
+  REJECTED
+}
+
+model UserSubscription {
+  id          String           @id @default(cuid())
+  userId      String           @map("user_id")
+  tier        SubscriptionTier
+  startDate   DateTime         @map("start_date")
+  endDate     DateTime         @map("end_date")
+  isActive    Boolean          @default(true) @map("is_active")
+  autoRenew   Boolean          @default(true) @map("auto_renew")
+  limits      Json             @default("{}")
+  createdAt   DateTime         @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("user_subscriptions")
+}
+
+enum SubscriptionTier {
+  FREE
+  PRO
+  PREMIUM
+  ENTERPRISE
+}
+
+model UserSession {
+  id           String    @id @default(cuid())
+  userId       String    @map("user_id")
+  token        String    @unique
+  refreshToken String?   @map("refresh_token")
+  expiresAt    DateTime  @map("expires_at")
+  createdAt    DateTime  @default(now()) @map("created_at")
+  lastActiveAt DateTime  @updatedAt @map("last_active_at")
+  ipAddress    String    @map("ip_address")
+  userAgent    String    @map("user_agent")
+  isActive     Boolean   @default(true) @map("is_active")
+  
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sessionKeys SessionKey[]
+  
+  @@map("user_sessions")
+}
+
+model SessionKey {
+  id               String      @id @default(cuid())
+  sessionId        String      @map("session_id")
+  address          String
+  validUntil       DateTime    @map("valid_until")
+  validAfter       DateTime    @map("valid_after")
+  limitAmount      String      @map("limit_amount") // Store as string for bigint
+  allowedTargets   String[]    @map("allowed_targets")
+  allowedFunctions String[]    @map("allowed_functions")
+  isActive         Boolean     @default(true) @map("is_active")
+  createdAt        DateTime    @default(now()) @map("created_at")
+  lastUsed         DateTime?   @map("last_used")
+  usageCount       Int         @default(0) @map("usage_count")
+  
+  session UserSession @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  
+  @@map("session_keys")
+}
+
+// Trading strategies
+model Strategy {
+  id             String        @id @default(cuid())
+  userId         String        @map("user_id")
+  name           String
+  type           StrategyType
+  description    String?
+  conditions     Json          @default("[]") // TradingCondition[]
+  parameters     Json          @default("{}") // StrategyParameters
+  isActive       Boolean       @default(true) @map("is_active")
+  createdAt      DateTime      @default(now()) @map("created_at")
+  updatedAt      DateTime      @updatedAt @map("updated_at")
+  executedCount  Int           @default(0) @map("executed_count")
+  lastExecutedAt DateTime?     @map("last_executed_at")
+  expiresAt      DateTime?     @map("expires_at")
+  
+  user         User          @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions Transaction[]
+  
+  @@map("strategies")
+}
+
+enum StrategyType {
+  SIMPLE_SWAP
+  CONDITIONAL_ORDER
+  DCA
+  YIELD_OPTIMIZATION
+  ARBITRAGE
+  PORTFOLIO_REBALANCING
+}
+
+// Transaction history
+model Transaction {
+  id              String            @id @default(cuid())
+  userId          String            @map("user_id")
+  strategyId      String?           @map("strategy_id")
+  txHash          String            @unique @map("tx_hash")
+  type            TransactionType
+  status          TransactionStatus @default(PENDING)
+  tokensIn        Json              @default("{}") // TokenAmount
+  tokensOut       Json              @default("{}") // TokenAmount
+  gasUsed         String?           @map("gas_used") // Store as string for bigint
+  gasPrice        String?           @map("gas_price") // Store as string for bigint
+  blockNumber     Int?              @map("block_number")
+  executedAt      DateTime          @default(now()) @map("executed_at")
+  confirmedAt     DateTime?         @map("confirmed_at")
+  error           String?
+  
+  user     User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  strategy Strategy? @relation(fields: [strategyId], references: [id], onDelete: SetNull)
+  
+  @@map("transactions")
+}
+
+enum TransactionType {
+  SWAP
+  LIMIT_ORDER
+  YIELD_FARM
+  PROVIDE_LIQUIDITY
+  REMOVE_LIQUIDITY
+  CLAIM_REWARDS
+  SMART_ACCOUNT_EXECUTION
+  SMART_ACCOUNT_BATCH
+}
+
+enum TransactionStatus {
+  PENDING
+  CONFIRMED
+  FAILED
+  REVERTED
+}
+
+// Portfolio management
+model Portfolio {
+  id          String    @id @default(cuid())
+  userId      String    @map("user_id")
+  name        String
+  description String?
+  isDefault   Boolean   @default(false) @map("is_default")
+  assets      Json      @default("[]") // Asset[]
+  metadata    Json      @default("{}")
+  createdAt   DateTime  @default(now()) @map("created_at")
+  updatedAt   DateTime  @updatedAt @map("updated_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("portfolios")
+}
+
+// Market data (TimescaleDB hypertable in production)
+model MarketData {
+  timestamp    DateTime @map("timestamp")
+  tokenAddress String   @map("token_address")
+  price        String   @map("price") // Store as string for high precision
+  volume24h    String?  @map("volume_24h")
+  liquidity    String?  @map("liquidity")
+  marketCap    String?  @map("market_cap")
+  
+  @@id([timestamp, tokenAddress])
+  @@map("market_data")
+}
+
+// AI chat history
+model ChatMessage {
+  id        String      @id @default(cuid())
+  userId    String      @map("user_id")
+  role      MessageRole
+  content   String
+  intent    Json?       @default("{}") // TradingIntent
+  metadata  Json        @default("{}")
+  createdAt DateTime    @default(now()) @map("created_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("chat_messages")
+}
+
+enum MessageRole {
+  USER
+  ASSISTANT
+  SYSTEM
+}
+
+// Price alerts and notifications
+model PriceAlert {
+  id          String     @id @default(cuid())
+  userId      String     @map("user_id")
+  tokenSymbol String     @map("token_symbol")
+  condition   String     // 'above' | 'below'
+  targetPrice String     @map("target_price")
+  isActive    Boolean    @default(true) @map("is_active")
+  triggered   Boolean    @default(false)
+  createdAt   DateTime   @default(now()) @map("created_at")
+  triggeredAt DateTime?  @map("triggered_at")
+  
+  @@map("price_alerts")
+}
+
+// DEX configuration and status
+model DEXStatus {
+  id           String   @id
+  name         String   @unique
+  displayName  String   @map("display_name")
+  isActive     Boolean  @default(true) @map("is_active")
+  routerAddress String  @map("router_address")
+  factoryAddress String @map("factory_address")
+  tvl          String?  // Total Value Locked
+  volume24h    String?  @map("volume_24h")
+  fees         Json     @default("[]") // Fee tiers
+  lastUpdated  DateTime @updatedAt @map("last_updated")
+  
+  @@map("dex_status")
+}
+
+// Token registry
+model TokenRegistry {
+  address     String  @id
+  symbol      String
+  name        String
+  decimals    Int
+  logoURI     String? @map("logo_uri")
+  coingeckoId String? @map("coingecko_id")
+  isActive    Boolean @default(true) @map("is_active")
+  isVerified  Boolean @default(false) @map("is_verified")
+  addedAt     DateTime @default(now()) @map("added_at")
+  
+  @@map("token_registry")
+}
+
+// Analytics and metrics
+model UserAnalytics {
+  id                String   @id @default(cuid())
+  userId            String   @unique @map("user_id")
+  totalTrades       Int      @default(0) @map("total_trades")
+  totalVolume       String   @default("0") @map("total_volume")
+  totalPnL          String   @default("0") @map("total_pnl")
+  winRate           Float    @default(0) @map("win_rate")
+  averageHoldTime   Int      @default(0) @map("average_hold_time") // in seconds
+  favoriteTokens    String[] @map("favorite_tokens")
+  riskScore         Float    @default(50) @map("risk_score")
+  lastCalculated    DateTime @updatedAt @map("last_calculated")
+  
+  @@map("user_analytics")
+}
+
+// System configuration
+model SystemConfig {
+  key       String   @id
+  value     String
+  updatedAt DateTime @updatedAt @map("updated_at")
+  updatedBy String?  @map("updated_by")
+  
+  @@map("system_config")
+}
+
+// Smart Account management
+model SmartAccount {
+  id            String    @id @default(cuid())
+  userId        String    @map("user_id")
+  address       String    @unique
+  saltNonce     String    @map("salt_nonce")
+  isActive      Boolean   @default(true) @map("is_active")
+  deployedAt    DateTime  @default(now()) @map("deployed_at")
+  lastUsedAt    DateTime? @map("last_used_at")
+  
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  
+  @@map("smart_accounts")
+}

@@ -1,0 +1,36 @@
+{
+  "name": "@copil/blockchain",
+  "version": "1.0.0",
+  "description": "Blockchain integration package for Copil platform on Sei Network",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "dev": "tsc --watch",
+    "clean": "rimraf dist",
+    "lint": "eslint src --ext .ts",
+    "test": "jest"
+  },
+  "dependencies": {
+    "@copil/core": "*",
+    "@cosmjs/cosmwasm-stargate": "^0.32.0",
+    "@cosmjs/proto-signing": "^0.32.0",
+    "@cosmjs/stargate": "^0.32.0",
+    "@pythnetwork/hermes-client": "^2.0.0",
+    "@sei-js/core": "^3.0.0",
+    "@sei-js/proto": "^3.0.0",
+    "axios": "^1.11.0",
+    "ethers": "^6.8.0",
+    "node-cache": "^5.1.2",
+    "openai": "^5.19.1",
+    "socket.io": "^4.8.1",
+    "viem": "^1.19.0",
+    "ws": "^8.14.0",
+    "zod": "^3.22.0"
+  },
+  "devDependencies": {
+    "@types/ws": "^8.5.0",
+    "rimraf": "^5.0.5",
+    "typescript": "^5.2.2"
+  }
+}

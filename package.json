@@ -1,0 +1,73 @@
+{
+  "name": "copil-sei-platform",
+  "version": "1.0.0",
+  "description": "AI-Powered DeFi Automation Platform on Sei Network",
+  "private": true,
+  "packageManager": "npm@10.2.4",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "build": "turbo run build",
+    "dev": "turbo run dev",
+    "lint": "turbo run lint",
+    "test": "turbo run test",
+    "clean": "turbo run clean",
+    "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
+    "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
+    "typecheck": "turbo run typecheck",
+    "contracts:compile": "npm run compile --workspace=@copil/contracts",
+    "contracts:deploy": "npm run deploy --workspace=@copil/contracts",
+    "db:generate": "npm run generate --workspace=@copil/database",
+    "db:migrate": "npm run migrate --workspace=@copil/database",
+    "db:studio": "npm run studio --workspace=@copil/database",
+    "docker:dev": "docker compose -f infrastructure/docker/docker-compose.dev.yml up -d",
+    "docker:prod": "docker compose -f infrastructure/docker/docker-compose.prod.yml up -d",
+    "k8s:deploy": "kubectl apply -f infrastructure/kubernetes/"
+  },
+  "devDependencies": {
+    "@types/node": "^20.9.0",
+    "@typescript-eslint/eslint-plugin": "^6.12.0",
+    "@typescript-eslint/parser": "^6.12.0",
+    "eslint": "^8.54.0",
+    "eslint-config-prettier": "^9.0.0",
+    "eslint-plugin-prettier": "^5.0.1",
+    "husky": "^8.0.3",
+    "lint-staged": "^15.1.0",
+    "prettier": "^3.1.0",
+    "turbo": "^1.10.16",
+    "typescript": "^5.2.2"
+  },
+  "engines": {
+    "node": ">=18.17.0",
+    "npm": ">=9.0.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx,js,jsx}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{md,json}": [
+      "prettier --write"
+    ]
+  },
+  "dependencies": {
+    "axios": "^1.11.0",
+    "bcryptjs": "^3.0.2",
+    "compression": "^1.8.1",
+    "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
+    "express": "^5.1.0",
+    "express-rate-limit": "^8.1.0",
+    "express-validator": "^7.2.1",
+    "helmet": "^8.1.0",
+    "ioredis": "^5.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "morgan": "^1.10.1",
+    "socket.io": "^4.8.1",
+    "uuid": "^11.1.0",
+    "winston": "^3.17.0",
+    "ws": "^8.18.3"
+  }
+}

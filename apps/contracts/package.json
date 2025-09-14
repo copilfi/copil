@@ -1,0 +1,49 @@
+{
+  "name": "@copil/contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Copil DeFi platform on Sei Network",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "hardhat compile",
+    "compile": "hardhat compile",
+    "deploy": "hardhat deploy",
+    "deploy:testnet": "hardhat deploy --network sei-testnet",
+    "deploy:mainnet": "hardhat deploy --network sei-mainnet",
+    "test": "hardhat test",
+    "test:gas": "REPORT_GAS=true hardhat test",
+    "test:coverage": "hardhat coverage",
+    "clean": "hardhat clean && rimraf dist",
+    "typechain": "hardhat typechain",
+    "node": "hardhat node",
+    "verify": "hardhat verify",
+    "size": "hardhat size-contracts",
+    "flatten": "hardhat flatten",
+    "dev": "hardhat watch compilation"
+  },
+  "dependencies": {
+    "@openzeppelin/contracts": "^5.0.0",
+    "@account-abstraction/contracts": "^0.7.0",
+    "@chainlink/contracts": "^0.8.0"
+  },
+  "devDependencies": {
+    "@copil/core": "*",
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@nomicfoundation/hardhat-verify": "^2.0.0",
+    "@typechain/ethers-v6": "^0.5.0",
+    "@typechain/hardhat": "^9.0.0",
+    "@types/chai": "^4.3.0",
+    "@types/mocha": "^10.0.0",
+    "chai": "^4.3.0",
+    "ethers": "^6.8.0",
+    "hardhat": "^2.19.0",
+    "hardhat-deploy": "^0.11.0",
+    "hardhat-gas-reporter": "^1.0.0",
+    "hardhat-watcher": "^2.5.0",
+    "rimraf": "^5.0.5",
+    "solidity-coverage": "^0.8.0",
+    "ts-node": "^10.9.0",
+    "typechain": "^8.3.0",
+    "typescript": "^5.2.2"
+  }
+}
