@@ -132,6 +132,41 @@ router.post('/connect',
   })
 );
 
+// Generate message for wallet signing (alias for challenge)
+router.post('/generate-message',
+  [
+    body('address')
+      .isEthereumAddress()
+      .withMessage('Invalid Ethereum address'),
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: errors.array(),
+      });
+    }
+
+    const { address } = req.body;
+    const nonce = uuidv4();
+
+    // Store nonce in Redis with short TTL
+    await RedisService.set(`challenge:${address}`, nonce, 300); // 5 minutes
+
+    const message = `Welcome to Copil DeFi Platform!\n\nSign this message to authenticate your wallet.\n\nWallet: ${address}\nNonce: ${nonce}\nTimestamp: ${new Date().toISOString()}`;
+
+    res.json({
+      success: true,
+      message,
+      nonce,
+      expiresAt: Date.now() + (5 * 60 * 1000), // 5 minutes from now
+    });
+  })
+);
+
 // Get authentication challenge message
 router.post('/challenge',
   [
@@ -264,6 +299,256 @@ router.get('/verify', asyncHandler(async (req, res) => {
     }
 
     throw error;
+  }
+}));
+
+// Login endpoint (alias for connect)
+router.post('/login',
+  [
+    body('address')
+      .isEthereumAddress()
+      .withMessage('Invalid Ethereum address'),
+    body('signature')
+      .notEmpty()
+      .withMessage('Signature is required'),
+    body('message')
+      .notEmpty()
+      .withMessage('Message is required'),
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: errors.array(),
+      });
+    }
+
+    const { address: walletAddress, signature, message } = req.body;
+    const userAgent = req.get('User-Agent') || 'Unknown';
+    const ipAddress = req.ip;
+
+    try {
+      // TODO: Verify signature with ethers/viem
+      const isValidSignature = process.env.NODE_ENV === 'development' || true;
+
+      if (!isValidSignature) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid signature',
+          code: 'INVALID_SIGNATURE',
+        });
+      }
+
+      // Try to find existing user for login
+      const existingUser = await userRepository.findByWalletAddress(walletAddress);
+
+      if (!existingUser) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          code: 'USER_NOT_FOUND',
+        });
+      }
+
+      // Update last login
+      await userRepository.updateLastLogin(existingUser.id);
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: existingUser.id, walletAddress },
+        process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      // Store session in database and cache
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await userRepository.createSession({
+        userId: existingUser.id,
+        token,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      });
+      await RedisService.set(`session:${token}`, JSON.stringify({ userId: existingUser.id }), 7 * 24 * 60 * 60);
+
+      res.json({
+        success: true,
+        user: {
+          id: existingUser.id,
+          walletAddress: existingUser.walletAddress,
+          smartAccountAddress: existingUser.smartAccountAddress,
+          email: existingUser.email,
+          username: existingUser.username,
+          preferences: existingUser.preferences,
+          kycStatus: existingUser.kycStatus,
+        },
+        token,
+      });
+
+    } catch (error) {
+      logger.error('Login error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Authentication failed',
+        code: 'AUTH_FAILED',
+      });
+    }
+  })
+);
+
+// Register endpoint (alias for connect)
+router.post('/register',
+  [
+    body('address')
+      .isEthereumAddress()
+      .withMessage('Invalid Ethereum address'),
+    body('signature')
+      .notEmpty()
+      .withMessage('Signature is required'),
+    body('message')
+      .notEmpty()
+      .withMessage('Message is required'),
+  ],
+  asyncHandler(async (req, res) => {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        success: false,
+        error: 'Validation failed',
+        code: 'VALIDATION_ERROR',
+        details: errors.array(),
+      });
+    }
+
+    const { address: walletAddress, signature, message, email } = req.body;
+    const userAgent = req.get('User-Agent') || 'Unknown';
+    const ipAddress = req.ip;
+
+    try {
+      // TODO: Verify signature with ethers/viem
+      const isValidSignature = process.env.NODE_ENV === 'development' || true;
+
+      if (!isValidSignature) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid signature',
+          code: 'INVALID_SIGNATURE',
+        });
+      }
+
+      // Check if user already exists
+      const existingUser = await userRepository.findByWalletAddress(walletAddress);
+
+      if (existingUser) {
+        return res.status(409).json({
+          success: false,
+          error: 'User already exists',
+          code: 'USER_EXISTS',
+        });
+      }
+
+      // Create new user
+      const newUser = await userRepository.create({
+        walletAddress,
+        email,
+        username: req.body.username,
+      });
+
+      // Generate JWT token
+      const token = jwt.sign(
+        { userId: newUser.id, walletAddress },
+        process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      // Store session in database and cache
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      await userRepository.createSession({
+        userId: newUser.id,
+        token,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      });
+      await RedisService.set(`session:${token}`, JSON.stringify({ userId: newUser.id }), 7 * 24 * 60 * 60);
+
+      res.json({
+        success: true,
+        user: {
+          id: newUser.id,
+          walletAddress: newUser.walletAddress,
+          smartAccountAddress: newUser.smartAccountAddress,
+          email: newUser.email,
+          username: newUser.username,
+          preferences: newUser.preferences,
+          kycStatus: newUser.kycStatus,
+        },
+        token,
+      });
+
+    } catch (error) {
+      logger.error('Registration error:', error);
+      return res.status(500).json({
+        success: false,
+        error: 'Registration failed',
+        code: 'REGISTRATION_FAILED',
+      });
+    }
+  })
+);
+
+// Get user profile
+router.get('/profile', asyncHandler(async (req, res) => {
+  const authHeader = req.headers.authorization;
+
+  if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({
+      success: false,
+      error: 'Authentication required',
+      code: 'AUTH_REQUIRED',
+    });
+  }
+
+  const token = authHeader.substring(7);
+
+  try {
+    // Verify token
+    const decoded = jwt.verify(token, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production') as any;
+
+    // Get user from database
+    const user = await userRepository.findById(decoded.userId);
+
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        error: 'User not found',
+        code: 'USER_NOT_FOUND',
+      });
+    }
+
+    res.json({
+      success: true,
+      data: {
+        id: user.id,
+        walletAddress: user.walletAddress,
+        smartAccountAddress: user.smartAccountAddress,
+        email: user.email,
+        username: user.username,
+        preferences: user.preferences,
+        kycStatus: user.kycStatus,
+      },
+    });
+
+  } catch (error) {
+    logger.error('Profile fetch error:', error);
+    res.status(401).json({
+      success: false,
+      error: 'Invalid token',
+      code: 'INVALID_TOKEN',
+    });
   }
 }));
 

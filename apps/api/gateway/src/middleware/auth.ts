@@ -46,15 +46,36 @@ export const authMiddleware = async (
     // Verify JWT token
     const decoded = jwt.verify(token, process.env.JWT_SECRET) as {
       userId: string;
-      sessionId: string;
+      sessionId?: string;
+      walletAddress?: string;
       iat: number;
       exp: number;
     };
 
     // Find session in database
-    const session = await userRepository.findSessionByToken(token);
-    
-    if (!session || !session.isActive || session.expiresAt < new Date()) {
+    let session = await userRepository.findSessionByToken(token);
+    let user;
+
+    // If no session found by token, try to find user directly (fallback for older tokens)
+    if (!session) {
+      user = await userRepository.findById(decoded.userId);
+      if (!user || !user.isActive) {
+        return res.status(401).json({
+          error: 'User not found or inactive',
+          code: 'USER_NOT_FOUND',
+        });
+      }
+
+      // Create a minimal session object for compatibility
+      session = {
+        id: 'legacy',
+        user: user,
+        isActive: true,
+        expiresAt: new Date(decoded.exp * 1000),
+        sessionKeys: [],
+        token: token
+      } as any;
+    } else if (!session.isActive || session.expiresAt < new Date()) {
       return res.status(401).json({
         error: 'Invalid or expired session',
         code: 'INVALID_SESSION',
@@ -69,19 +90,21 @@ export const authMiddleware = async (
       });
     }
 
-    // Update last active time
+    // Update last active time for real sessions (not legacy fallback)
     // We'll do this asynchronously to not slow down requests
-    userRepository.findSessionByToken(token).then(existingSession => {
-      if (existingSession) {
-        // Update lastActiveAt without blocking the response
-        prisma.userSession.update({
-          where: { id: existingSession.id },
-          data: { lastActiveAt: new Date() },
-        }).catch(error => {
-          logger.warn('Failed to update session last active time:', error);
-        });
-      }
-    });
+    if (session.id !== 'legacy') {
+      userRepository.findSessionByToken(token).then(existingSession => {
+        if (existingSession) {
+          // Update lastActiveAt without blocking the response
+          prisma.userSession.update({
+            where: { id: existingSession.id },
+            data: { lastActiveAt: new Date() },
+          }).catch(error => {
+            logger.warn('Failed to update session last active time:', error);
+          });
+        }
+      });
+    }
 
     // Add user and session to request
     req.user = {

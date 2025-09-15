@@ -20,6 +20,7 @@ import strategyRoutes from './routes/strategy';
 import portfolioRoutes from './routes/portfolio';
 import aiRoutes from './routes/ai';
 import marketRoutes from './routes/market';
+import smartAccountRoutes from './routes/smartAccount';
 
 // WebSocket setup
 import { setupWebSocket } from './websocket';
@@ -29,7 +30,7 @@ const app = express();
 const server = createServer(app);
 const io = new SocketIOServer(server, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
     methods: ['GET', 'POST'],
   },
 });
@@ -48,7 +49,7 @@ async function startServer() {
     }));
     
     app.use(cors({
-      origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+      origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
       credentials: true,
     }));
     
@@ -84,6 +85,7 @@ async function startServer() {
     app.use('/api/portfolio', authMiddleware, portfolioRoutes);
     app.use('/api/ai', authMiddleware, aiRoutes);
     app.use('/api/market', marketRoutes);
+    app.use('/api/smart-account', smartAccountRoutes);
 
     // WebSocket setup
     setupWebSocket(io);

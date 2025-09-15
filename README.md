@@ -1,6 +1,6 @@
 # Copil - AI-Powered DeFi Automation Platform on Sei Network
 
-Copil is a next-generation DeFi automation platform specifically built for Sei Network that combines AI agents with sophisticated trading strategies. It provides seamless, secure, and intelligent DeFi automation through natural language interfaces while maintaining complete user control over assets via ERC-4337 Account Abstraction.
+Copil is Copil'ot a next-generation DeFi automation platform specifically built for Sei Network that combines AI agents with sophisticated trading strategies. It provides seamless, secure, and intelligent DeFi automation through natural language interfaces while maintaining complete user control over assets via ERC-4337 Account Abstraction.
 
 ## Current Status: **FULLY OPERATIONAL**
 
@@ -72,8 +72,8 @@ Copil is a next-generation DeFi automation platform specifically built for Sei N
 
 1. **Clone the repository**
 ```bash
-git clone https://github.com/yourorg/copil-sei-platform
-cd copil-sei-platform
+git clone https://github.com/copilfi/copil
+cd copil
 ```
 
 2. **Install dependencies**
@@ -110,20 +110,6 @@ curl -X POST http://localhost:3002/api/test-copil \
   -H "Content-Type: application/json" \
   -d '{"message": "Hello Copil! Check my SEI balance."}'
 ```
-
-### Available Services
-
-After running `npm run docker:dev`, the following services will be available:
-
-- **PostgreSQL**: `localhost:5432`
-- **Redis**: `localhost:6379`  
-- **TimescaleDB**: `localhost:5433`
-- **ClickHouse**: `localhost:8123`
-- **Neo4j**: `localhost:7474` (browser), `localhost:7687` (bolt)
-- **Kafka**: `localhost:9092`
-- **Prometheus**: `localhost:9090`
-- **Grafana**: `localhost:3001` (admin/copil_admin)
-- **Jaeger**: `localhost:16686`
 
 ## Project Structure
 
@@ -201,7 +187,7 @@ npm run clean               # Clean build artifacts
 
 ### Currently Deployed Smart Contracts (Sei Mainnet)
 
-- **Account Factory**: `0xcF7038Cd52C5BE08EEdFa3f042B9842AFaBB99A2`
+- **Account Factory**: `0x3597342717C9545D555233b195525542B7f591c2`
 - **Conditional Order Engine**: `0x425020571862cfDc97727bB6c920866D8BeAbbeB`
 - **Entry Point**: `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`
 
@@ -273,7 +259,7 @@ Copil implements multiple layers of security:
 
 Copil features specialized AI agents:
 
-- **Orchestrator Agent**: Main coordinator using ElizaOS pattern
+- **Orchestrator Agent**
 - **Trading Agent**: Executes and optimizes trades
 - **Analytics Agent**: Market analysis and predictions
 - **Portfolio Agent**: Portfolio optimization and rebalancing
