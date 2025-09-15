@@ -500,6 +500,102 @@ router.post('/register',
   })
 );
 
+// Refresh token endpoint
+router.post('/refresh',
+  asyncHandler(async (req, res) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({
+        success: false,
+        error: 'Authentication required',
+        code: 'AUTH_REQUIRED',
+      });
+    }
+
+    const currentToken = authHeader.substring(7);
+
+    try {
+      // Verify current token
+      const decoded = jwt.verify(currentToken, process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production') as any;
+
+      const user = await userRepository.findById(decoded.userId);
+      if (!user) {
+        return res.status(404).json({
+          success: false,
+          error: 'User not found',
+          code: 'USER_NOT_FOUND',
+        });
+      }
+
+      // Generate new JWT token
+      const newToken = jwt.sign(
+        { userId: user.id, walletAddress: user.walletAddress },
+        process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-in-production',
+        { expiresIn: process.env.JWT_EXPIRES_IN || '7d' }
+      );
+
+      const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+      const userAgent = req.get('User-Agent') || 'Unknown';
+      const ipAddress = req.ip;
+
+      // Create new session
+      await userRepository.createSession({
+        userId: user.id,
+        token: newToken,
+        expiresAt,
+        ipAddress,
+        userAgent,
+      });
+
+      // Update Redis cache
+      await RedisService.set(
+        `session:${newToken}`,
+        {
+          userId: user.id,
+          walletAddress: user.walletAddress,
+        },
+        7 * 24 * 60 * 60
+      );
+
+      // Deactivate old session if exists
+      try {
+        await userRepository.deactivateSession(currentToken);
+        await RedisService.del(`session:${currentToken}`);
+      } catch (error) {
+        logger.warn('Failed to deactivate old session:', error);
+      }
+
+      logger.info(`Token refreshed for user: ${user.id}`);
+
+      res.json({
+        success: true,
+        data: {
+          token: newToken,
+          expiresAt: expiresAt.toISOString(),
+          user: {
+            id: user.id,
+            walletAddress: user.walletAddress,
+            smartAccountAddress: user.smartAccountAddress,
+            email: user.email,
+            username: user.username,
+            preferences: user.preferences,
+            kycStatus: user.kycStatus,
+          },
+        },
+      });
+
+    } catch (error) {
+      logger.error('Token refresh error:', error);
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired token',
+        code: 'INVALID_TOKEN',
+      });
+    }
+  })
+);
+
 // Get user profile
 router.get('/profile', asyncHandler(async (req, res) => {
   const authHeader = req.headers.authorization;

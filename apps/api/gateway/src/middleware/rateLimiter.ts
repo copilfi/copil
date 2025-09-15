@@ -68,8 +68,10 @@ export const rateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   store: {
-    incr: (key: string, cb: (error?: Error, result?: { totalCount: number; timeToExpire?: number }) => void) => {
-      redisStore.increment(key).then(result => cb(undefined, result)).catch(cb);
+    incr: (key: string, cb: (error?: Error, result?: { totalHits: number; timeToExpire?: number }) => void) => {
+      redisStore.increment(key)
+        .then(result => cb(undefined, { totalHits: result.totalCount, timeToExpire: result.timeToExpire }))
+        .catch(cb);
     },
     decrement: (key: string) => {
       redisStore.decrement(key);
@@ -107,9 +109,11 @@ export const aiRateLimiter = rateLimit({
     retryAfter: 3600,
   },
   store: {
-    incr: (key: string, cb: (error?: Error, result?: { totalCount: number; timeToExpire?: number }) => void) => {
+    incr: (key: string, cb: (error?: Error, result?: { totalHits: number; timeToExpire?: number }) => void) => {
       const aiStore = new RedisStore('ai_rl:');
-      aiStore.increment(key).then(result => cb(undefined, result)).catch(cb);
+      aiStore.increment(key)
+        .then(result => cb(undefined, { totalHits: result.totalCount, timeToExpire: result.timeToExpire }))
+        .catch(cb);
     },
     decrement: (key: string) => {
       const aiStore = new RedisStore('ai_rl:');
@@ -136,9 +140,11 @@ export const tradingRateLimiter = rateLimit({
     retryAfter: 60,
   },
   store: {
-    incr: (key: string, cb: (error?: Error, result?: { totalCount: number; timeToExpire?: number }) => void) => {
+    incr: (key: string, cb: (error?: Error, result?: { totalHits: number; timeToExpire?: number }) => void) => {
       const tradingStore = new RedisStore('trading_rl:');
-      tradingStore.increment(key).then(result => cb(undefined, result)).catch(cb);
+      tradingStore.increment(key)
+        .then(result => cb(undefined, { totalHits: result.totalCount, timeToExpire: result.timeToExpire }))
+        .catch(cb);
     },
     decrement: (key: string) => {
       const tradingStore = new RedisStore('trading_rl:');
