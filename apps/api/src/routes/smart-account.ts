@@ -41,8 +41,8 @@ const createSessionKeySchema = Joi.object({
   allowedFunctions: Joi.array().items(
     Joi.string().pattern(/^0x[0-9a-fA-F]{8}$/)
   ).optional(),
-  description: Joi.string().max(255).optional(),
-  privateKey: commonSchemas.privateKey
+  description: Joi.string().max(255).optional()
+  // privateKey removed - platform sponsors session key creation
 });
 
 const revokeSessionKeySchema = Joi.object({
@@ -63,6 +63,7 @@ const confirmDeploymentSchema = Joi.object({
 
 // Routes
 router.post('/deploy', validateBody(deployAccountSchema), SmartAccountController.deployAccount);
+router.post('/deploy/prepare', validateBody(deployAccountSchema), SmartAccountController.prepareDeployment);
 router.post('/deploy/confirm', validateBody(confirmDeploymentSchema), SmartAccountController.confirmDeployment);
 router.get('/info', SmartAccountController.getAccountInfo);
 
@@ -71,6 +72,7 @@ router.post('/batch', validateBody(executeBatchSchema), SmartAccountController.e
 
 router.post('/session-keys', validateBody(createSessionKeySchema), SmartAccountController.createSessionKey);
 router.delete('/session-keys', validateBody(revokeSessionKeySchema), SmartAccountController.revokeSessionKey);
+router.delete('/session-keys/:sessionKeyId', SmartAccountController.revokeSessionKeyById);
 router.get('/session-keys', validateQuery(listSessionKeysSchema), SmartAccountController.listSessionKeys);
 
 export default router;

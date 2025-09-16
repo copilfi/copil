@@ -112,7 +112,7 @@ export class AutomationManager {
       this.logger.info('🤖 Copil Automation Manager started successfully');
       this.updateSystemStats();
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to start automation manager', undefined, {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -147,7 +147,7 @@ export class AutomationManager {
 
       this.logger.info('🛑 Copil Automation Manager stopped');
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Error while stopping automation manager', undefined, {
         error: error instanceof Error ? error.message : 'Unknown error'
       });
@@ -392,7 +392,7 @@ export class AutomationManager {
         return true;
       }
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
       return false;
     }
   }

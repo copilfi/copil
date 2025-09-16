@@ -112,7 +112,7 @@ export class DexExecutor {
         ...swapResult,
         feeCollected: feeTransaction
       };
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Swap execution failed', undefined, { params });
       throw error;
     }
@@ -206,7 +206,7 @@ export class DexExecutor {
         ...result,
         feeInfo
       };
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to create conditional swap order', undefined, { params });
       throw error;
     }
@@ -270,8 +270,8 @@ export class DexExecutor {
         swapResult,
         feeCollected: feeTransaction
       };
-    } catch (error) {
-      this.logger.error(`Failed to execute conditional order ${orderId}:`, error);
+    } catch (error: unknown) {
+      this.logger.error(`Failed to execute conditional order ${orderId}:`, error as Error);
       throw error;
     }
   }
@@ -356,7 +356,7 @@ export class DexExecutor {
         ...result,
         feeInfo
       };
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to create DCA order', undefined, { params });
       throw error;
     }
@@ -420,8 +420,8 @@ export class DexExecutor {
         swapResult,
         feeCollected: feeTransaction
       };
-    } catch (error) {
-      this.logger.error(`Failed to execute DCA iteration for order ${orderId}:`, error);
+    } catch (error: unknown) {
+      this.logger.error(`Failed to execute DCA iteration for order ${orderId}:`, error as Error);
       throw error;
     }
   }
@@ -490,7 +490,7 @@ export class DexExecutor {
       });
       
       return bestQuote;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get best quote', undefined, { params });
       throw error;
     }
@@ -576,7 +576,7 @@ export class DexExecutor {
         priceImpact,
         gasEstimate: 150000n
       };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn('DragonSwap quote failed, using fallback', { error: errorMessage });
       throw new Error(`DragonSwap quote unavailable: ${errorMessage}`);
@@ -600,7 +600,7 @@ export class DexExecutor {
         priceImpact: route.priceImpact,
         gasEstimate: route.gasEstimate
       };
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
       this.logger.warn('Symphony quote failed, using fallback', { error: errorMessage });
       throw new Error(`Symphony quote unavailable: ${errorMessage}`);
@@ -775,11 +775,11 @@ export class DexExecutor {
             this.logger.info('Executing order', { orderId: order.orderId });
             await this.orderEngine.executeOrder(order.orderId);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           this.logger.error(`Failed to execute order: ${order.orderId}`);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Order monitoring failed');
     }
   }

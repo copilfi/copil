@@ -207,7 +207,7 @@ export class ConditionalOrderMonitor {
       try {
         await this.checkAndExecuteOrder(order);
         order.lastCheckedAt = new Date();
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error(`Failed to process conditional order: ${order.orderId}`, undefined, {
           error: error instanceof Error ? error.message : 'Unknown error',
           orderId: order.orderId
@@ -271,7 +271,7 @@ export class ConditionalOrderMonitor {
         await this.onExecutionCallback(execution);
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to execute conditional order', undefined, {
         orderId: order.orderId,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -299,7 +299,7 @@ export class ConditionalOrderMonitor {
         default:
           this.logger.warn('Unknown condition type', { conditionType: condition.conditionType });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to update condition value', undefined, {
         conditionType: condition.conditionType,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -369,7 +369,7 @@ export class ConditionalOrderMonitor {
       this.priceCache.set(cacheKey, { price, timestamp: Date.now() });
       
       return price;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.warn('Failed to get current price, using fallback', {
         tokenAddress,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -413,7 +413,7 @@ export class ConditionalOrderMonitor {
       }
 
       return 0n;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get token balance', undefined, { tokenAddress });
       return 0n;
     }

@@ -180,8 +180,8 @@ export class SmartAccountService {
       // Return predicted address if no signer
       return { address: predictedAddress, isDeployed: false };
       
-    } catch (error) {
-      logger.error(`Failed to create Smart Account for ${ownerAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to create Smart Account for ${ownerAddress}:`, error as Error);
       throw error;
     }
   }
@@ -237,8 +237,8 @@ export class SmartAccountService {
       logger.info(`✅ Transaction executed: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
-      logger.error(`Failed to execute transaction on Smart Account ${smartAccountAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to execute transaction on Smart Account ${smartAccountAddress}:`, error as Error);
       throw error;
     }
   }
@@ -269,8 +269,8 @@ export class SmartAccountService {
       
       logger.info(`✅ Batch transaction executed: ${receipt.hash}`);
       return receipt.hash;
-    } catch (error) {
-      logger.error(`Failed to execute batch transaction:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to execute batch transaction:`, error as Error);
       throw error;
     }
   }
@@ -303,8 +303,8 @@ export class SmartAccountService {
       logger.info(`✅ Session key created: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
-      logger.error(`Failed to create session key:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to create session key:`, error as Error);
       throw error;
     }
   }
@@ -327,8 +327,8 @@ export class SmartAccountService {
       
       logger.info(`✅ Session key revoked: ${receipt.hash}`);
       return receipt.hash;
-    } catch (error) {
-      logger.error(`Failed to revoke session key:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to revoke session key:`, error as Error);
       throw error;
     }
   }
@@ -356,7 +356,7 @@ export class SmartAccountService {
           const smartAccount = await this.getSmartAccount(smartAccountAddress);
           owner = await smartAccount.owner();
           nonce = (await smartAccount.getNonce()).toString();
-        } catch (error) {
+        } catch (error: unknown) {
           logger.warn(`Could not get owner/nonce for ${smartAccountAddress}:`, error);
         }
       }
@@ -368,8 +368,8 @@ export class SmartAccountService {
         balance: ethers.formatEther(balance),
         isDeployed
       };
-    } catch (error) {
-      logger.error(`Failed to get account info for ${smartAccountAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get account info for ${smartAccountAddress}:`, error as Error);
       throw error;
     }
   }
@@ -384,8 +384,8 @@ export class SmartAccountService {
     try {
       const smartAccount = await this.getSmartAccount(smartAccountAddress);
       return await smartAccount.isValidSessionKey(sessionKey);
-    } catch (error) {
-      logger.error(`Failed to check session key validity:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to check session key validity:`, error as Error);
       return false;
     }
   }
@@ -412,7 +412,8 @@ export class SmartAccountService {
         data || '0x'
       ]);
 
-      // Get gas estimates
+      // Get network and gas estimates
+      const network = await this.provider.getNetwork();
       const feeData = await this.provider.getFeeData();
       
       // Check if account is deployed
@@ -431,6 +432,22 @@ export class SmartAccountService {
         initCode = ethers.concat([this.config.factoryAddress, createCallData]);
       }
 
+      // Handle SEI network (1329) fee compatibility - use legacy gas price
+      let maxFeePerGas: string;
+      let maxPriorityFeePerGas: string;
+
+      if (Number(network.chainId) === 1329) {
+        // SEI network doesn't support EIP-1559, use legacy gas price
+        const gasPrice = feeData.gasPrice?.toString() || '20000000000';
+        maxFeePerGas = gasPrice;
+        maxPriorityFeePerGas = gasPrice;
+        logger.info(`Using SEI legacy gas price: ${gasPrice}`);
+      } else {
+        // Other networks support EIP-1559
+        maxFeePerGas = feeData.maxFeePerGas?.toString() || '20000000000';
+        maxPriorityFeePerGas = feeData.maxPriorityFeePerGas?.toString() || '1000000000';
+      }
+
       const userOp: UserOperation = {
         sender: smartAccountAddress,
         nonce: nonce.toString(),
@@ -439,8 +456,8 @@ export class SmartAccountService {
         callGasLimit: '200000',
         verificationGasLimit: '500000',
         preVerificationGas: '50000',
-        maxFeePerGas: feeData.maxFeePerGas?.toString() || '20000000000',
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || '1000000000',
+        maxFeePerGas,
+        maxPriorityFeePerGas,
         paymasterAndData: '0x',
         signature: '0x'
       };
@@ -453,8 +470,8 @@ export class SmartAccountService {
       }
 
       return userOp;
-    } catch (error) {
-      logger.error('Failed to create UserOperation:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to create UserOperation:', error as Error);
       throw error;
     }
   }
@@ -483,8 +500,8 @@ export class SmartAccountService {
       logger.info(`✅ UserOperation submitted: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
-      logger.error('Failed to submit UserOperation:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to submit UserOperation:', error as Error);
       throw error;
     }
   }
@@ -511,8 +528,8 @@ export class SmartAccountService {
 
       // Submit to bundler/entry point
       return await this.submitUserOperation(userOp);
-    } catch (error) {
-      logger.error('Failed to execute with session key:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to execute with session key:', error as Error);
       throw error;
     }
   }
@@ -526,16 +543,31 @@ export class SmartAccountService {
       const blockNumber = await this.provider.getBlockNumber();
       const feeData = await this.provider.getFeeData();
 
+      // Handle SEI network compatibility
+      let maxFeePerGas: string;
+      let maxPriorityFeePerGas: string;
+
+      if (Number(network.chainId) === 1329) {
+        // SEI network doesn't support EIP-1559, use legacy gas price
+        const gasPrice = feeData.gasPrice?.toString() || '0';
+        maxFeePerGas = gasPrice;
+        maxPriorityFeePerGas = gasPrice;
+      } else {
+        // Other networks support EIP-1559
+        maxFeePerGas = feeData.maxFeePerGas?.toString() || '0';
+        maxPriorityFeePerGas = feeData.maxPriorityFeePerGas?.toString() || '0';
+      }
+
       return {
         chainId: Number(network.chainId),
         name: network.name,
         blockNumber,
         gasPrice: feeData.gasPrice?.toString() || '0',
-        maxFeePerGas: feeData.maxFeePerGas?.toString() || '0',
-        maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString() || '0'
+        maxFeePerGas,
+        maxPriorityFeePerGas
       };
-    } catch (error) {
-      logger.error('Failed to get network info:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to get network info:', error as Error);
       throw error;
     }
   }
@@ -551,8 +583,8 @@ export class SmartAccountService {
       await this.factoryContract.accountImplementation();
       
       return true;
-    } catch (error) {
-      logger.error('SmartAccountService health check failed:', error);
+    } catch (error: unknown) {
+      logger.error('SmartAccountService health check failed:', error as Error);
       return false;
     }
   }

@@ -64,7 +64,7 @@ export class AccountFactoryContract {
         transactionHash: receipt.hash,
         isNew: true
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to create Smart Account',
         this.factoryAddress,
@@ -79,7 +79,7 @@ export class AccountFactoryContract {
   async getAccount(owner: string): Promise<string> {
     try {
       return await this.contract.getAccount(owner);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get Smart Account address',
         this.factoryAddress,
@@ -94,7 +94,7 @@ export class AccountFactoryContract {
   async getAddress(owner: string, salt: string): Promise<string> {
     try {
       return await (this.contract as any).getAddress(owner, salt);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to predict Smart Account address',
         this.factoryAddress,
@@ -109,7 +109,7 @@ export class AccountFactoryContract {
   async isAccount(address: string): Promise<boolean> {
     try {
       return await this.contract.isAccount(address);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to verify Smart Account',
         this.factoryAddress,
@@ -176,7 +176,7 @@ export class AccountFactoryContract {
         transactionHash: receipt.hash,
         newAccounts
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to batch create Smart Accounts',
         this.factoryAddress,
@@ -201,7 +201,7 @@ export class AccountFactoryContract {
         implementationAddress: '0x...',
         entryPointAddress: '0x...'
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get factory statistics',
         this.factoryAddress,
@@ -246,7 +246,7 @@ export class AccountFactoryContract {
         blockNumber: event.blockNumber,
         transactionHash: event.transactionHash
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get account creation history',
         this.factoryAddress,
@@ -263,7 +263,7 @@ export class AccountFactoryContract {
       const accountSalt = salt || generateRandomBytes32();
       const gasEstimate = await this.contract.createAccount.estimateGas(owner, accountSalt);
       return gasEstimate.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to estimate gas for account creation',
         this.factoryAddress,

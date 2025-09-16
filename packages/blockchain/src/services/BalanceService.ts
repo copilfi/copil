@@ -95,8 +95,8 @@ export class BalanceService {
       logger.debug(`Cached token info for ${symbol}: ${tokenAddress}`);
       
       return tokenInfo;
-    } catch (error) {
-      logger.error(`Failed to get token info for ${tokenAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get token info for ${tokenAddress}:`, error as Error);
       
       // Return default token info on failure
       const defaultInfo: TokenInfo = {
@@ -117,8 +117,8 @@ export class BalanceService {
     try {
       const balance = await this.provider.getBalance(walletAddress);
       return ethers.formatEther(balance);
-    } catch (error) {
-      logger.error(`Failed to get native balance for ${walletAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get native balance for ${walletAddress}:`, error as Error);
       throw error;
     }
   }
@@ -144,8 +144,8 @@ export class BalanceService {
         priceUsd: 0, // Would be fetched from price oracle in production
         valueUsd: 0
       };
-    } catch (error) {
-      logger.error(`Failed to get token balance for ${tokenAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get token balance for ${tokenAddress}:`, error as Error);
       throw error;
     }
   }
@@ -169,8 +169,8 @@ export class BalanceService {
           result.status === 'fulfilled'
         )
         .map(result => result.value);
-    } catch (error) {
-      logger.error(`Failed to get token balances for ${walletAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get token balances for ${walletAddress}:`, error as Error);
       throw error;
     }
   }
@@ -227,8 +227,8 @@ export class BalanceService {
       logger.info(`  Total Value: $${totalValueUsd.toFixed(2)}`);
 
       return walletBalances;
-    } catch (error) {
-      logger.error(`Failed to get wallet balances for ${walletAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get wallet balances for ${walletAddress}:`, error as Error);
       throw error;
     }
   }
@@ -254,8 +254,8 @@ export class BalanceService {
       }
 
       return hasSufficient;
-    } catch (error) {
-      logger.error(`Failed to check native balance for ${walletAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to check native balance for ${walletAddress}:`, error as Error);
       return false;
     }
   }
@@ -283,8 +283,8 @@ export class BalanceService {
       }
 
       return hasSufficient;
-    } catch (error) {
-      logger.error(`Failed to check token balance for ${walletAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to check token balance for ${walletAddress}:`, error as Error);
       return false;
     }
   }
@@ -313,8 +313,8 @@ export class BalanceService {
         formattedAllowance,
         isUnlimited
       };
-    } catch (error) {
-      logger.error(`Failed to get allowance for ${tokenAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get allowance for ${tokenAddress}:`, error as Error);
       throw error;
     }
   }
@@ -350,8 +350,8 @@ export class BalanceService {
       }
 
       return hasSufficient;
-    } catch (error) {
-      logger.error(`Failed to check token allowance:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to check token allowance:`, error as Error);
       return false;
     }
   }
@@ -418,8 +418,8 @@ export class BalanceService {
         canExecuteSwap,
         errors
       };
-    } catch (error) {
-      logger.error('Failed to check swap requirements:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to check swap requirements:', error as Error);
       errors.push('Failed to check requirements');
       
       return {
@@ -451,8 +451,8 @@ export class BalanceService {
           result.status === 'fulfilled'
         )
         .map(result => result.value);
-    } catch (error) {
-      logger.error('Failed to get multiple wallet balances:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to get multiple wallet balances:', error as Error);
       throw error;
     }
   }
@@ -541,8 +541,8 @@ export class BalanceService {
       // Test with a zero address query (should not fail)
       await this.provider.getBalance(ethers.ZeroAddress);
       return true;
-    } catch (error) {
-      logger.error('BalanceService health check failed:', error);
+    } catch (error: unknown) {
+      logger.error('BalanceService health check failed:', error as Error);
       return false;
     }
   }

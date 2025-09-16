@@ -36,7 +36,7 @@ export class DragonswapProvider {
       });
       
       return balance as bigint;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to get token balance for ${tokenAddress}, account: ${account}`);
       throw new Error(`Failed to get token balance: ${error}`);
     }
@@ -59,7 +59,7 @@ export class DragonswapProvider {
       });
       
       return quote as bigint;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get quote', undefined, { params });
       throw new Error(`Failed to get quote: ${error}`);
     }
@@ -100,7 +100,7 @@ export class DragonswapProvider {
       }
 
       this.logger.info('Token approval completed', { hash, tokenAddress, spenderAddress, amount });
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Token approval failed: ${tokenAddress} -> ${spenderAddress}, amount: ${amount}`);
       throw new Error(`Token approval failed: ${error}`);
     }
@@ -178,7 +178,7 @@ export class DragonswapProvider {
       this.logger.info('Swap completed successfully', { result });
       return result;
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Swap failed', undefined, { params });
       throw new Error(`Swap failed: ${error}`);
     }
@@ -245,7 +245,7 @@ export class DragonswapProvider {
       this.logger.info('Swap completed successfully', { result });
       return result;
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Swap failed', undefined, { params });
       throw new Error(`Swap failed: ${error}`);
     }

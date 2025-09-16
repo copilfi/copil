@@ -178,6 +178,6 @@ export function getAddressFromPrivateKey(privateKey: string): string {
  * Generate random private key
  */
 export function generateRandomPrivateKey(): string {
-  const wallet = ethers.Wallet.createRandom();
+  const wallet = ethers.Wallet.createRandom() as ethers.Wallet;
   return wallet.privateKey;
 }

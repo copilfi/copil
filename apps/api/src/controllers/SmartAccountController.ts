@@ -11,7 +11,7 @@ import PrivateKeyService from '@/services/PrivateKeyService';
 
 export class SmartAccountController {
   /**
-   * Deploy Smart Account for authenticated user
+   * Deploy Smart Account for authenticated user (gas sponsored by platform)
    */
   static deployAccount = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
     if (!req.user) {
@@ -26,12 +26,83 @@ export class SmartAccountController {
 
     try {
       logger.info(`🚀 Starting Smart Account deployment for user: ${req.user.walletAddress}`);
-      
+
       // Check if Smart Account is already deployed
       const existingAccount = await prisma.smartAccount.findFirst({
-        where: { 
+        where: {
           userId: req.user.id,
-          isActive: true 
+          isActive: true
+        }
+      });
+
+      if (existingAccount) {
+        logger.info(`✅ Found existing Smart Account: ${existingAccount.address}`);
+        return res.json({
+          success: true,
+          message: 'Smart Account already deployed',
+          data: {
+            address: existingAccount.address,
+            deployedAt: existingAccount.deployedAt,
+            isExisting: true
+          }
+        });
+      }
+
+      // Deploy Smart Account with gas sponsored by platform
+      logger.info(`💰 Deploying Smart Account with platform-sponsored gas for: ${req.user.walletAddress}`);
+      const smartAccountAddress = await blockchainService.deploySmartAccount(req.user.walletAddress);
+
+      // Save to database
+      const smartAccount = await prisma.smartAccount.create({
+        data: {
+          userId: req.user.id,
+          address: smartAccountAddress,
+          saltNonce: ethers.keccak256(ethers.toUtf8Bytes(req.user.walletAddress)),
+          isActive: true,
+          deployedAt: new Date()
+        }
+      });
+
+      logger.info(`✅ Smart Account deployed and recorded: ${smartAccountAddress}`);
+
+      res.json({
+        success: true,
+        message: 'Smart Account deployed successfully with sponsored gas',
+        data: {
+          address: smartAccountAddress,
+          deployedAt: smartAccount.deployedAt,
+          gasSponsoredByPlatform: true,
+          isExisting: false
+        }
+      });
+    } catch (error) {
+      logger.error('Smart Account deployment failed:', error);
+      throw new AppError('Failed to deploy Smart Account', 500);
+    }
+  });
+
+  /**
+   * Prepare Smart Account deployment for frontend execution (legacy method)
+   */
+  static prepareDeployment = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError('User not authenticated', 401);
+    }
+
+    // Validate user wallet address
+    if (!req.user.walletAddress) {
+      logger.error('User wallet address is missing from request');
+      throw new AppError('User wallet address is required', 400);
+    }
+
+    try {
+      logger.info(`🚀 Preparing Smart Account deployment for user: ${req.user.walletAddress}`);
+
+      // Check if Smart Account is already deployed
+      const existingAccount = await prisma.smartAccount.findFirst({
+        where: {
+          userId: req.user.id,
+          isActive: true
         }
       });
 
@@ -54,13 +125,13 @@ export class SmartAccountController {
       // If already deployed, return the deployed address info and save to DB if not exists
       if (deploymentResult.isAlreadyDeployed) {
         logger.info(`✅ Smart Account already deployed on blockchain: ${deploymentResult.address}`);
-        
+
         // Ensure it's recorded in database
         const existingRecord = await prisma.smartAccount.findFirst({
-          where: { 
+          where: {
             userId: req.user.id,
             address: deploymentResult.address,
-            isActive: true 
+            isActive: true
           }
         });
 
@@ -386,7 +457,7 @@ export class SmartAccountController {
 
     try {
       logger.info(`🔑 Creating session key for user: ${req.user.walletAddress}`);
-      // Create session key on blockchain
+      // Create session key on blockchain with platform-sponsored transaction (no private key needed from user)
       const txHash = await blockchainService.createSessionKey(
         req.user.walletAddress,
         {
@@ -395,8 +466,8 @@ export class SmartAccountController {
           limitAmount,
           allowedTargets: allowedTargets || [],
           allowedFunctions: allowedFunctions || []
-        },
-        privateKey
+        }
+        // No privateKey parameter - let the service use platform wallet for gas sponsorship
       );
 
       // Get Smart Account from database
@@ -549,5 +620,47 @@ export class SmartAccountController {
         }
       }
     });
+  });
+
+  /**
+   * Revoke session key by ID
+   */
+  static revokeSessionKeyById = asyncHandler(async (req: AuthenticatedRequest, res: Response) => {
+    if (!req.user) {
+      throw new AppError('User not authenticated', 401);
+    }
+
+    const { sessionKeyId } = req.params;
+
+    try {
+      // Find the session key
+      const sessionKey = await prisma.sessionKey.findFirst({
+        where: {
+          id: sessionKeyId,
+          session: {
+            userId: req.user.id
+          },
+          isActive: true
+        }
+      });
+
+      if (!sessionKey) {
+        throw new AppError('Session key not found', 404);
+      }
+
+      // Mark as inactive in database (soft delete)
+      await prisma.sessionKey.update({
+        where: { id: sessionKeyId },
+        data: { isActive: false }
+      });
+
+      res.json({
+        success: true,
+        message: 'Session key revoked successfully'
+      });
+    } catch (error) {
+      logger.error('Session key revocation failed:', error);
+      throw new AppError('Failed to revoke session key', 500);
+    }
   });
 }

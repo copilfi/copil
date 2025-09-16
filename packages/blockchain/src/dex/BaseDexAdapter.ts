@@ -82,7 +82,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
         fee,
         route
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         `Failed to get quote for ${this.name}`,
         String(this.router.target),
@@ -121,7 +121,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
       });
 
       return tx;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError(
         `Failed to execute swap on ${this.name}`,
         undefined,
@@ -161,7 +161,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
         totalSupply: totalSupply.toString(),
         price
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         `Failed to get pool info for ${this.name}`,
         this.factory ? String(this.factory.target) : undefined,
@@ -207,7 +207,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
       });
 
       return tx;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError(
         `Failed to add liquidity on ${this.name}`,
         undefined,
@@ -243,7 +243,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
       });
 
       return tx;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError(
         `Failed to remove liquidity on ${this.name}`,
         undefined,
@@ -263,7 +263,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
     
     try {
       return await this.factory.getPair(tokenA, tokenB);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to get pool address', String(this.factory.target), error);
     }
   }
@@ -296,7 +296,7 @@ export abstract class BaseDexAdapter implements IDexAdapter {
     try {
       const amounts = await this.router.getAmountsOut(amountIn, path);
       return amounts[amounts.length - 1].toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to get amounts out', String(this.router.target), error);
     }
   }

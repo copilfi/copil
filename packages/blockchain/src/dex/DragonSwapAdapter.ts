@@ -232,7 +232,7 @@ export class DragonSwapAdapter extends BaseDexAdapter {
         // Use known addresses from research or fallback
         await this.tryKnownAddresses();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to initialize DragonSwap addresses:', error);
       // Use fallback addresses
       await this.tryKnownAddresses();
@@ -259,7 +259,7 @@ export class DragonSwapAdapter extends BaseDexAdapter {
         if (factory && factory !== '0x0000000000000000000000000000000000000000') {
           return { router: address, factory };
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // Not a router contract, continue
         continue;
       }
@@ -288,7 +288,7 @@ export class DragonSwapAdapter extends BaseDexAdapter {
         
         console.log('🐉 Using fallback DragonSwap addresses:', { router: fallbackRouter, factory });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('⚠️  Fallback addresses also failed. DragonSwap may not be available.');
     }
   }

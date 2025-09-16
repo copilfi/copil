@@ -179,8 +179,8 @@ export class FeeCollectorService {
       
       logger.info(`✅ Fee collected and recorded: ${transactionId}`);
       return treasuryTx;
-    } catch (error) {
-      logger.error(`Failed to collect native fee:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to collect native fee:`, error as Error);
       throw error;
     }
   }
@@ -223,8 +223,8 @@ export class FeeCollectorService {
       
       logger.info(`✅ Token fee collected and recorded: ${transactionId}`);
       return treasuryTx;
-    } catch (error) {
-      logger.error(`Failed to collect token fee:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to collect token fee:`, error as Error);
       throw error;
     }
   }
@@ -266,8 +266,8 @@ export class FeeCollectorService {
         native: ethers.formatEther(nativeBalance),
         tokens: [] // TODO: Implement token balance tracking
       };
-    } catch (error) {
-      logger.error('Failed to get treasury balance:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to get treasury balance:', error as Error);
       throw error;
     }
   }
@@ -388,8 +388,8 @@ export class FeeCollectorService {
     try {
       await this.getTreasuryBalance();
       return true;
-    } catch (error) {
-      logger.error('FeeCollectorService health check failed:', error);
+    } catch (error: unknown) {
+      logger.error('FeeCollectorService health check failed:', error as Error);
       return false;
     }
   }

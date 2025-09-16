@@ -7,11 +7,13 @@ import { commonSchemas } from '@/middleware/validation';
 import { generateApiKey, securityLevel } from '@/middleware/security';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
-import { 
-  authRateLimit, 
+import {
+  authRateLimit,
   strictRateLimit,
-  AdvancedRateLimiter 
+  refreshTokenRateLimit,
+  AdvancedRateLimiter
 } from '@/middleware/rateLimiter';
+import TokenService from '@/services/TokenService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -56,9 +58,9 @@ const revokeApiKeySchema = Joi.object({
 });
 
 // Routes with appropriate rate limiting (temporarily disabled for debugging)
-router.post('/register', validateBody(registerSchema), AuthController.register);
-router.post('/login', validateBody(loginSchema), AuthController.login);
-router.post('/generate-message', validateBody(generateMessageSchema), AuthController.generateMessage);
+router.post('/register', /* authRateLimit, */ validateBody(registerSchema), AuthController.register);
+router.post('/login', /* authRateLimit, */ validateBody(loginSchema), AuthController.login);
+router.post('/generate-message', /* authRateLimit, */ validateBody(generateMessageSchema), AuthController.generateMessage);
 router.post('/logout', authenticateToken, AuthController.logout);
 router.get('/profile', authenticateToken, AuthController.getProfile);
 router.put('/preferences', authenticateToken, validateBody(updatePreferencesSchema), AuthController.updatePreferences);
@@ -107,7 +109,7 @@ router.post('/generate-api-key', strictRateLimit, validateBody(generateApiKeySch
         apiKey,
         userId: user.id,
         walletAddress: user.walletAddress,
-        permissions: user.permissions,
+        permissions: permissions,
         usage: {
           rateLimit: permissions.includes('premium') ? '1000/min' : 
                     permissions.includes('pro') ? '500/min' : '100/min'
@@ -162,6 +164,103 @@ router.post('/revoke-api-key', strictRateLimit, validateBody(revokeApiKeySchema)
     res.status(500).json({
       success: false,
       error: 'Failed to revoke API key'
+    });
+  }
+});
+
+// Refresh Token Endpoint
+router.post('/refresh', refreshTokenRateLimit, authenticateToken, async (req, res) => {
+  try {
+    const authHeader = req.headers['authorization'];
+    const currentToken = authHeader && authHeader.split(' ')[1];
+
+    if (!currentToken) {
+      return res.status(401).json({
+        success: false,
+        error: 'No token provided'
+      });
+    }
+
+    // Get refresh token from cookies or request body
+    let refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
+
+    if (!refreshToken) {
+      // If no refresh token provided, try to extract from current token's user
+      const decoded = await TokenService.verifyAccessToken(currentToken);
+      if (!decoded) {
+        return res.status(401).json({
+          success: false,
+          error: 'Invalid current token'
+        });
+      }
+
+      // Generate a new refresh token for the user (fallback for existing sessions)
+      refreshToken = await TokenService.generateRefreshToken(decoded.userId);
+    }
+
+    // Verify and rotate the refresh token
+    const tokenData = await TokenService.verifyAndRotateRefreshToken(refreshToken);
+
+    if (!tokenData) {
+      return res.status(401).json({
+        success: false,
+        error: 'Invalid or expired refresh token'
+      });
+    }
+
+    // Get user data to include in new access token
+    const user = await prisma.user.findUnique({
+      where: { id: tokenData.userId },
+      select: {
+        id: true,
+        walletAddress: true,
+        email: true,
+        isActive: true
+      }
+    });
+
+    if (!user || !user.isActive) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not found or inactive'
+      });
+    }
+
+    // Generate new access token with proper user data
+    const newAccessToken = TokenService.generateAccessToken({
+      userId: user.id,
+      address: user.walletAddress,
+      email: user.email || undefined
+    });
+
+    // Set new refresh token in httpOnly cookie (more secure)
+    res.cookie('refreshToken', tokenData.newRefreshToken, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'strict',
+      maxAge: 30 * 24 * 60 * 60 * 1000 // 30 days
+    });
+
+    logger.info(`🔄 Token refreshed for user: ${user.id}`);
+
+    res.json({
+      success: true,
+      data: {
+        token: newAccessToken,
+        user: {
+          id: user.id,
+          walletAddress: user.walletAddress,
+          email: user.email
+        }
+      },
+      message: 'Token refreshed successfully'
+    });
+
+  } catch (error) {
+    logger.error('Token refresh failed:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Token refresh failed'
     });
   }
 });

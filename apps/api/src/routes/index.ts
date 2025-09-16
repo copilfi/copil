@@ -3,22 +3,22 @@ import { Response } from 'express';
 // Import auth routes with security enhancements
 import authRoutes from './auth';
 import smartAccountRoutes from './smart-account';
-// import portfolioRoutes from './portfolio';
-// import { createStrategyRoutes } from './strategy';
+import portfolioRoutes from './portfolio';
+import { createStrategyRoutes } from './strategy';
 import { createDEXRoutes } from './dex';
-// import { createAIRoutes } from './ai';
+import { createAIRoutes } from './ai';
 // import { createMonitoringRoutes } from './monitoring';
 import { createOracleRoutes } from './oracle';
 import { createMarketRoutes } from './market';
 import feeAnalyticsRoutes from './fee-analytics.routes';
-// import { blockchainService } from '@/services/RealBlockchainService';
-// import { StrategyExecutionEngine } from '@/services/StrategyExecutionEngine';
+import { blockchainService } from '@/services/RealBlockchainService';
+import { StrategyExecutionEngine } from '@/services/StrategyExecutionEngine';
 import DEXAggregationService from '@/services/DEXAggregationService';
 // import MonitoringService from '@/services/MonitoringService';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-// const executionEngine = new StrategyExecutionEngine(prisma, blockchainService);
+const executionEngine = new StrategyExecutionEngine(prisma, blockchainService);
 const dexService = new DEXAggregationService();
 // const monitoringService = new MonitoringService(prisma);
 // import redis from '@/config/redis';
@@ -125,10 +125,21 @@ try {
 // Enable auth routes with security enhancements
 router.use('/auth', authRoutes);
 router.use('/smart-account', smartAccountRoutes);
-// router.use('/portfolios', portfolioRoutes);
-// router.use('/strategies', createStrategyRoutes(prisma, executionEngine));
+router.use('/portfolio', portfolioRoutes);
+router.use('/strategies', createStrategyRoutes(prisma, executionEngine));
 // router.use('/monitoring', createMonitoringRoutes(monitoringService));
-// router.use('/ai', createAIRoutes(aiService));
+try {
+  // Initialize AI service if available
+  if (process.env.OPENAI_API_KEY) {
+    const aiService = null; // TODO: Initialize proper AI service
+    router.use('/ai', createAIRoutes(aiService));
+    console.log('✅ AI routes registered');
+  } else {
+    console.log('⚠️ AI routes skipped - OPENAI_API_KEY not configured');
+  }
+} catch (error) {
+  console.error('❌ AI routes failed:', error.message);
+}
 
 // Root endpoint
 router.get('/', (_req, res: Response) => {

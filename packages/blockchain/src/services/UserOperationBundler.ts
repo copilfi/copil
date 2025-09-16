@@ -91,8 +91,8 @@ export class UserOperationBundler {
     this.bundleTimer = setInterval(async () => {
       try {
         await this.processPendingBundle();
-      } catch (error) {
-        logger.error('Error processing bundle:', error);
+      } catch (error: unknown) {
+        logger.error('Error processing bundle:', error as Error);
       }
     }, this.config.bundleInterval);
 
@@ -152,8 +152,8 @@ export class UserOperationBundler {
       }
 
       return userOpHash;
-    } catch (error) {
-      logger.error('Failed to add UserOperation:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to add UserOperation:', error as Error);
       throw error;
     }
   }
@@ -175,8 +175,8 @@ export class UserOperationBundler {
       // In production, you'd call simulateValidation on the EntryPoint
       logger.debug(`Validated UserOperation for ${userOp.sender}`);
       
-    } catch (error) {
-      logger.error('UserOperation validation failed:', error);
+    } catch (error: unknown) {
+      logger.error('UserOperation validation failed:', error as Error);
       throw error;
     }
   }
@@ -226,8 +226,8 @@ export class UserOperationBundler {
       logger.info(`  Gas used: ${receipt.gasUsed}`);
       logger.info(`  Remaining queue size: ${this.pendingUserOps.size}`);
       
-    } catch (error) {
-      logger.error('Failed to execute bundle:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to execute bundle:', error as Error);
       
       // On failure, remove UserOps from queue to prevent retry loops
       // In production, you might want more sophisticated retry logic
@@ -271,8 +271,8 @@ export class UserOperationBundler {
         userOperationResults: userOpEvents
       };
       
-    } catch (error) {
-      logger.error('Bundle execution failed:', error);
+    } catch (error: unknown) {
+      logger.error('Bundle execution failed:', error as Error);
       throw error;
     }
   }
@@ -309,8 +309,8 @@ export class UserOperationBundler {
         });
       }
       
-    } catch (error) {
-      logger.error('Failed to parse UserOperation events:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to parse UserOperation events:', error as Error);
     }
     
     return results;
@@ -347,8 +347,8 @@ export class UserOperationBundler {
         logs: receipt.logs
       };
       
-    } catch (error) {
-      logger.error(`Failed to get UserOperation receipt for ${userOpHash}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get UserOperation receipt for ${userOpHash}:`, error as Error);
       return null;
     }
   }
@@ -430,8 +430,8 @@ export class UserOperationBundler {
       }
       
       return true;
-    } catch (error) {
-      logger.error('Bundler health check failed:', error);
+    } catch (error: unknown) {
+      logger.error('Bundler health check failed:', error as Error);
       return false;
     }
   }

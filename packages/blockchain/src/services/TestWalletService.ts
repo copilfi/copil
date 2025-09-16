@@ -77,7 +77,7 @@ export class TestWalletService {
     if (this.config.mnemonic) {
       const hdWallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(this.config.mnemonic));
       const path = `m/44'/60'/0'/0/${index}`;
-      derivedWallet = hdWallet.derivePath(path).connect(this.provider);
+      derivedWallet = hdWallet.derivePath(path).connect(this.provider) as ethers.Wallet;
     } else {
       // For non-HD wallets, create deterministic wallets based on primary key
       const derivedKey = ethers.keccak256(
@@ -112,8 +112,8 @@ export class TestWalletService {
         nonce,
         isContract: code !== '0x'
       };
-    } catch (error) {
-      logger.error(`Failed to get wallet info for ${targetWallet.address}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get wallet info for ${targetWallet.address}:`, error as Error);
       throw error;
     }
   }
@@ -141,8 +141,8 @@ export class TestWalletService {
       logger.info(`✅ Funded wallet ${targetAddress}: ${receipt?.hash}`);
       
       return receipt?.hash || tx.hash;
-    } catch (error) {
-      logger.error(`Failed to fund wallet ${targetAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to fund wallet ${targetAddress}:`, error as Error);
       throw error;
     }
   }
@@ -177,8 +177,8 @@ export class TestWalletService {
       
       logger.info(`✅ Sent ${amountEth} ETH: ${receipt?.hash}`);
       return receipt?.hash || tx.hash;
-    } catch (error) {
-      logger.error(`Failed to send native token:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to send native token:`, error as Error);
       throw error;
     }
   }
@@ -218,8 +218,8 @@ export class TestWalletService {
       
       logger.info(`✅ Contract transaction sent: ${receipt?.hash}`);
       return receipt?.hash || tx.hash;
-    } catch (error) {
-      logger.error(`Failed to send contract transaction:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to send contract transaction:`, error as Error);
       throw error;
     }
   }
@@ -238,8 +238,8 @@ export class TestWalletService {
       logger.info(`✅ Message signed`);
       
       return signature;
-    } catch (error) {
-      logger.error('Failed to sign message:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to sign message:', error as Error);
       throw error;
     }
   }
@@ -262,8 +262,8 @@ export class TestWalletService {
       logger.info(`✅ Typed data signed`);
       
       return signature;
-    } catch (error) {
-      logger.error('Failed to sign typed data:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to sign typed data:', error as Error);
       throw error;
     }
   }
@@ -289,8 +289,8 @@ export class TestWalletService {
 
       logger.debug(`Gas estimate: ${gasEstimate.toString()}`);
       return gasEstimate;
-    } catch (error) {
-      logger.error('Failed to estimate gas:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to estimate gas:', error as Error);
       throw error;
     }
   }
@@ -302,8 +302,8 @@ export class TestWalletService {
     try {
       const receipt = await this.provider.getTransactionReceipt(txHash);
       return receipt;
-    } catch (error) {
-      logger.error(`Failed to get transaction receipt for ${txHash}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get transaction receipt for ${txHash}:`, error as Error);
       throw error;
     }
   }
@@ -319,8 +319,8 @@ export class TestWalletService {
       
       logger.info(`✅ Transaction confirmed: ${txHash}`);
       return receipt;
-    } catch (error) {
-      logger.error(`Failed to wait for transaction ${txHash}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to wait for transaction ${txHash}:`, error as Error);
       throw error;
     }
   }
@@ -335,16 +335,28 @@ export class TestWalletService {
     isEIP1559: boolean;
   }> {
     try {
+      const network = await this.provider.getNetwork();
       const feeData = await this.provider.getFeeData();
-      
+
+      // Handle SEI network (1329) - doesn't support EIP-1559
+      if (Number(network.chainId) === 1329) {
+        const gasPrice = feeData.gasPrice?.toString();
+        return {
+          gasPrice,
+          maxFeePerGas: gasPrice,
+          maxPriorityFeePerGas: gasPrice,
+          isEIP1559: false // SEI uses legacy gas pricing
+        };
+      }
+
       return {
         gasPrice: feeData.gasPrice?.toString(),
         maxFeePerGas: feeData.maxFeePerGas?.toString(),
         maxPriorityFeePerGas: feeData.maxPriorityFeePerGas?.toString(),
         isEIP1559: !!feeData.maxFeePerGas
       };
-    } catch (error) {
-      logger.error('Failed to get gas price:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to get gas price:', error as Error);
       throw error;
     }
   }
@@ -383,8 +395,8 @@ export class TestWalletService {
       try {
         const txHash = await this.fundWallet(address, amountEthPerWallet);
         txHashes.push(txHash);
-      } catch (error) {
-        logger.error(`Failed to fund wallet ${address}:`, error);
+      } catch (error: unknown) {
+        logger.error(`Failed to fund wallet ${address}:`, error as Error);
         txHashes.push(''); // Add empty string for failed transactions
       }
     }
@@ -414,10 +426,10 @@ export class TestWalletService {
         name: network.name,
         blockNumber,
         gasPrice: feeData.gasPrice?.toString() || '0',
-        isEIP1559: !!feeData.maxFeePerGas
+        isEIP1559: Number(network.chainId) === 1329 ? false : !!feeData.maxFeePerGas
       };
-    } catch (error) {
-      logger.error('Failed to get network info:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to get network info:', error as Error);
       throw error;
     }
   }
@@ -438,8 +450,8 @@ export class TestWalletService {
       await this.provider.getBlockNumber();
       await this.getWalletInfo();
       return true;
-    } catch (error) {
-      logger.error('TestWalletService health check failed:', error);
+    } catch (error: unknown) {
+      logger.error('TestWalletService health check failed:', error as Error);
       return false;
     }
   }
@@ -466,8 +478,8 @@ export class TestWalletService {
       const available = parseFloat(balance);
       
       return available >= required;
-    } catch (error) {
-      logger.error('Failed to check balance:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to check balance:', error as Error);
       return false;
     }
   }
@@ -488,8 +500,8 @@ export class TestWalletService {
       logger.info(`Block: ${networkInfo.blockNumber}`);
       logger.info(`Gas Price: ${ethers.formatUnits(networkInfo.gasPrice, 'gwei')} Gwei`);
       logger.info('========================');
-    } catch (error) {
-      logger.error('Failed to log wallet stats:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to log wallet stats:', error as Error);
     }
   }
 }

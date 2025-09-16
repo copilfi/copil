@@ -1,9 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { DCAScheduler, AutomationManager } from '@copil/blockchain';
-import { BlockchainLogger } from '@copil/blockchain';
+import { logger } from '@/utils/logger';
+import { AuthenticatedRequest } from '@/middleware/auth';
 import { z } from 'zod';
-
-const logger = BlockchainLogger.getInstance();
 
 // Request validation schemas
 const CreateDCAStrategySchema = z.object({

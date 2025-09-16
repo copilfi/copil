@@ -109,7 +109,7 @@ export class ConditionalOrderEngineContract {
         orderId: decodedEvent.args.orderId.toString(),
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to create conditional order',
         this.engineAddress,
@@ -159,7 +159,7 @@ export class ConditionalOrderEngineContract {
         orderId: decodedEvent.args.orderId.toString(),
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to create DCA order',
         this.engineAddress,
@@ -203,7 +203,7 @@ export class ConditionalOrderEngineContract {
         gasUsed,
         reward
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to execute conditional order',
         this.engineAddress,
@@ -225,7 +225,7 @@ export class ConditionalOrderEngineContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to cancel conditional order',
         this.engineAddress,
@@ -256,7 +256,7 @@ export class ConditionalOrderEngineContract {
         inputAmount: order.inputAmount.toString(),
         deadline: order.deadline
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get order details',
         this.engineAddress,
@@ -272,7 +272,7 @@ export class ConditionalOrderEngineContract {
     try {
       const orderIds = await this.contract.getUserOrders(userAddress);
       return orderIds.map((id: any) => id.toString());
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get user orders',
         this.engineAddress,
@@ -294,7 +294,7 @@ export class ConditionalOrderEngineContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to update token price',
         this.engineAddress,
@@ -316,7 +316,7 @@ export class ConditionalOrderEngineContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to authorize executor',
         this.engineAddress,
@@ -338,7 +338,7 @@ export class ConditionalOrderEngineContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to revoke executor',
         this.engineAddress,
@@ -361,7 +361,7 @@ export class ConditionalOrderEngineContract {
       // This would require a view function in the contract to return executable orders
       // For now, return empty array - would need contract enhancement
       return [];
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get executable orders',
         this.engineAddress,
@@ -453,7 +453,7 @@ export class ConditionalOrderEngineContract {
         blockNumber: event.blockNumber,
         transactionHash: event.transactionHash
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get execution history',
         this.engineAddress,

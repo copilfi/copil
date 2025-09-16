@@ -43,7 +43,7 @@ export class EVMProvider implements IBlockchainProvider {
     try {
       const balance = await this.provider.getBalance(address);
       return balance.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get balance for ${address}`,
         'BALANCE_ERROR',
@@ -70,7 +70,7 @@ export class EVMProvider implements IBlockchainProvider {
         blockHash: tx.blockHash || undefined,
         status: tx.blockNumber ? 'confirmed' : 'pending'
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get transaction ${hash}`,
         'TRANSACTION_ERROR',
@@ -90,7 +90,7 @@ export class EVMProvider implements IBlockchainProvider {
       
       const response = await this.wallet.sendTransaction(enhancedTx);
       return response;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to send transaction', undefined, error);
     }
   }
@@ -98,7 +98,7 @@ export class EVMProvider implements IBlockchainProvider {
   async waitForTransaction(hash: string): Promise<any> {
     try {
       return await this.transactionMonitor.waitForTransaction(hash, 1, 60000);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError(
         `Failed to wait for transaction ${hash}`,
         hash,
@@ -111,7 +111,7 @@ export class EVMProvider implements IBlockchainProvider {
     try {
       const estimate = await this.gasEstimator.estimateGas(tx);
       return estimate.gasLimit;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to estimate gas', 'GAS_ERROR', error);
     }
   }
@@ -120,7 +120,7 @@ export class EVMProvider implements IBlockchainProvider {
     try {
       const feeData = await this.provider.getFeeData();
       return feeData.gasPrice?.toString() || '0';
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get gas price', 'GAS_PRICE_ERROR', error);
     }
   }
@@ -128,7 +128,7 @@ export class EVMProvider implements IBlockchainProvider {
   async getBlockNumber(): Promise<number> {
     try {
       return await this.provider.getBlockNumber();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get block number', 'BLOCK_ERROR', error);
     }
   }
@@ -136,7 +136,7 @@ export class EVMProvider implements IBlockchainProvider {
   async getBlock(blockNumber: number): Promise<any> {
     try {
       return await this.provider.getBlock(blockNumber);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get block ${blockNumber}`,
         'BLOCK_ERROR',
@@ -148,7 +148,7 @@ export class EVMProvider implements IBlockchainProvider {
   async getLogs(filter: any): Promise<any[]> {
     try {
       return await this.provider.getLogs(filter);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get logs', 'LOGS_ERROR', error);
     }
   }
@@ -156,7 +156,7 @@ export class EVMProvider implements IBlockchainProvider {
   async call(tx: any): Promise<string> {
     try {
       return await this.provider.call(tx);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to call contract', 'CALL_ERROR', error);
     }
   }
@@ -205,7 +205,7 @@ export class EVMProvider implements IBlockchainProvider {
         blockNumber: receipt.blockNumber,
         gasUsed: receipt.gasUsed.toString()
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to get transaction status', hash, error);
     }
   }
@@ -245,7 +245,7 @@ export class EVMProvider implements IBlockchainProvider {
         deploymentHash: contract.deploymentTransaction()?.hash || '',
         address: await contract.getAddress()
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Contract deployment failed', 'DEPLOYMENT_ERROR', error);
     }
   }
@@ -269,7 +269,7 @@ export class EVMProvider implements IBlockchainProvider {
             resolveNext = null;
           }
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.warn('Error watching transaction:', error);
       }
     });

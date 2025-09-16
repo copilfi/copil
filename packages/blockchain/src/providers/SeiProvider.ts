@@ -67,7 +67,7 @@ export class SeiProvider implements IBlockchainProvider {
     try {
       const balance = await this.evmProvider.getBalance(address);
       return balance.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get balance for ${address}`,
         'BALANCE_ERROR',
@@ -93,7 +93,7 @@ export class SeiProvider implements IBlockchainProvider {
         blockNumber: tx.blockNumber || undefined,
         blockHash: tx.blockHash || undefined,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get transaction ${hash}`,
         'TRANSACTION_ERROR',
@@ -111,7 +111,7 @@ export class SeiProvider implements IBlockchainProvider {
       const wallet = new Wallet(this.privateKey, this.evmProvider);
       const response = await wallet.sendTransaction(tx);
       return response;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to send transaction', 'SEND_ERROR', error);
     }
   }
@@ -120,7 +120,7 @@ export class SeiProvider implements IBlockchainProvider {
     try {
       const receipt = await this.evmProvider.waitForTransaction(hash);
       return receipt;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to wait for transaction ${hash}`,
         'WAIT_ERROR',
@@ -133,7 +133,7 @@ export class SeiProvider implements IBlockchainProvider {
     try {
       const gasEstimate = await this.evmProvider.estimateGas(tx);
       return gasEstimate.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to estimate gas', 'GAS_ERROR', error);
     }
   }
@@ -142,7 +142,7 @@ export class SeiProvider implements IBlockchainProvider {
     try {
       const feeData = await this.evmProvider.getFeeData();
       return feeData.gasPrice?.toString() || '0';
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get gas price', 'GAS_PRICE_ERROR', error);
     }
   }
@@ -150,7 +150,7 @@ export class SeiProvider implements IBlockchainProvider {
   async getBlockNumber(): Promise<number> {
     try {
       return await this.evmProvider.getBlockNumber();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get block number', 'BLOCK_ERROR', error);
     }
   }
@@ -158,7 +158,7 @@ export class SeiProvider implements IBlockchainProvider {
   async getBlock(blockNumber: number): Promise<any> {
     try {
       return await this.evmProvider.getBlock(blockNumber);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get block ${blockNumber}`,
         'BLOCK_ERROR',
@@ -170,7 +170,7 @@ export class SeiProvider implements IBlockchainProvider {
   async getLogs(filter: any): Promise<any[]> {
     try {
       return await this.evmProvider.getLogs(filter);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to get logs', 'LOGS_ERROR', error);
     }
   }
@@ -178,7 +178,7 @@ export class SeiProvider implements IBlockchainProvider {
   async call(tx: any): Promise<string> {
     try {
       return await this.evmProvider.call(tx);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to call contract', 'CALL_ERROR', error);
     }
   }
@@ -301,7 +301,7 @@ export class SeiProvider implements IBlockchainProvider {
       // In Sei, blocks are final when they appear
       // This is different from other chains that require confirmations
       return block !== null;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError('Failed to check finality', 'FINALITY_ERROR', error);
     }
   }

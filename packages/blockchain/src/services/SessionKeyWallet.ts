@@ -54,10 +54,10 @@ export class SessionKeyWallet {
       if (this.masterWallet && keyIndex !== undefined) {
         // Generate deterministic key from master wallet
         const path = `m/44'/60'/0'/0/${keyIndex}`;
-        wallet = this.masterWallet.derivePath(path).connect(this.provider);
+        wallet = this.masterWallet.derivePath(path).connect(this.provider) as ethers.Wallet;
       } else {
         // Generate random key
-        wallet = ethers.Wallet.createRandom().connect(this.provider);
+        wallet = ethers.Wallet.createRandom().connect(this.provider) as ethers.Wallet;
       }
 
       const sessionKeyInfo: SessionKeyInfo = {
@@ -81,8 +81,8 @@ export class SessionKeyWallet {
       logger.info(`  Limit amount: ${permissions.limitAmount} ETH`);
       
       return sessionKeyInfo;
-    } catch (error) {
-      logger.error('Failed to generate session key:', error);
+    } catch (error: unknown) {
+      logger.error('Failed to generate session key:', error as Error);
       throw error;
     }
   }
@@ -99,8 +99,8 @@ export class SessionKeyWallet {
       }
 
       return new Wallet(sessionKeyInfo.privateKey, this.provider);
-    } catch (error) {
-      logger.error(`Failed to get session key wallet ${sessionKeyAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to get session key wallet ${sessionKeyAddress}:`, error as Error);
       return null;
     }
   }
@@ -386,8 +386,8 @@ export class SessionKeyWallet {
 
       // Sign the hash
       return await wallet.signMessage(ethers.getBytes(messageHash));
-    } catch (error) {
-      logger.error(`Failed to sign transaction data with session key ${sessionKeyAddress}:`, error);
+    } catch (error: unknown) {
+      logger.error(`Failed to sign transaction data with session key ${sessionKeyAddress}:`, error as Error);
       return null;
     }
   }

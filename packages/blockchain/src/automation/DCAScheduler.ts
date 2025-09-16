@@ -205,7 +205,7 @@ export class DCAScheduler {
     for (const strategy of readyStrategies) {
       try {
         await this.executeStrategy(strategy);
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error(`Failed to execute DCA strategy: ${strategy.id}`, undefined, {
           error: error instanceof Error ? error.message : 'Unknown error',
           strategyId: strategy.id
@@ -285,7 +285,7 @@ export class DCAScheduler {
         await this.onExecutionCallback(execution);
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('DCA execution failed', undefined, {
         strategyId: strategy.id,
         error: error instanceof Error ? error.message : 'Unknown error'
@@ -329,7 +329,7 @@ export class DCAScheduler {
       }
 
       return 0n;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to check wallet balance', undefined, { tokenAddress });
       return 0n;
     }

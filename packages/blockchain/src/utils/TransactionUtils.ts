@@ -86,7 +86,7 @@ export class GasEstimator {
         gasLimit = await this.provider.estimateGas(tx);
         // Add 20% buffer for safety
         gasLimit = gasLimit * BigInt(120) / BigInt(100);
-      } catch (error) {
+      } catch (error: unknown) {
         // If estimation fails, use conservative defaults
         gasLimit = BigInt(200000);
       }
@@ -105,7 +105,7 @@ export class GasEstimator {
         maxPriorityFeePerGas: maxPriorityFeePerGas.toString(),
         estimatedCost: ethers.formatEther(estimatedCost)
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new Error(`Gas estimation failed: ${error}`);
     }
   }
@@ -175,7 +175,7 @@ export class TransactionMonitor {
         
         // Wait for one Sei block time before checking again
         await new Promise(resolve => setTimeout(resolve, SEI_BLOCK_TIME));
-      } catch (error) {
+      } catch (error: unknown) {
         if (Date.now() - startTime >= timeout) {
           throw new TransactionError('Transaction timeout', hash, error);
         }
@@ -227,7 +227,7 @@ export class TransactionMonitor {
         }
         
         await new Promise(resolve => setTimeout(resolve, SEI_BLOCK_TIME));
-      } catch (error) {
+      } catch (error: unknown) {
         console.warn('Error monitoring transaction:', error);
         await new Promise(resolve => setTimeout(resolve, SEI_BLOCK_TIME * 2));
       }
@@ -363,7 +363,7 @@ export class BatchTransactionUtils {
           value: call.value || '0'
         });
         totalGas += gasEstimate;
-      } catch (error) {
+      } catch (error: unknown) {
         // If individual estimation fails, add a conservative estimate
         totalGas += BigInt(50000);
       }

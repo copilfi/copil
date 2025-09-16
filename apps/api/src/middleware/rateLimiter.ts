@@ -76,15 +76,22 @@ export class AdvancedRateLimiter {
       },
 
       // Enhanced logging and suspicious activity detection
-      onLimitReached: async (req: Request, res: Response) => {
+      handler: async (req: Request, res: Response) => {
         const clientIp = this.getClientIP(req);
         const endpoint = req.route?.path || req.path;
-        
+
         logger.warn(`Rate limit exceeded for IP ${clientIp} on ${endpoint}`, {
           ip: clientIp,
           endpoint,
           userAgent: req.get('User-Agent'),
           timestamp: new Date().toISOString()
+        });
+
+        // Send rate limit response
+        res.status(429).json({
+          success: false,
+          error: options.message,
+          retryAfter: Math.ceil(options.windowMs / 1000)
         });
 
         // Track suspicious activity
@@ -278,6 +285,15 @@ export const strictRateLimit = AdvancedRateLimiter.createRateLimiter({
   maxRequests: 3, // Only 3 attempts per hour
   message: 'Too many sensitive operation attempts. Please try again in 1 hour.',
   skipSuccessfulRequests: false
+});
+
+// Lenient rate limit for token refresh (automatic operation)
+export const refreshTokenRateLimit = AdvancedRateLimiter.createRateLimiter({
+  windowMs: 1 * 60 * 1000, // 1 minute
+  maxRequests: 20, // 20 refresh attempts per minute (generous for automatic retries)
+  message: 'Token refresh rate limit exceeded. Please wait a moment.',
+  skipSuccessfulRequests: true, // Don't count successful refreshes against limit
+  skipFailedRequests: false // Count failed attempts to prevent abuse
 });
 
 export default AdvancedRateLimiter;

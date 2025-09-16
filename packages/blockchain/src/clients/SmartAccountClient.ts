@@ -122,7 +122,7 @@ export class SmartAccountClient {
       await this.initializeSmartAccountContract(accountAddress);
       
       return accountAddress;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to deploy Smart Account', undefined, error);
     }
   }
@@ -183,7 +183,7 @@ export class SmartAccountClient {
       logger.info('Session key created successfully', { txHash: receipt.hash });
       
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to create session key', error as Error);
       throw new ContractError('Failed to create session key', String(this.smartAccountContract?.target), error);
     }
@@ -203,7 +203,7 @@ export class SmartAccountClient {
       console.log(`Session key revoked in tx: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to revoke session key', String(this.smartAccountContract?.target), error);
     }
   }
@@ -231,7 +231,7 @@ export class SmartAccountClient {
       console.log(`Transaction executed in tx: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to execute transaction', undefined, error);
     }
   }
@@ -261,7 +261,7 @@ export class SmartAccountClient {
       console.log(`Batch executed in tx: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to execute batch', undefined, error);
     }
   }
@@ -291,7 +291,7 @@ export class SmartAccountClient {
       console.log(`Automated transaction executed in tx: ${receipt.hash}`);
       
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to execute automated transaction', undefined, error);
     }
   }
@@ -355,7 +355,7 @@ export class SmartAccountClient {
         paymasterAndData: '0x',
         signature: '0x'
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to build UserOperation', undefined, error);
     }
   }
@@ -391,7 +391,7 @@ export class SmartAccountClient {
         ...userOp,
         signature
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to sign UserOperation', undefined, error);
     }
   }
@@ -406,7 +406,7 @@ export class SmartAccountClient {
       
       console.log(`UserOperation submitted in tx: ${receipt.hash}`);
       return receipt.hash;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new TransactionError('Failed to submit UserOperation', undefined, error);
     }
   }
@@ -427,7 +427,7 @@ export class SmartAccountClient {
           BigInt(200000) * (feeData.maxFeePerGas || BigInt(2000000000))
         )
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to estimate gas', undefined, error);
     }
   }
@@ -465,7 +465,7 @@ export class SmartAccountClient {
         balance,
         isDeployed
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError('Failed to get account info', undefined, error);
     }
   }

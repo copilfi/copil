@@ -45,7 +45,7 @@ export class SymphonyProvider {
       });
       
       return balance as bigint;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to get token balance for ${tokenAddress}, account: ${account}`);
       throw new Error(`Failed to get token balance: ${error}`);
     }
@@ -86,7 +86,7 @@ export class SymphonyProvider {
       }
 
       this.logger.info('Token approval completed', { hash, tokenAddress, spenderAddress, amount });
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Token approval failed: ${tokenAddress} -> ${spenderAddress}, amount: ${amount}`);
       throw new Error(`Token approval failed: ${error}`);
     }
@@ -149,7 +149,7 @@ export class SymphonyProvider {
           priceImpact: 0.003 // 0.3% fee assumption
         };
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get Symphony quote', undefined, { params });
       throw new Error(`Failed to get Symphony quote: ${error}`);
     }
@@ -251,7 +251,7 @@ export class SymphonyProvider {
       this.logger.info('Symphony swap completed successfully', { result });
       return result;
 
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Symphony swap failed', undefined, { params });
       throw new Error(`Symphony swap failed: ${error}`);
     }
@@ -280,7 +280,7 @@ export class SymphonyProvider {
         priceImpact: quote.priceImpact,
         gasEstimate: 150000n // Estimated gas for swap
       };
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get best route', undefined, { params });
       throw new Error(`Failed to get best route: ${error}`);
     }

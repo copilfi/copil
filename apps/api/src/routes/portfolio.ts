@@ -3,7 +3,9 @@ import { PrismaClient } from '@prisma/client';
 import Joi from 'joi';
 import { logger } from '@/utils/logger';
 import { validateBody } from '@/middleware/validation';
+import { authenticateToken } from '@/middleware/auth';
 import rateLimit from 'express-rate-limit';
+import blockchainService from '@/services/RealBlockchainService';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -85,6 +87,189 @@ router.get('/', async (req, res) => {
     res.status(500).json({
       success: false,
       error: 'Failed to fetch portfolios'
+    });
+  }
+});
+
+// Portfolio summary endpoint for real-time dashboard
+router.get('/summary', authenticateToken, async (req, res) => {
+  try {
+    logger.info(`Portfolio summary debug: user object = ${JSON.stringify((req as any).user)}`);
+
+    const userId = (req as any).user?.id;
+    const user = (req as any).user;
+
+    if (!userId || !user?.walletAddress) {
+      logger.error(`Portfolio summary auth failed: userId=${userId}, walletAddress=${user?.walletAddress}`);
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      });
+    }
+
+    logger.info(`Portfolio summary requested for user ${userId}, wallet: ${user.walletAddress}`);
+
+    // Get user's smart account for portfolio calculations
+    const smartAccount = await prisma.smartAccount.findFirst({
+      where: {
+        userId: userId,
+        isActive: true
+      }
+    });
+
+    const targetAddress = smartAccount?.address || user.walletAddress;
+    logger.info(`Fetching portfolio data for address: ${targetAddress}`);
+
+    // Get SEI balance
+    const seiBalance = await blockchainService.getBalance(targetAddress);
+
+    // Calculate total portfolio value in USD
+    // Note: This would need price feeds integration for accurate USD values
+    const totalValue = parseFloat(seiBalance); // For now, just use SEI amount
+
+    const summary = {
+      totalValue: totalValue,
+      dailyChange: 0, // TODO: Calculate from historical data
+      tokens: [
+        {
+          symbol: 'SEI',
+          balance: seiBalance,
+          value: totalValue,
+          address: '0x0000000000000000000000000000000000000000', // Native token
+          decimals: 18
+        }
+      ],
+      address: targetAddress,
+      lastUpdated: new Date().toISOString()
+    };
+
+    logger.info(`Portfolio summary: ${JSON.stringify(summary, null, 2)}`);
+
+    res.json({
+      success: true,
+      data: summary
+    });
+  } catch (error) {
+    logger.error('Error fetching portfolio summary:', error);
+    // Return empty portfolio on error
+    res.json({
+      success: true,
+      data: {
+        totalValue: 0,
+        dailyChange: 0,
+        tokens: [],
+        lastUpdated: new Date().toISOString()
+      }
+    });
+  }
+});
+
+// Portfolio history endpoint for charts
+router.get('/history', authenticateToken, async (req, res) => {
+  try {
+    const userId = (req as any).user?.id;
+    const user = (req as any).user;
+
+    if (!userId || !user?.walletAddress) {
+      return res.status(401).json({
+        success: false,
+        error: 'User not authenticated'
+      });
+    }
+
+    const period = req.query.period as string || '24h';
+    logger.info(`Portfolio history requested for user ${userId}, period: ${period}`);
+
+    // Get user's smart account for history calculations
+    const smartAccount = await prisma.smartAccount.findFirst({
+      where: {
+        userId: userId,
+        isActive: true
+      }
+    });
+
+    const targetAddress = smartAccount?.address || user.walletAddress;
+
+    // Calculate time range based on period
+    const now = new Date();
+    let startTime = new Date();
+
+    switch (period) {
+      case '1h':
+        startTime.setHours(now.getHours() - 1);
+        break;
+      case '24h':
+        startTime.setDate(now.getDate() - 1);
+        break;
+      case '7d':
+        startTime.setDate(now.getDate() - 7);
+        break;
+      case '30d':
+        startTime.setDate(now.getDate() - 30);
+        break;
+      default:
+        startTime.setDate(now.getDate() - 1);
+    }
+
+    // For now, generate synthetic historical data based on current balance
+    // In production, this would come from stored balance snapshots
+    const currentBalance = await blockchainService.getBalance(targetAddress);
+    const currentValue = parseFloat(currentBalance);
+
+    const dataPoints = 24; // 24 data points for the period
+    const timeInterval = (now.getTime() - startTime.getTime()) / dataPoints;
+
+    const history = Array.from({ length: dataPoints }, (_, i) => {
+      const timestamp = new Date(startTime.getTime() + (i * timeInterval));
+      // Add small random variation to simulate realistic price movement
+      const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
+      const value = Math.max(0, currentValue * (1 + variation));
+
+      return {
+        timestamp: timestamp.toISOString(),
+        value: value,
+        tokens: [
+          {
+            symbol: 'SEI',
+            balance: value.toFixed(6),
+            value: value
+          }
+        ]
+      };
+    });
+
+    // Ensure the last data point matches current balance
+    if (history.length > 0) {
+      history[history.length - 1] = {
+        timestamp: now.toISOString(),
+        value: currentValue,
+        tokens: [
+          {
+            symbol: 'SEI',
+            balance: currentBalance,
+            value: currentValue
+          }
+        ]
+      };
+    }
+
+    logger.info(`Portfolio history: ${history.length} data points for period ${period}`);
+
+    res.json({
+      success: true,
+      data: history,
+      period: period,
+      startTime: startTime.toISOString(),
+      endTime: now.toISOString()
+    });
+  } catch (error) {
+    logger.error('Error fetching portfolio history:', error);
+    res.json({
+      success: true,
+      data: [],
+      period: req.query.period || '24h',
+      startTime: new Date().toISOString(),
+      endTime: new Date().toISOString()
     });
   }
 });
@@ -324,6 +509,5 @@ router.delete('/:id', async (req, res) => {
     });
   }
 });
-
 
 export default router;

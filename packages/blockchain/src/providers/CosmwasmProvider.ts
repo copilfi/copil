@@ -52,7 +52,7 @@ export class CosmwasmProvider {
           { gasPrice: this.gasPrice }
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         'Failed to initialize CosmWasm client',
         'INITIALIZATION_ERROR',
@@ -72,7 +72,7 @@ export class CosmwasmProvider {
 
     try {
       return await this.client!.queryContractSmart(contractAddress, queryMsg);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to query contract ${contractAddress}`,
         'CONTRACT_QUERY_ERROR',
@@ -109,7 +109,7 @@ export class CosmwasmProvider {
       );
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to execute contract ${contractAddress}`,
         'CONTRACT_EXECUTION_ERROR',
@@ -157,7 +157,7 @@ export class CosmwasmProvider {
         contractAddress: result.contractAddress,
         transactionHash: result.transactionHash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         'Failed to instantiate contract',
         'CONTRACT_INSTANTIATION_ERROR',
@@ -199,7 +199,7 @@ export class CosmwasmProvider {
         codeId: result.codeId,
         transactionHash: result.transactionHash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         'Failed to upload contract',
         'CONTRACT_UPLOAD_ERROR',
@@ -239,7 +239,7 @@ export class CosmwasmProvider {
       return {
         transactionHash: result.transactionHash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to migrate contract ${contractAddress}`,
         'CONTRACT_MIGRATION_ERROR',
@@ -264,7 +264,7 @@ export class CosmwasmProvider {
         admin: contractInfo.admin,
         label: contractInfo.label
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get contract info for ${contractAddress}`,
         'CONTRACT_INFO_ERROR',
@@ -294,7 +294,7 @@ export class CosmwasmProvider {
         source: (codeInfo as any).source,
         builder: (codeInfo as any).builder
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get code info for ${codeId}`,
         'CODE_INFO_ERROR',
@@ -328,7 +328,7 @@ export class CosmwasmProvider {
         `${this.lcdEndpoint}/cosmos/bank/v1beta1/balances/${address}/by_denom?denom=${denom}`
       );
       return response.data.balance?.amount || '0';
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get balance for ${address}`,
         'BALANCE_ERROR',
@@ -343,7 +343,7 @@ export class CosmwasmProvider {
         `${this.lcdEndpoint}/cosmos/bank/v1beta1/balances/${address}`
       );
       return response.data.balances || [];
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get all balances for ${address}`,
         'BALANCE_ERROR',
@@ -378,7 +378,7 @@ export class CosmwasmProvider {
         `${this.lcdEndpoint}/cosmos/base/tendermint/v1beta1/blocks/latest`
       );
       return response.data.block;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         'Failed to get latest block',
         'BLOCK_ERROR',
@@ -393,7 +393,7 @@ export class CosmwasmProvider {
         `${this.lcdEndpoint}/cosmos/base/tendermint/v1beta1/blocks/${height}`
       );
       return response.data.block;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         `Failed to get block at height ${height}`,
         'BLOCK_ERROR',
@@ -443,7 +443,7 @@ export class CosmwasmProvider {
         gasWanted: ((result as any).gasUsed || result) * 1.5, // Add some buffer
         events: []
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new BlockchainError(
         'Failed to simulate contract execution',
         'SIMULATION_ERROR',

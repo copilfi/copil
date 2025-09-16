@@ -22,7 +22,7 @@ export class SmartAccountContract {
   async getOwner(): Promise<string> {
     try {
       return await this.contract.owner();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get account owner',
         this.accountAddress,
@@ -38,7 +38,7 @@ export class SmartAccountContract {
     try {
       const nonce = await this.contract.getNonce();
       return nonce.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get account nonce',
         this.accountAddress,
@@ -71,7 +71,7 @@ export class SmartAccountContract {
         transactionHash: receipt.hash,
         success: receipt.status === 1
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to execute transaction',
         this.accountAddress,
@@ -106,7 +106,7 @@ export class SmartAccountContract {
         transactionHash: receipt.hash,
         success: receipt.status === 1
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to execute batch transaction',
         this.accountAddress,
@@ -141,7 +141,7 @@ export class SmartAccountContract {
         transactionHash: receipt.hash,
         success: receipt.status === 1
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to execute automated transaction',
         this.accountAddress,
@@ -172,7 +172,7 @@ export class SmartAccountContract {
         transactionHash: receipt.hash,
         sessionKey: config.sessionKey
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to create session key',
         this.accountAddress,
@@ -194,7 +194,7 @@ export class SmartAccountContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to revoke session key',
         this.accountAddress,
@@ -216,7 +216,7 @@ export class SmartAccountContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to add guardian',
         this.accountAddress,
@@ -238,7 +238,7 @@ export class SmartAccountContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to remove guardian',
         this.accountAddress,
@@ -269,7 +269,7 @@ export class SmartAccountContract {
       return {
         transactionHash: receipt.hash
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to execute emergency recovery',
         this.accountAddress,
@@ -306,7 +306,7 @@ export class SmartAccountContract {
         guardianCount: 0, // Would need to implement getter in contract
         isDeployed
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get account information',
         this.accountAddress,
@@ -380,7 +380,7 @@ export class SmartAccountContract {
       // This would require parsing transaction logs and events
       // For now, return empty array - would need more complex implementation
       return [];
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to get transaction history',
         this.accountAddress,
@@ -404,7 +404,7 @@ export class SmartAccountContract {
         data
       );
       return gasEstimate.toString();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ContractError(
         'Failed to estimate execution gas',
         this.accountAddress,

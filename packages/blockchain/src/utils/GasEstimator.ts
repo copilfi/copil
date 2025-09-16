@@ -64,7 +64,7 @@ export class AdvancedGasEstimator {
       const estimate = await this.provider.estimateGas(tx);
       // Add 20% buffer for safety
       return estimate * BigInt(120) / BigInt(100);
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('Gas estimation failed, using fallback:', error);
       return this.getFallbackGasLimit(tx);
     }
@@ -147,7 +147,7 @@ export class AdvancedGasEstimator {
       if (this.gasHistory.length > this.historySize) {
         this.gasHistory = this.gasHistory.slice(-this.historySize);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('Failed to update gas history:', error);
     }
   }

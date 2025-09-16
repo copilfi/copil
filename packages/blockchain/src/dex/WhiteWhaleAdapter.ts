@@ -263,7 +263,7 @@ export class WhiteWhaleAdapter extends BaseDexAdapter {
         fee: commissionAmount,
         route
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Fallback to base implementation
       return await super.getQuote(params);
     }
@@ -416,7 +416,7 @@ export class WhiteWhaleAdapter extends BaseDexAdapter {
             operations
           });
         }
-      } catch (error) {
+      } catch (error: unknown) {
         continue; // Skip pools that fail
       }
     }
