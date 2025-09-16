@@ -1,281 +1,160 @@
-# Copil - AI-Powered DeFi Automation Platform on Sei Network
+# Copil - DeFi Automation Platform on Sei Network
 
-Copil is Copil'ot a next-generation DeFi automation platform specifically built for Sei Network that combines AI agents with sophisticated trading strategies. It provides seamless, secure, and intelligent DeFi automation through natural language interfaces while maintaining complete user control over assets via ERC-4337 Account Abstraction.
+A DeFi automation platform built for Sei Network that enables secure wallet management and trading through smart account abstraction.
 
-## Current Status: **FULLY OPERATIONAL**
+## Overview
 
-- **Backend**: Fully operational API with all services running
-- **Database**: PostgreSQL with complete schema and migrations  
-- **AI Agents**: LangChain-powered agents for DeFi operations
-- **Blockchain**: Sei Network integration with smart contracts deployed
-- **Real-time**: WebSocket connections for live updates
-- **Frontend**: In development (Next.js 14)
+Copil is Copil'ot provides a user-friendly interface for DeFi operations on Sei Network using ERC-4337 account abstraction. Users can manage portfolios, execute trades, and set up automated strategies while maintaining full control of their assets.
 
 ## Features
 
-- **AI-Powered Trading**: Natural language interface for complex DeFi strategies
-- **Multi-DEX Aggregation**: Best execution across Astroport, DragonSwap, White Whale, and more
-- **ERC-4337 Account Abstraction**: Secure automation without exposing private keys
-- **Real-time Analytics**: Advanced market analysis and portfolio insights
-- **Strategy Automation**: DCA, arbitrage, yield optimization, and portfolio rebalancing
-- **Institutional Security**: Session keys, multi-sig, and hardware wallet support
-
-## Architecture
-
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Frontend Layer                         │
-│  Next.js 14 App with Natural Language Interface          │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                   API Gateway                            │
-│         WebSocket + REST API (Node.js/Express)           │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│              AI Agent Orchestration Layer                │
-│     Orchestrator Agent + Specialized DeFi Agents         │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│              Blockchain Abstraction Layer                │
-│    ERC-4337 Account Abstraction + Session Keys           │
-└─────────────────────────────────────────────────────────┘
-                            │
-┌─────────────────────────────────────────────────────────┐
-│                    Sei Network                           │
-│         Parallel EVM + DeFi Protocols                    │
-└─────────────────────────────────────────────────────────┘
-```
+- **Smart Account Integration**: ERC-4337 account abstraction for enhanced security
+- **Portfolio Management**: Real-time portfolio tracking and analytics
+- **Multi-DEX Trading**: Integration with DragonSwap, White Whale, and other Sei DEXes
+- **Session Keys**: Secure automation without exposing private keys
+- **Real-time Updates**: WebSocket-powered live data feeds
 
 ## Tech Stack
 
-### Backend
-- **Runtime**: Node.js 18+ with TypeScript
-- **Framework**: Express.js with Socket.IO
-- **Database**: PostgreSQL + TimescaleDB + Redis + ClickHouse + Neo4j
-- **Blockchain**: Sei Network EVM with viem
-- **AI**: OpenAI GPT-4 with custom agents
-- **Monitoring**: Prometheus + Grafana + Jaeger
-- **Messaging**: Apache Kafka
+**Backend:**
+- Node.js + TypeScript + Express.js
+- PostgreSQL + Prisma ORM
+- Redis for caching
+- WebSocket for real-time updates
+
+**Frontend:**
+- React + TypeScript + Vite
+- TailwindCSS for styling
+- Wallet integration (MetaMask, etc.)
+
+**Blockchain:**
+- Sei Network EVM
+- ERC-4337 Smart Accounts
+- Smart contract integrations
 
 ## Quick Start
 
 ### Prerequisites
+
 - Node.js 18+
-- PostgreSQL (running locally or via Docker)
-- Redis (for caching and real-time features)
-- Git
+- PostgreSQL database
+- Redis server
 
 ### Installation
 
-1. **Clone the repository**
+1. **Clone the repository:**
 ```bash
 git clone https://github.com/copilfi/copil
 cd copil
 ```
 
-2. **Install dependencies**
+2. **Install dependencies:**
 ```bash
 npm install
 ```
 
-3. **Setup environment**
+3. **Setup environment:**
 ```bash
 cp .env.example .env
-# Edit .env with your configuration:
-# - DATABASE_URL for PostgreSQL
-# - REDIS_URL for Redis
-# - OPENAI_API_KEY for AI agents
-# - SEI_RPC_URL for blockchain interaction
+# Configure your database and API keys in .env
 ```
 
-4. **Setup database**
+4. **Setup database:**
 ```bash
 npm run generate --workspace=@copil/database
-DATABASE_URL="your_db_url" npx prisma db push --accept-data-loss
+DATABASE_URL="your_postgresql_url" npx prisma db push
 ```
 
-5. **Start API server**
+5. **Start the services:**
+
+Backend API:
 ```bash
-npm run dev --workspace=@copil/api
+CORS_ORIGIN="http://localhost:5173" PORT=8888 npm run dev --workspace=@copil/api
 ```
 
-The API Gateway will be available at `http://localhost:3002`
-
-### Test the API
+Frontend:
 ```bash
-curl -X POST http://localhost:3002/api/test-copil \
-  -H "Content-Type: application/json" \
-  -d '{"message": "Hello Copil! Check my SEI balance."}'
+cd frontend && npm run dev
 ```
+
+### Access the Application
+
+- **Frontend**: http://localhost:5173
+- **Backend API**: http://localhost:8888
+- **API Health Check**: http://localhost:8888/api/health
 
 ## Project Structure
 
 ```
-copil-sei-platform/
+copil-sei/
 ├── apps/
-│   ├── api/                  # Main API Gateway (OPERATIONAL)
-│   │   ├── src/
-│   │   │   ├── controllers/  # REST API controllers
-│   │   │   ├── services/     # Business logic services
-│   │   │   ├── middleware/   # Auth, CORS, rate limiting
-│   │   │   ├── routes/       # API route definitions
-│   │   │   └── types/        # TypeScript type definitions
-│   │   └── package.json
-│   ├── contracts/            # Smart Contracts (DEPLOYED)
-│   │   ├── src/              # Solidity contracts
-│   │   ├── scripts/          # Deployment scripts
-│   │   └── package.json
-│   └── web/                  # Frontend (EMPTY - TO DO)
+│   └── api/                 # Backend API server
 ├── packages/
-│   ├── ai-agent/            # AI Agent System (OPERATIONAL)
-│   │   ├── src/
-│   │   │   ├── agents/      # LangChain AI agents
-│   │   │   ├── tools/       # DeFi trading tools
-│   │   │   └── types/       # Agent interfaces
-│   │   └── package.json
-│   ├── database/            # Database Layer (OPERATIONAL)
-│   │   ├── prisma/          # Schema & migrations
-│   │   ├── src/             # Database utilities
-│   │   └── package.json
-│   ├── blockchain/          # Blockchain Integration (OPERATIONAL)
-│   │   ├── src/             # Sei Network utilities
-│   │   └── package.json
-│   ├── core/                # Shared Types
-│   ├── ai-models/           # ML Models (PLACEHOLDER)
-│   └── utils/               # Utilities
-├── infrastructure/
-│   ├── docker/              # Docker configurations
-│   ├── kubernetes/          # K8s deployments (PLACEHOLDER)
-│   └── terraform/           # Infrastructure as Code (PLACEHOLDER)
-├── docs/                    # Documentation
-│   ├── api/                 # API documentation
-│   ├── architecture/        # System design docs
-│   └── user-guide/          # User guides
-├── examples/                # Usage examples
-├── .env                     # Environment configuration
-├── copil-prd.md            # Product Requirements Document
-└── package.json            # Root package.json (workspace config)
+│   ├── blockchain/          # Blockchain integration
+│   └── database/           # Database schema & migrations
+├── .env                   # Environment configuration
+└── package.json          # Workspace configuration
 ```
+
+## API Endpoints
+
+### Authentication
+- `POST /api/auth/generate-message` - Generate signing message
+- `POST /api/auth/login` - Login with wallet signature
+- `POST /api/auth/register` - Register new user
+- `GET /api/auth/profile` - Get user profile
+
+### Portfolio
+- `GET /api/portfolio/summary` - Portfolio overview
+- `GET /api/portfolio/history` - Portfolio history
+
+### Smart Accounts
+- `POST /api/smart-account/deploy` - Deploy smart account
+- `GET /api/smart-account/status` - Get deployment status
 
 ## Development
 
 ### Available Scripts
 
 ```bash
-# Development (Currently Working)
-npm run dev --workspace=@copil/api        # Start API server (port 3002)
-npm run build --workspace=@copil/api      # Build API package
-npm run build --workspace=@copil/ai-agent # Build AI agent package
+# Start API server (development)
+npm run dev --workspace=@copil/api
 
-# Database (Currently Working)
-npm run generate --workspace=@copil/database  # Generate Prisma client
-DATABASE_URL="<url>" npx prisma db push        # Push schema to database
-DATABASE_URL="<url>" npx prisma studio        # Open Prisma Studio
+# Start frontend (development)
+cd frontend && npm run dev
 
-# Smart Contracts (Deployed to Sei)
-npm run compile --workspace=@copil/contracts  # Compile contracts
-npm run deploy --workspace=@copil/contracts   # Deploy to Sei
+# Database operations
+npm run generate --workspace=@copil/database
+npx prisma studio
 
-# Development Tools
-npm run typecheck           # Type checking across packages
-npm install                 # Install all dependencies
-npm run clean               # Clean build artifacts
+# Build for production
+npm run build --workspace=@copil/api
+cd frontend && npm run build
 ```
 
-### Currently Deployed Smart Contracts (Sei Mainnet)
+### Environment Variables
 
-- **Account Factory**: `0x3597342717C9545D555233b195525542B7f591c2`
-- **Conditional Order Engine**: `0x425020571862cfDc97727bB6c920866D8BeAbbeB`
-- **Entry Point**: `0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789`
+Required environment variables in `.env`:
 
-### API Documentation
+```bash
+# Database
+DATABASE_URL="postgresql://user:password@localhost:5432/copil_db"
 
-The API Gateway provides the following endpoints:
+# Redis
+REDIS_URL="redis://localhost:6379"
 
-#### Authentication
-- `POST /api/auth/challenge` - Get signing challenge
-- `POST /api/auth/connect` - Connect wallet and authenticate
-- `POST /api/auth/logout` - Logout user
-- `GET /api/auth/verify` - Verify token
+# Blockchain
+SEI_RPC_URL="https://evm-rpc.sei-apis.com"
+PRIVATE_KEY="your_private_key"
 
-#### Trading
-- `POST /api/trading/quote` - Get swap quotes
-- `POST /api/trading/swap` - Execute swap
+# JWT
+JWT_SECRET="your_jwt_secret"
 
-#### Strategies  
-- `GET /api/strategy` - List user strategies
-- `POST /api/strategy` - Create new strategy
-- `PUT /api/strategy/:id` - Update strategy
-- `DELETE /api/strategy/:id` - Delete strategy
-
-#### Portfolio
-- `GET /api/portfolio` - Get portfolio summary
-- `GET /api/portfolio/history` - Get transaction history
-
-#### AI Assistant
-- `POST /api/ai/chat` - Send message to AI
-- `GET /api/ai/recommendations` - Get AI recommendations
-
-#### Market Data
-- `GET /api/market/prices` - Get token prices
-- `GET /api/market/analytics` - Get market analysis
-
-### WebSocket Events
-
-Connect to WebSocket at `ws://localhost:3000` with authentication token:
-
-```javascript
-const socket = io('ws://localhost:3000', {
-  auth: {
-    token: 'your-jwt-token'
-  }
-});
-
-// Subscribe to price updates
-socket.emit('subscribe:prices', ['SEI', 'USDC', 'WETH']);
-
-// Listen for price updates
-socket.on('price:update', (data) => {
-  console.log('Price update:', data);
-});
+# API Keys (optional)
+OPENAI_API_KEY="your_openai_key"
+ALCHEMY_API_KEY="your_alchemy_key"
 ```
 
-## Security
+## Support
 
-Copil implements multiple layers of security:
-
-- **ERC-4337 Account Abstraction**: Users never expose their private keys
-- **Session Keys**: Time-bound automation keys with specific permissions
-- **Multi-signature Support**: Optional 2-of-3 multi-sig for high-value operations
-- **Hardware Wallet Support**: Ledger integration for secure signing
-- **Rate Limiting**: API and AI endpoint protection
-- **Input Validation**: Comprehensive validation with Zod schemas
-
-
-## AI Agents
-
-Copil features specialized AI agents:
-
-- **Orchestrator Agent**
-- **Trading Agent**: Executes and optimizes trades
-- **Analytics Agent**: Market analysis and predictions
-- **Portfolio Agent**: Portfolio optimization and rebalancing
-- **Risk Agent**: Risk assessment and management
-
-## Supported DEXes
-
-- **Astroport**: Primary DEX integration
-- **DragonSwap**: V3 concentrated liquidity
-- **White Whale**: Cross-chain routing
-- **Fuzio Network**: Additional liquidity sources
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
----
-
-Built with love for the Sei Network ecosystem
+For questions or support, please open an issue in the repository.
