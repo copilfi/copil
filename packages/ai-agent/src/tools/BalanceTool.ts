@@ -3,7 +3,7 @@ import { BaseDeFiTool } from './BaseTools';
 import { Address } from 'viem';
 
 const BalanceToolSchema = z.object({
-  token: z.string().optional().describe('Token symbol or address to check balance for (e.g., "SEI", "WSEI", "USDC"). If not provided, shows all major token balances'),
+  token: z.string().optional().nullable().describe('Token symbol or address to check balance for (e.g., "SEI", "WSEI", "USDC"). If not provided, shows all major token balances'),
 });
 
 export class BalanceTool extends BaseDeFiTool {

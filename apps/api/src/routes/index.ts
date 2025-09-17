@@ -11,6 +11,8 @@ import { createAIRoutes } from './ai';
 import { createOracleRoutes } from './oracle';
 import { createMarketRoutes } from './market';
 import feeAnalyticsRoutes from './fee-analytics.routes';
+import dcaRoutes from './dca';
+import ordersRoutes from './orders';
 import { blockchainService } from '@/services/RealBlockchainService';
 import { StrategyExecutionEngine } from '@/services/StrategyExecutionEngine';
 import DEXAggregationService from '@/services/DEXAggregationService';
@@ -127,6 +129,8 @@ router.use('/auth', authRoutes);
 router.use('/smart-account', smartAccountRoutes);
 router.use('/portfolio', portfolioRoutes);
 router.use('/strategies', createStrategyRoutes(prisma, executionEngine));
+router.use('/dca', dcaRoutes);
+router.use('/orders', ordersRoutes);
 // router.use('/monitoring', createMonitoringRoutes(monitoringService));
 try {
   // Initialize AI service if available
@@ -155,6 +159,8 @@ router.get('/', (_req, res: Response) => {
       smartAccount: '/api/smart-account',
       portfolios: '/api/portfolios',
       strategies: '/api/strategies',
+      dca: '/api/dca',
+      orders: '/api/orders',
       dex: '/api/dex',
       ai: '/api/ai',
       monitoring: '/api/monitoring',

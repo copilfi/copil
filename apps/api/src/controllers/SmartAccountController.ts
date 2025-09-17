@@ -8,6 +8,7 @@ import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import { logger } from '@/utils/logger';
 import blockchainService from '@/services/RealBlockchainService';
 import PrivateKeyService from '@/services/PrivateKeyService';
+import WebSocketService from '@/services/WebSocketService';
 
 export class SmartAccountController {
   /**
@@ -64,6 +65,21 @@ export class SmartAccountController {
       });
 
       logger.info(`✅ Smart Account deployed and recorded: ${smartAccountAddress}`);
+
+      // Send WebSocket notification about successful deployment
+      try {
+        WebSocketService.notifyUser(req.user.id, {
+          type: 'SMART_ACCOUNT_DEPLOYED',
+          data: {
+            address: smartAccountAddress,
+            deployedAt: smartAccount.deployedAt,
+            gasSponsoredByPlatform: true
+          }
+        });
+        logger.info(`📡 WebSocket notification sent for smart account deployment: ${req.user.id}`);
+      } catch (wsError) {
+        logger.warn('Failed to send WebSocket notification for smart account deployment:', wsError);
+      }
 
       res.json({
         success: true,

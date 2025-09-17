@@ -9,6 +9,7 @@ import { asyncHandler, AppError } from '@/middleware/errorHandler';
 import { logger } from '@/utils/logger';
 import blockchainService from '@/services/RealBlockchainService';
 import AuthHelpers from '@/utils/authHelpers';
+import WebSocketService from '@/services/WebSocketService';
 
 export class AuthController {
   /**
@@ -83,19 +84,52 @@ export class AuthController {
       email: user.email || undefined
     });
 
-    // Deploy Smart Account in background
+    // Auto-deploy Smart Account with platform-sponsored gas
     try {
-      const smartAccountAddress = await blockchainService.getSmartAccountAddress(user.walletAddress);
-      logger.info(`Smart Account address for ${user.walletAddress}: ${smartAccountAddress}`);
-      
+      logger.info(`🚀 Auto-deploying Smart Account for new user: ${user.walletAddress}`);
+
+      // Deploy Smart Account using platform wallet (gas sponsored)
+      const smartAccountAddress = await blockchainService.deploySmartAccount(user.walletAddress);
+      logger.info(`✅ Smart Account deployed at: ${smartAccountAddress}`);
+
+      // Create SmartAccount record in database
+      await prisma.smartAccount.create({
+        data: {
+          userId: user.id,
+          address: smartAccountAddress,
+          saltNonce: ethers.keccak256(ethers.toUtf8Bytes(user.walletAddress)),
+          isActive: true,
+          deployedAt: new Date()
+        }
+      });
+
       // Update user with smart account address
       await prisma.user.update({
         where: { id: user.id },
         data: { smartAccountAddress }
       });
+
+      logger.info(`📝 Smart Account deployment recorded for user: ${user.id}`);
+
+      // Send WebSocket notification about successful auto-deployment
+      try {
+        WebSocketService.notifyUser(user.id, {
+          type: 'SMART_ACCOUNT_DEPLOYED',
+          data: {
+            address: smartAccountAddress,
+            deployedAt: new Date(),
+            gasSponsoredByPlatform: true,
+            autoDeployed: true
+          }
+        });
+        logger.info(`📡 WebSocket notification sent for auto-deployed smart account: ${user.id}`);
+      } catch (wsError) {
+        logger.warn('Failed to send WebSocket notification for auto-deployment:', wsError);
+      }
     } catch (error) {
-      logger.error('Failed to get Smart Account address during registration:', error);
-      // Continue with registration even if smart account fails
+      logger.error('Failed to auto-deploy Smart Account during registration:', error);
+      // Continue with registration even if smart account deployment fails
+      // User can deploy manually later from automation page
     }
 
     res.status(201).json({
@@ -245,6 +279,11 @@ export class AuthController {
 
     // Calculate Smart Account deployment status
     const hasActiveSmartAccount = user.smartAccounts && user.smartAccounts.length > 0;
+
+    // Debug log for smart account detection
+    logger.info(`🔍 Profile Debug - User: ${user.id}, Smart Accounts: ${JSON.stringify(user.smartAccounts)}`);
+    logger.info(`🔍 Profile Debug - hasActiveSmartAccount: ${hasActiveSmartAccount}`);
+
     const smartAccountDeploymentStatus = {
       hasSmartAccount: hasActiveSmartAccount,
       deployedAt: hasActiveSmartAccount ? user.smartAccounts[0].deployedAt : null,

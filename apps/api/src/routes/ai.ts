@@ -1,22 +1,36 @@
 import express from 'express';
 import { logger } from '@/utils/logger';
 import AIAgentService from '@/services/AIAgentService';
+import { authenticateToken, AuthenticatedRequest } from '@/middleware/auth';
 
-export function createAIRoutes(aiService: AIAgentService) {
+export function createAIRoutes(aiService: AIAgentService | null) {
   const router = express.Router();
-  // Chat with AI agent
-  router.post('/chat', async (req, res) => {
-    try {
-      const { userId, message, sessionId = 'default' } = req.body;
 
-      if (!userId || !message) {
+  // Middleware to check AI service availability
+  const checkAIService = (req: AuthenticatedRequest, res: express.Response, next: express.NextFunction) => {
+    if (!aiService) {
+      return res.status(503).json({
+        success: false,
+        error: 'AI service is not available. Please try again later.'
+      });
+    }
+    next();
+  };
+
+  // Chat with AI agent
+  router.post('/chat', authenticateToken, checkAIService, async (req: AuthenticatedRequest, res) => {
+    try {
+      const { message, sessionId = 'default' } = req.body;
+      const userId = req.user!.id;
+
+      if (!message) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: userId, message'
+          error: 'Missing required field: message'
         });
       }
 
-      const response = await aiService.processMessage(userId, message, sessionId);
+      const response = await aiService!.processMessage(userId, message, sessionId);
 
       res.json({
         success: true,
@@ -32,12 +46,12 @@ export function createAIRoutes(aiService: AIAgentService) {
   });
 
   // Get chat history
-  router.get('/chat/history/:userId', async (req, res) => {
+  router.get('/chat/history', authenticateToken, checkAIService, async (req: AuthenticatedRequest, res) => {
     try {
-      const { userId } = req.params;
+      const userId = req.user!.id;
       const { limit = 50 } = req.query;
 
-      const history = await aiService.getChatHistory(userId, parseInt(limit as string));
+      const history = await aiService!.getChatHistory(userId, parseInt(limit as string));
 
       res.json({
         success: true,
@@ -54,11 +68,12 @@ export function createAIRoutes(aiService: AIAgentService) {
   });
 
   // Clear chat session
-  router.delete('/chat/session/:userId/:sessionId?', async (req, res) => {
+  router.delete('/chat/session/:sessionId?', authenticateToken, checkAIService, async (req: AuthenticatedRequest, res) => {
     try {
-      const { userId, sessionId = 'default' } = req.params;
+      const userId = req.user!.id;
+      const { sessionId = 'default' } = req.params;
 
-      aiService.clearChatSession(userId, sessionId);
+      aiService!.clearChatSession(userId, sessionId);
 
       res.json({
         success: true,
@@ -74,9 +89,10 @@ export function createAIRoutes(aiService: AIAgentService) {
   });
 
   // Test intent extraction
-  router.post('/intent', async (req, res) => {
+  router.post('/intent', authenticateToken, checkAIService, async (req: AuthenticatedRequest, res) => {
     try {
-      const { message, userId = 'test' } = req.body;
+      const { message } = req.body;
+      const userId = req.user!.id;
 
       if (!message) {
         return res.status(400).json({
@@ -85,7 +101,7 @@ export function createAIRoutes(aiService: AIAgentService) {
         });
       }
 
-      const response = await aiService.processMessage(userId, message, 'intent-test');
+      const response = await aiService!.processMessage(userId, message, 'intent-test');
 
       res.json({
         success: true,
@@ -107,9 +123,9 @@ export function createAIRoutes(aiService: AIAgentService) {
   });
 
   // Get AI capabilities
-  router.get('/capabilities', async (req, res) => {
+  router.get('/capabilities', checkAIService, async (req, res) => {
     try {
-      const capabilities = aiService.getCapabilities();
+      const capabilities = aiService!.getCapabilities();
 
       res.json({
         success: true,
@@ -125,9 +141,9 @@ export function createAIRoutes(aiService: AIAgentService) {
   });
 
   // AI service health check
-  router.get('/health', async (req, res) => {
+  router.get('/health', checkAIService, async (req, res) => {
     try {
-      const health = await aiService.healthCheck();
+      const health = await aiService!.healthCheck();
 
       res.json({
         success: true,
@@ -204,19 +220,20 @@ export function createAIRoutes(aiService: AIAgentService) {
     }
   });
 
-  // Execute trading actions directly  
-  router.post('/execute', async (req, res) => {
+  // Execute trading actions directly
+  router.post('/execute', authenticateToken, checkAIService, async (req: AuthenticatedRequest, res) => {
     try {
-      const { userId, action, parameters } = req.body;
+      const { action, parameters } = req.body;
+      const userId = req.user!.id;
 
-      if (!userId || !action) {
+      if (!action) {
         return res.status(400).json({
           success: false,
-          error: 'Missing required fields: userId, action'
+          error: 'Missing required field: action'
         });
       }
 
-      const result = await aiService.executeTradingAction(userId, action, parameters || {});
+      const result = await aiService!.executeTradingAction(userId, action, parameters || {});
 
       res.json({
         success: true,

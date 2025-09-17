@@ -7,8 +7,8 @@ const SwapToolSchema = z.object({
   tokenFrom: z.string().describe('Symbol or address of the token to swap from (e.g., "SEI", "WSEI", "USDC")'),
   tokenTo: z.string().describe('Symbol or address of the token to swap to (e.g., "SEI", "WSEI", "USDC")'),
   amount: z.number().positive().describe('Amount of tokens to swap'),
-  slippage: z.number().min(0).max(50).optional().describe('Maximum slippage tolerance in percentage (default: 0.5)'),
-  protocol: z.enum(['dragonswap', 'symphony']).optional().describe('DEX protocol to use (default: best quote)'),
+  slippage: z.number().min(0).max(50).optional().nullable().describe('Maximum slippage tolerance in percentage (default: 0.5)'),
+  protocol: z.enum(['dragonswap', 'symphony']).optional().nullable().describe('DEX protocol to use (default: best quote)'),
 });
 
 export class SwapTool extends BaseDeFiTool {

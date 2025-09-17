@@ -10,8 +10,8 @@ const DCAToolSchema = z.object({
     z.enum(['daily', 'weekly', 'monthly']),
     z.number().positive()
   ]).describe('How often to execute (daily/weekly/monthly or custom hours)'),
-  duration: z.number().positive().optional().describe('Duration in days (default: 30)'),
-  protocol: z.enum(['dragonswap', 'symphony']).optional().describe('DEX protocol to use (default: dragonswap)'),
+  duration: z.number().positive().optional().nullable().describe('Duration in days (default: 30)'),
+  protocol: z.enum(['dragonswap', 'symphony']).optional().nullable().describe('DEX protocol to use (default: dragonswap)'),
 });
 
 export class DCATool extends BaseDeFiTool {

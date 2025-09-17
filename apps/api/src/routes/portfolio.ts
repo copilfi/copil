@@ -117,29 +117,81 @@ router.get('/summary', authenticateToken, async (req, res) => {
       }
     });
 
-    const targetAddress = smartAccount?.address || user.walletAddress;
-    logger.info(`Fetching portfolio data for address: ${targetAddress}`);
+    logger.info(`Fetching portfolio data - Main wallet: ${user.walletAddress}, Smart account: ${smartAccount?.address || 'none'}`);
 
-    // Get SEI balance
-    const seiBalance = await blockchainService.getBalance(targetAddress);
+    // Get balances from both wallets
+    const mainWalletBalance = await blockchainService.getBalance(user.walletAddress);
+    const smartAccountBalance = smartAccount ? await blockchainService.getBalance(smartAccount.address) : '0.0';
 
-    // Calculate total portfolio value in USD
-    // Note: This would need price feeds integration for accurate USD values
-    const totalValue = parseFloat(seiBalance); // For now, just use SEI amount
+    const mainValue = parseFloat(mainWalletBalance);
+    const smartValue = parseFloat(smartAccountBalance);
+    const totalValue = mainValue + smartValue;
+
+    logger.info(`Balances - Main wallet: ${mainWalletBalance} SEI, Smart account: ${smartAccountBalance} SEI, Total: ${totalValue} SEI`);
+
+    const tokens = [];
+
+    // Add main wallet balance if > 0
+    if (mainValue > 0) {
+      tokens.push({
+        symbol: 'SEI',
+        balance: mainWalletBalance,
+        value: mainValue,
+        address: '0x0000000000000000000000000000000000000000',
+        decimals: 18,
+        walletType: 'main',
+        walletAddress: user.walletAddress
+      });
+    }
+
+    // Add smart account balance if exists and > 0
+    if (smartAccount && smartValue > 0) {
+      tokens.push({
+        symbol: 'SEI',
+        balance: smartAccountBalance,
+        value: smartValue,
+        address: '0x0000000000000000000000000000000000000000',
+        decimals: 18,
+        walletType: 'smart',
+        walletAddress: smartAccount.address
+      });
+    }
+
+    // If both are empty, show main wallet with 0 balance
+    if (tokens.length === 0) {
+      tokens.push({
+        symbol: 'SEI',
+        balance: '0.0',
+        value: 0,
+        address: '0x0000000000000000000000000000000000000000',
+        decimals: 18,
+        walletType: 'main',
+        walletAddress: user.walletAddress
+      });
+    }
 
     const summary = {
       totalValue: totalValue,
       dailyChange: 0, // TODO: Calculate from historical data
-      tokens: [
-        {
-          symbol: 'SEI',
-          balance: seiBalance,
-          value: totalValue,
-          address: '0x0000000000000000000000000000000000000000', // Native token
-          decimals: 18
+      tokens: tokens,
+      wallets: {
+        main: {
+          address: user.walletAddress,
+          balance: mainWalletBalance,
+          value: mainValue
+        },
+        smart: smartAccount ? {
+          address: smartAccount.address,
+          balance: smartAccountBalance,
+          value: smartValue,
+          isDeployed: true
+        } : {
+          address: null,
+          balance: '0.0',
+          value: 0,
+          isDeployed: false
         }
-      ],
-      address: targetAddress,
+      },
       lastUpdated: new Date().toISOString()
     };
 
@@ -188,8 +240,6 @@ router.get('/history', authenticateToken, async (req, res) => {
       }
     });
 
-    const targetAddress = smartAccount?.address || user.walletAddress;
-
     // Calculate time range based on period
     const now = new Date();
     let startTime = new Date();
@@ -211,10 +261,13 @@ router.get('/history', authenticateToken, async (req, res) => {
         startTime.setDate(now.getDate() - 1);
     }
 
-    // For now, generate synthetic historical data based on current balance
-    // In production, this would come from stored balance snapshots
-    const currentBalance = await blockchainService.getBalance(targetAddress);
-    const currentValue = parseFloat(currentBalance);
+    // Get current balances from both wallets
+    const mainWalletBalance = await blockchainService.getBalance(user.walletAddress);
+    const smartAccountBalance = smartAccount ? await blockchainService.getBalance(smartAccount.address) : '0.0';
+
+    const mainValue = parseFloat(mainWalletBalance);
+    const smartValue = parseFloat(smartAccountBalance);
+    const currentValue = mainValue + smartValue;
 
     const dataPoints = 24; // 24 data points for the period
     const timeInterval = (now.getTime() - startTime.getTime()) / dataPoints;
@@ -240,16 +293,39 @@ router.get('/history', authenticateToken, async (req, res) => {
 
     // Ensure the last data point matches current balance
     if (history.length > 0) {
+      const tokens = [];
+
+      if (mainValue > 0) {
+        tokens.push({
+          symbol: 'SEI',
+          balance: mainWalletBalance,
+          value: mainValue,
+          walletType: 'main'
+        });
+      }
+
+      if (smartValue > 0) {
+        tokens.push({
+          symbol: 'SEI',
+          balance: smartAccountBalance,
+          value: smartValue,
+          walletType: 'smart'
+        });
+      }
+
+      if (tokens.length === 0) {
+        tokens.push({
+          symbol: 'SEI',
+          balance: '0.0',
+          value: 0,
+          walletType: 'main'
+        });
+      }
+
       history[history.length - 1] = {
         timestamp: now.toISOString(),
         value: currentValue,
-        tokens: [
-          {
-            symbol: 'SEI',
-            balance: currentBalance,
-            value: currentValue
-          }
-        ]
+        tokens: tokens
       };
     }
 
