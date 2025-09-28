@@ -58,9 +58,9 @@ const revokeApiKeySchema = Joi.object({
 });
 
 // Routes with appropriate rate limiting (temporarily disabled for debugging)
-router.post('/register', /* authRateLimit, */ validateBody(registerSchema), AuthController.register);
-router.post('/login', /* authRateLimit, */ validateBody(loginSchema), AuthController.login);
-router.post('/generate-message', /* authRateLimit, */ validateBody(generateMessageSchema), AuthController.generateMessage);
+router.post('/register', authRateLimit, validateBody(registerSchema), AuthController.register);
+router.post('/login', authRateLimit, validateBody(loginSchema), AuthController.login);
+router.post('/generate-message', authRateLimit, validateBody(generateMessageSchema), AuthController.generateMessage);
 router.post('/logout', authenticateToken, AuthController.logout);
 router.get('/profile', authenticateToken, AuthController.getProfile);
 router.put('/preferences', authenticateToken, validateBody(updatePreferencesSchema), AuthController.updatePreferences);

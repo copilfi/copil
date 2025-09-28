@@ -77,13 +77,17 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
         uint256 limitAmount,
         address[] calldata allowedTargets,
         bytes4[] calldata allowedFunctions
-    ) external {
+    ) external onlyOwner {
+        require(smartAccount == owner(), "SessionKeyManager: Smart account mismatch");
         require(sessionKey != address(0), "SessionKeyManager: Invalid session key");
-        require(smartAccount != address(0), "SessionKeyManager: Invalid smart account");
         require(validUntil > block.timestamp, "SessionKeyManager: Invalid expiration");
         require(limitAmount > 0, "SessionKeyManager: Invalid limit amount");
         require(allowedTargets.length > 0, "SessionKeyManager: No allowed targets");
         require(allowedFunctions.length > 0, "SessionKeyManager: No allowed functions");
+
+        for (uint256 i = 0; i < allowedTargets.length; i++) {
+            require(allowedTargets[i] != address(0), "SessionKeyManager: Invalid target");
+        }
 
         // Ensure session key doesn't already exist for this account
         require(
@@ -117,7 +121,8 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
      * @param sessionKey Session key to revoke
      * @param smartAccount Smart Account address
      */
-    function revokeSessionKey(address sessionKey, address smartAccount) external {
+    function revokeSessionKey(address sessionKey, address smartAccount) external onlyOwner {
+        require(smartAccount == owner(), "SessionKeyManager: Smart account mismatch");
         require(
             sessionKeys[sessionKey][smartAccount].isActive,
             "SessionKeyManager: Session key not active"
@@ -136,7 +141,8 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
      * @dev Revokes all session keys for a Smart Account (emergency function)
      * @param smartAccount Smart Account address
      */
-    function revokeAllSessionKeys(address smartAccount) external {
+    function revokeAllSessionKeys(address smartAccount) external onlyOwner {
+        require(smartAccount == owner(), "SessionKeyManager: Smart account mismatch");
         address[] memory keys = accountSessionKeys[smartAccount];
         
         for (uint256 i = 0; i < keys.length; i++) {
@@ -172,17 +178,19 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
 
     /**
      * @dev Checks if a session key can execute a specific operation
+     * @param smartAccount Smart Account address requesting execution
      * @param target Target contract address
      * @param callData Call data containing function selector
      * @return True if operation is allowed
      */
     function canExecute(
-        address /* sessionKey */,
+        address sessionKey,
+        address smartAccount,
         address target,
         bytes calldata callData
     ) external view returns (bool) {
-        SessionKey storage key = sessionKeys[msg.sender][target];
-        
+        SessionKey storage key = sessionKeys[sessionKey][smartAccount];
+
         if (!key.isActive || block.timestamp > key.validUntil) {
             return false;
         }
@@ -195,7 +203,7 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
                 break;
             }
         }
-        
+
         if (!targetAllowed) {
             return false;
         }
@@ -251,7 +259,7 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
      * @dev Updates session key usage statistics
      * @param sessionKey Session key address
      */
-    function updateUsage(address sessionKey) external {
+    function updateUsage(address sessionKey) external onlyOwner {
         // Find the smart account for this session key (caller should be smart account)
         SessionKey storage key = sessionKeys[sessionKey][msg.sender];
         
@@ -268,7 +276,7 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
      * @param sessionKey Session key address
      * @param amount Amount spent
      */
-    function updateSpending(address sessionKey, uint256 amount) external {
+    function updateSpending(address sessionKey, uint256 amount) external onlyOwner {
         SessionKey storage key = sessionKeys[sessionKey][msg.sender];
         
         require(key.isActive, "SessionKeyManager: Session key not active");
@@ -280,6 +288,20 @@ contract SessionKeyManager is Ownable, ReentrancyGuard {
         key.spentAmount += amount;
 
         emit SessionKeyUsed(sessionKey, msg.sender, address(0), amount);
+    }
+
+    /**
+     * @dev Ownership of the manager is permanently bound to the Smart Account
+     */
+    function transferOwnership(address) public view override onlyOwner {
+        revert("SessionKeyManager: Ownership cannot be transferred");
+    }
+
+    /**
+     * @dev Prevent accidental renounce of ownership
+     */
+    function renounceOwnership() public view override onlyOwner {
+        revert("SessionKeyManager: Ownership cannot be renounced");
     }
 
     /**

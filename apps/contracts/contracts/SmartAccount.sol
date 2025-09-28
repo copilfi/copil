@@ -190,13 +190,20 @@ contract SmartAccount is
         bytes calldata func,
         address sessionKey
     ) external nonReentrant {
+        bool callerIsSessionKey = msg.sender == sessionKey;
+        bool callerIsEntryPoint = msg.sender == address(entryPoint());
+        require(
+            callerIsSessionKey || callerIsEntryPoint,
+            "SmartAccount: Caller not authorized"
+        );
+
         require(
             sessionKeyManager.isValidSessionKey(sessionKey, address(this)),
             "SmartAccount: Invalid session key"
         );
         
         require(
-            sessionKeyManager.canExecute(sessionKey, dest, func),
+            sessionKeyManager.canExecute(sessionKey, address(this), dest, func),
             "SmartAccount: Session key cannot execute this operation"
         );
         
@@ -209,8 +216,12 @@ contract SmartAccount is
         executedOperations[operationHash] = true;
         
         bool success = _call(dest, value, func);
-        
+        require(success, "SmartAccount: Automated call failed");
+
         // Update session key usage
+        if (value > 0) {
+            sessionKeyManager.updateSpending(sessionKey, value);
+        }
         sessionKeyManager.updateUsage(sessionKey);
         
         emit OperationExecuted(operationHash, success);

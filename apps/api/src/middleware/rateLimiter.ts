@@ -254,9 +254,9 @@ export class AdvancedRateLimiter {
 
 // Pre-configured rate limiters for different endpoints
 export const authRateLimit = AdvancedRateLimiter.createRateLimiter({
-  windowMs: 5 * 60 * 1000, // 5 minutes
-  maxRequests: 5, // 5 attempts per 5 minutes
-  message: 'Too many authentication attempts. Please try again in 5 minutes.',
+  windowMs: 60 * 1000, // 1 minute
+  maxRequests: 20, // 20 attempts per minute
+  message: 'Too many authentication attempts. Please wait a moment and try again.',
   skipSuccessfulRequests: true
 });
 

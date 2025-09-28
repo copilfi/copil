@@ -1,0 +1,1621 @@
+{
+  "address": "0x42b2a93dbea0BAb8285937E9a9877f17402B14c7",
+  "abi": [
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "_feeRecipient",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "inputs": [],
+      "name": "EnforcedPause",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ExpectedPause",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnableInvalidOwner",
+      "type": "error"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "OwnableUnauthorizedAccount",
+      "type": "error"
+    },
+    {
+      "inputs": [],
+      "name": "ReentrancyGuardReentrantCall",
+      "type": "error"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "conditionIndex",
+          "type": "uint256"
+        }
+      ],
+      "name": "ConditionMet",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "executor",
+          "type": "address"
+        }
+      ],
+      "name": "ExecutorAuthorized",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "executor",
+          "type": "address"
+        }
+      ],
+      "name": "ExecutorRevoked",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        }
+      ],
+      "name": "OrderCancelled",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "enum ConditionalOrderEngine.OrderType",
+          "name": "orderType",
+          "type": "uint8"
+        },
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "inputAmount",
+          "type": "uint256"
+        }
+      ],
+      "name": "OrderCreated",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "executor",
+          "type": "address"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "gasUsed",
+          "type": "uint256"
+        },
+        {
+          "indexed": false,
+          "internalType": "uint256",
+          "name": "reward",
+          "type": "uint256"
+        }
+      ],
+      "name": "OrderExecuted",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "previousOwner",
+          "type": "address"
+        },
+        {
+          "indexed": true,
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "OwnershipTransferred",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "Paused",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        {
+          "indexed": false,
+          "internalType": "address",
+          "name": "account",
+          "type": "address"
+        }
+      ],
+      "name": "Unpaused",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "executor",
+          "type": "address"
+        }
+      ],
+      "name": "authorizeExecutor",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "authorizedExecutors",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "cancelOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "outputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalBudget",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "frequency",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxExecutions",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "targetContract",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes",
+          "name": "callDataTemplate",
+          "type": "bytes"
+        }
+      ],
+      "name": "createDCAOrder",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "enum ConditionalOrderEngine.OrderType",
+          "name": "orderType",
+          "type": "uint8"
+        },
+        {
+          "components": [
+            {
+              "internalType": "enum ConditionalOrderEngine.ConditionType",
+              "name": "conditionType",
+              "type": "uint8"
+            },
+            {
+              "internalType": "address",
+              "name": "tokenAddress",
+              "type": "address"
+            },
+            {
+              "internalType": "uint256",
+              "name": "targetValue",
+              "type": "uint256"
+            },
+            {
+              "internalType": "uint256",
+              "name": "currentValue",
+              "type": "uint256"
+            },
+            {
+              "internalType": "bool",
+              "name": "isMet",
+              "type": "bool"
+            },
+            {
+              "internalType": "bytes",
+              "name": "extraData",
+              "type": "bytes"
+            }
+          ],
+          "internalType": "struct ConditionalOrderEngine.Condition[]",
+          "name": "conditions",
+          "type": "tuple[]"
+        },
+        {
+          "internalType": "address",
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "outputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "inputAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "minOutputAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "targetContract",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes",
+          "name": "callData",
+          "type": "bytes"
+        },
+        {
+          "internalType": "bool",
+          "name": "requiresAllConditions",
+          "type": "bool"
+        }
+      ],
+      "name": "createOrder",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "dcaOrders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "frequency",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountPerExecution",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "totalBudget",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "spentAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lastExecutionTime",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "executionCount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxExecutions",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "executeOrder",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "executionFeePercent",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "feeRecipient",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        }
+      ],
+      "name": "getOrder",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "enum ConditionalOrderEngine.OrderType",
+          "name": "orderType",
+          "type": "uint8"
+        },
+        {
+          "internalType": "enum ConditionalOrderEngine.OrderStatus",
+          "name": "status",
+          "type": "uint8"
+        },
+        {
+          "internalType": "address",
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "inputAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "deadline",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "user",
+          "type": "address"
+        }
+      ],
+      "name": "getUserOrders",
+      "outputs": [
+        {
+          "internalType": "uint256[]",
+          "name": "",
+          "type": "uint256[]"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "gridOrders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "upperPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "lowerPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "gridLevels",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "amountPerGrid",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "maxExecutionReward",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "nextOrderId",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "orders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "orderId",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "owner",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "smartAccount",
+          "type": "address"
+        },
+        {
+          "internalType": "enum ConditionalOrderEngine.OrderType",
+          "name": "orderType",
+          "type": "uint8"
+        },
+        {
+          "internalType": "enum ConditionalOrderEngine.OrderStatus",
+          "name": "status",
+          "type": "uint8"
+        },
+        {
+          "internalType": "address",
+          "name": "inputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "address",
+          "name": "outputToken",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "inputAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "minOutputAmount",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "maxGasPrice",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "deadline",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "createdAt",
+          "type": "uint256"
+        },
+        {
+          "internalType": "uint256",
+          "name": "executedAt",
+          "type": "uint256"
+        },
+        {
+          "internalType": "address",
+          "name": "targetContract",
+          "type": "address"
+        },
+        {
+          "internalType": "bytes",
+          "name": "callData",
+          "type": "bytes"
+        },
+        {
+          "internalType": "uint256",
+          "name": "executionReward",
+          "type": "uint256"
+        },
+        {
+          "internalType": "bool",
+          "name": "requiresAllConditions",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "owner",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "pause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "paused",
+      "outputs": [
+        {
+          "internalType": "bool",
+          "name": "",
+          "type": "bool"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "priceOracles",
+      "outputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "renounceOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "executor",
+          "type": "address"
+        }
+      ],
+      "name": "revokeExecutor",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        }
+      ],
+      "name": "tokenPrices",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "newOwner",
+          "type": "address"
+        }
+      ],
+      "name": "transferOwnership",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "unpause",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "token",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "price",
+          "type": "uint256"
+        }
+      ],
+      "name": "updateTokenPrice",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        {
+          "internalType": "address",
+          "name": "",
+          "type": "address"
+        },
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "name": "userOrders",
+      "outputs": [
+        {
+          "internalType": "uint256",
+          "name": "",
+          "type": "uint256"
+        }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "withdrawFees",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "stateMutability": "payable",
+      "type": "receive"
+    }
+  ],
+  "transactionHash": "0x057043cbde9d0ee1a236031965421a978d9025ea2ec342d7b1d8d928b4b03356",
+  "receipt": {
+    "to": null,
+    "from": "0xCCb7ea77288A442ddAFc872C7EBe1513444b06bc",
+    "contractAddress": "0x42b2a93dbea0BAb8285937E9a9877f17402B14c7",
+    "transactionIndex": 1,
+    "gasUsed": "2214145",
+    "logsBloom": "0x00000000000000000000000000000000000000000000000000800000000080000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000001000000000000000001000000000000000000128000000000000000000800000000000000000000000000000000400000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000040000000000000000000000000000200000000000000000000000000020000000000000000000000000000000000000000000000000000000000000000000",
+    "blockHash": "0x60c88d39b4a25ac335f1dd71da895b6b0f1c36b741d2400a77a14543f6fd319a",
+    "transactionHash": "0x057043cbde9d0ee1a236031965421a978d9025ea2ec342d7b1d8d928b4b03356",
+    "logs": [
+      {
+        "transactionIndex": 1,
+        "blockNumber": 170472699,
+        "transactionHash": "0x057043cbde9d0ee1a236031965421a978d9025ea2ec342d7b1d8d928b4b03356",
+        "address": "0x42b2a93dbea0BAb8285937E9a9877f17402B14c7",
+        "topics": [
+          "0x8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0",
+          "0x0000000000000000000000000000000000000000000000000000000000000000",
+          "0x000000000000000000000000ccb7ea77288a442ddafc872c7ebe1513444b06bc"
+        ],
+        "data": "0x",
+        "logIndex": 3,
+        "blockHash": "0x60c88d39b4a25ac335f1dd71da895b6b0f1c36b741d2400a77a14543f6fd319a"
+      }
+    ],
+    "blockNumber": 170472699,
+    "cumulativeGasUsed": "0",
+    "status": 1,
+    "byzantium": true
+  },
+  "args": [
+    "0xCCb7ea77288A442ddAFc872C7EBe1513444b06bc"
+  ],
+  "numDeployments": 1,
+  "solcInputHash": "5826a792d2b43325ea0ad89df881e973",
+  "metadata": "{\"compiler\":{\"version\":\"0.8.23+commit.f704f362\"},\"language\":\"Solidity\",\"output\":{\"abi\":[{\"inputs\":[{\"internalType\":\"address\",\"name\":\"_feeRecipient\",\"type\":\"address\"}],\"stateMutability\":\"nonpayable\",\"type\":\"constructor\"},{\"inputs\":[],\"name\":\"EnforcedPause\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ExpectedPause\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OwnableInvalidOwner\",\"type\":\"error\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"OwnableUnauthorizedAccount\",\"type\":\"error\"},{\"inputs\":[],\"name\":\"ReentrancyGuardReentrantCall\",\"type\":\"error\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"conditionIndex\",\"type\":\"uint256\"}],\"name\":\"ConditionMet\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"executor\",\"type\":\"address\"}],\"name\":\"ExecutorAuthorized\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"executor\",\"type\":\"address\"}],\"name\":\"ExecutorRevoked\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"}],\"name\":\"OrderCancelled\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"enum ConditionalOrderEngine.OrderType\",\"name\":\"orderType\",\"type\":\"uint8\"},{\"indexed\":false,\"internalType\":\"address\",\"name\":\"inputToken\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"inputAmount\",\"type\":\"uint256\"}],\"name\":\"OrderCreated\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"executor\",\"type\":\"address\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"gasUsed\",\"type\":\"uint256\"},{\"indexed\":false,\"internalType\":\"uint256\",\"name\":\"reward\",\"type\":\"uint256\"}],\"name\":\"OrderExecuted\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":true,\"internalType\":\"address\",\"name\":\"previousOwner\",\"type\":\"address\"},{\"indexed\":true,\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"OwnershipTransferred\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"Paused\",\"type\":\"event\"},{\"anonymous\":false,\"inputs\":[{\"indexed\":false,\"internalType\":\"address\",\"name\":\"account\",\"type\":\"address\"}],\"name\":\"Unpaused\",\"type\":\"event\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"executor\",\"type\":\"address\"}],\"name\":\"authorizeExecutor\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"authorizedExecutors\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"}],\"name\":\"cancelOrder\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"inputToken\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"outputToken\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"totalBudget\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"frequency\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"maxExecutions\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"targetContract\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"callDataTemplate\",\"type\":\"bytes\"}],\"name\":\"createDCAOrder\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"enum ConditionalOrderEngine.OrderType\",\"name\":\"orderType\",\"type\":\"uint8\"},{\"components\":[{\"internalType\":\"enum ConditionalOrderEngine.ConditionType\",\"name\":\"conditionType\",\"type\":\"uint8\"},{\"internalType\":\"address\",\"name\":\"tokenAddress\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"targetValue\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"currentValue\",\"type\":\"uint256\"},{\"internalType\":\"bool\",\"name\":\"isMet\",\"type\":\"bool\"},{\"internalType\":\"bytes\",\"name\":\"extraData\",\"type\":\"bytes\"}],\"internalType\":\"struct ConditionalOrderEngine.Condition[]\",\"name\":\"conditions\",\"type\":\"tuple[]\"},{\"internalType\":\"address\",\"name\":\"inputToken\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"outputToken\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"inputAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"minOutputAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"deadline\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"targetContract\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"callData\",\"type\":\"bytes\"},{\"internalType\":\"bool\",\"name\":\"requiresAllConditions\",\"type\":\"bool\"}],\"name\":\"createOrder\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"}],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"dcaOrders\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"frequency\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amountPerExecution\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"totalBudget\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"spentAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lastExecutionTime\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"executionCount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"maxExecutions\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"}],\"name\":\"executeOrder\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"executionFeePercent\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"feeRecipient\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"}],\"name\":\"getOrder\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"enum ConditionalOrderEngine.OrderType\",\"name\":\"orderType\",\"type\":\"uint8\"},{\"internalType\":\"enum ConditionalOrderEngine.OrderStatus\",\"name\":\"status\",\"type\":\"uint8\"},{\"internalType\":\"address\",\"name\":\"inputToken\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"inputAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"deadline\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"user\",\"type\":\"address\"}],\"name\":\"getUserOrders\",\"outputs\":[{\"internalType\":\"uint256[]\",\"name\":\"\",\"type\":\"uint256[]\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"gridOrders\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"upperPrice\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"lowerPrice\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"gridLevels\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"amountPerGrid\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"maxExecutionReward\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"nextOrderId\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"orders\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"orderId\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"owner\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"smartAccount\",\"type\":\"address\"},{\"internalType\":\"enum ConditionalOrderEngine.OrderType\",\"name\":\"orderType\",\"type\":\"uint8\"},{\"internalType\":\"enum ConditionalOrderEngine.OrderStatus\",\"name\":\"status\",\"type\":\"uint8\"},{\"internalType\":\"address\",\"name\":\"inputToken\",\"type\":\"address\"},{\"internalType\":\"address\",\"name\":\"outputToken\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"inputAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"minOutputAmount\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"maxGasPrice\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"deadline\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"createdAt\",\"type\":\"uint256\"},{\"internalType\":\"uint256\",\"name\":\"executedAt\",\"type\":\"uint256\"},{\"internalType\":\"address\",\"name\":\"targetContract\",\"type\":\"address\"},{\"internalType\":\"bytes\",\"name\":\"callData\",\"type\":\"bytes\"},{\"internalType\":\"uint256\",\"name\":\"executionReward\",\"type\":\"uint256\"},{\"internalType\":\"bool\",\"name\":\"requiresAllConditions\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"owner\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"pause\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"paused\",\"outputs\":[{\"internalType\":\"bool\",\"name\":\"\",\"type\":\"bool\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"priceOracles\",\"outputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"renounceOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"executor\",\"type\":\"address\"}],\"name\":\"revokeExecutor\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"}],\"name\":\"tokenPrices\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"newOwner\",\"type\":\"address\"}],\"name\":\"transferOwnership\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"unpause\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"token\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"price\",\"type\":\"uint256\"}],\"name\":\"updateTokenPrice\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"inputs\":[{\"internalType\":\"address\",\"name\":\"\",\"type\":\"address\"},{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"name\":\"userOrders\",\"outputs\":[{\"internalType\":\"uint256\",\"name\":\"\",\"type\":\"uint256\"}],\"stateMutability\":\"view\",\"type\":\"function\"},{\"inputs\":[],\"name\":\"withdrawFees\",\"outputs\":[],\"stateMutability\":\"nonpayable\",\"type\":\"function\"},{\"stateMutability\":\"payable\",\"type\":\"receive\"}],\"devdoc\":{\"details\":\"Executes conditional orders based on market conditions and user-defined strategies\",\"errors\":{\"EnforcedPause()\":[{\"details\":\"The operation failed because the contract is paused.\"}],\"ExpectedPause()\":[{\"details\":\"The operation failed because the contract is not paused.\"}],\"OwnableInvalidOwner(address)\":[{\"details\":\"The owner is not a valid owner account. (eg. `address(0)`)\"}],\"OwnableUnauthorizedAccount(address)\":[{\"details\":\"The caller account is not authorized to perform an operation.\"}],\"ReentrancyGuardReentrantCall()\":[{\"details\":\"Unauthorized reentrant call.\"}]},\"events\":{\"Paused(address)\":{\"details\":\"Emitted when the pause is triggered by `account`.\"},\"Unpaused(address)\":{\"details\":\"Emitted when the pause is lifted by `account`.\"}},\"kind\":\"dev\",\"methods\":{\"authorizeExecutor(address)\":{\"details\":\"Authorizes an address to execute orders\",\"params\":{\"executor\":\"Address to authorize\"}},\"cancelOrder(uint256)\":{\"details\":\"Cancels an active order\",\"params\":{\"orderId\":\"ID of the order to cancel\"}},\"createDCAOrder(address,address,uint256,uint256,uint256,address,bytes)\":{\"details\":\"Creates a DCA (Dollar Cost Averaging) order\",\"params\":{\"callDataTemplate\":\"Template for swap calls\",\"frequency\":\"How often to execute (in seconds)\",\"inputToken\":\"Token to spend regularly\",\"maxExecutions\":\"Maximum number of executions\",\"outputToken\":\"Token to buy regularly\",\"targetContract\":\"DEX contract to use\",\"totalBudget\":\"Total amount to spend over time\"}},\"createOrder(uint8,(uint8,address,uint256,uint256,bool,bytes)[],address,address,uint256,uint256,uint256,address,bytes,bool)\":{\"details\":\"Creates a new conditional order\",\"params\":{\"callData\":\"Call data for the target contract\",\"conditions\":\"Array of conditions that must be met\",\"deadline\":\"Order expiration timestamp\",\"inputAmount\":\"Amount of input token\",\"inputToken\":\"Token to be spent\",\"minOutputAmount\":\"Minimum amount of output token expected\",\"orderType\":\"Type of the order\",\"outputToken\":\"Token to be received\",\"requiresAllConditions\":\"Whether all conditions must be met (AND) or just one (OR)\",\"targetContract\":\"Contract to call for execution\"}},\"executeOrder(uint256)\":{\"details\":\"Executes a conditional order if conditions are met\",\"params\":{\"orderId\":\"ID of the order to execute\"}},\"getOrder(uint256)\":{\"details\":\"Gets order details\",\"params\":{\"orderId\":\"Order ID\"},\"returns\":{\"deadline\":\"Expiration timestamp\",\"inputAmount\":\"Input token amount\",\"inputToken\":\"Input token address\",\"orderType\":\"Type of order\",\"owner\":\"Order owner\",\"status\":\"Current status\"}},\"getUserOrders(address)\":{\"details\":\"Gets user's orders\",\"params\":{\"user\":\"User address\"},\"returns\":{\"_0\":\"Array of order IDs\"}},\"owner()\":{\"details\":\"Returns the address of the current owner.\"},\"pause()\":{\"details\":\"Emergency pause function\"},\"paused()\":{\"details\":\"Returns true if the contract is paused, and false otherwise.\"},\"renounceOwnership()\":{\"details\":\"Leaves the contract without owner. It will not be possible to call `onlyOwner` functions. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby disabling any functionality that is only available to the owner.\"},\"revokeExecutor(address)\":{\"details\":\"Revokes executor authorization\",\"params\":{\"executor\":\"Address to revoke\"}},\"transferOwnership(address)\":{\"details\":\"Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner.\"},\"unpause()\":{\"details\":\"Unpause function\"},\"updateTokenPrice(address,uint256)\":{\"details\":\"Updates token price (would be called by oracle in production)\",\"params\":{\"price\":\"New price\",\"token\":\"Token address\"}},\"withdrawFees()\":{\"details\":\"Withdraw accumulated fees\"}},\"title\":\"ConditionalOrderEngine\",\"version\":1},\"userdoc\":{\"kind\":\"user\",\"methods\":{},\"notice\":\"This contract handles automated DeFi strategy execution with various trigger conditions\",\"version\":1}},\"settings\":{\"compilationTarget\":{\"contracts/ConditionalOrderEngine.sol\":\"ConditionalOrderEngine\"},\"evmVersion\":\"paris\",\"libraries\":{},\"metadata\":{\"bytecodeHash\":\"ipfs\",\"useLiteralContent\":true},\"optimizer\":{\"enabled\":true,\"runs\":1000},\"remappings\":[],\"viaIR\":true},\"sources\":{\"@openzeppelin/contracts/access/Ownable.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.0.0) (access/Ownable.sol)\\n\\npragma solidity ^0.8.20;\\n\\nimport {Context} from \\\"../utils/Context.sol\\\";\\n\\n/**\\n * @dev Contract module which provides a basic access control mechanism, where\\n * there is an account (an owner) that can be granted exclusive access to\\n * specific functions.\\n *\\n * The initial owner is set to the address provided by the deployer. This can\\n * later be changed with {transferOwnership}.\\n *\\n * This module is used through inheritance. It will make available the modifier\\n * `onlyOwner`, which can be applied to your functions to restrict their use to\\n * the owner.\\n */\\nabstract contract Ownable is Context {\\n    address private _owner;\\n\\n    /**\\n     * @dev The caller account is not authorized to perform an operation.\\n     */\\n    error OwnableUnauthorizedAccount(address account);\\n\\n    /**\\n     * @dev The owner is not a valid owner account. (eg. `address(0)`)\\n     */\\n    error OwnableInvalidOwner(address owner);\\n\\n    event OwnershipTransferred(address indexed previousOwner, address indexed newOwner);\\n\\n    /**\\n     * @dev Initializes the contract setting the address provided by the deployer as the initial owner.\\n     */\\n    constructor(address initialOwner) {\\n        if (initialOwner == address(0)) {\\n            revert OwnableInvalidOwner(address(0));\\n        }\\n        _transferOwnership(initialOwner);\\n    }\\n\\n    /**\\n     * @dev Throws if called by any account other than the owner.\\n     */\\n    modifier onlyOwner() {\\n        _checkOwner();\\n        _;\\n    }\\n\\n    /**\\n     * @dev Returns the address of the current owner.\\n     */\\n    function owner() public view virtual returns (address) {\\n        return _owner;\\n    }\\n\\n    /**\\n     * @dev Throws if the sender is not the owner.\\n     */\\n    function _checkOwner() internal view virtual {\\n        if (owner() != _msgSender()) {\\n            revert OwnableUnauthorizedAccount(_msgSender());\\n        }\\n    }\\n\\n    /**\\n     * @dev Leaves the contract without owner. It will not be possible to call\\n     * `onlyOwner` functions. Can only be called by the current owner.\\n     *\\n     * NOTE: Renouncing ownership will leave the contract without an owner,\\n     * thereby disabling any functionality that is only available to the owner.\\n     */\\n    function renounceOwnership() public virtual onlyOwner {\\n        _transferOwnership(address(0));\\n    }\\n\\n    /**\\n     * @dev Transfers ownership of the contract to a new account (`newOwner`).\\n     * Can only be called by the current owner.\\n     */\\n    function transferOwnership(address newOwner) public virtual onlyOwner {\\n        if (newOwner == address(0)) {\\n            revert OwnableInvalidOwner(address(0));\\n        }\\n        _transferOwnership(newOwner);\\n    }\\n\\n    /**\\n     * @dev Transfers ownership of the contract to a new account (`newOwner`).\\n     * Internal function without access restriction.\\n     */\\n    function _transferOwnership(address newOwner) internal virtual {\\n        address oldOwner = _owner;\\n        _owner = newOwner;\\n        emit OwnershipTransferred(oldOwner, newOwner);\\n    }\\n}\\n\",\"keccak256\":\"0xff6d0bb2e285473e5311d9d3caacb525ae3538a80758c10649a4d61029b017bb\",\"license\":\"MIT\"},\"@openzeppelin/contracts/interfaces/IERC1363.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.4.0) (interfaces/IERC1363.sol)\\n\\npragma solidity >=0.6.2;\\n\\nimport {IERC20} from \\\"./IERC20.sol\\\";\\nimport {IERC165} from \\\"./IERC165.sol\\\";\\n\\n/**\\n * @title IERC1363\\n * @dev Interface of the ERC-1363 standard as defined in the https://eips.ethereum.org/EIPS/eip-1363[ERC-1363].\\n *\\n * Defines an extension interface for ERC-20 tokens that supports executing code on a recipient contract\\n * after `transfer` or `transferFrom`, or code on a spender contract after `approve`, in a single transaction.\\n */\\ninterface IERC1363 is IERC20, IERC165 {\\n    /*\\n     * Note: the ERC-165 identifier for this interface is 0xb0202a11.\\n     * 0xb0202a11 ===\\n     *   bytes4(keccak256('transferAndCall(address,uint256)')) ^\\n     *   bytes4(keccak256('transferAndCall(address,uint256,bytes)')) ^\\n     *   bytes4(keccak256('transferFromAndCall(address,address,uint256)')) ^\\n     *   bytes4(keccak256('transferFromAndCall(address,address,uint256,bytes)')) ^\\n     *   bytes4(keccak256('approveAndCall(address,uint256)')) ^\\n     *   bytes4(keccak256('approveAndCall(address,uint256,bytes)'))\\n     */\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from the caller's account to `to`\\n     * and then calls {IERC1363Receiver-onTransferReceived} on `to`.\\n     * @param to The address which you want to transfer to.\\n     * @param value The amount of tokens to be transferred.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function transferAndCall(address to, uint256 value) external returns (bool);\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from the caller's account to `to`\\n     * and then calls {IERC1363Receiver-onTransferReceived} on `to`.\\n     * @param to The address which you want to transfer to.\\n     * @param value The amount of tokens to be transferred.\\n     * @param data Additional data with no specified format, sent in call to `to`.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function transferAndCall(address to, uint256 value, bytes calldata data) external returns (bool);\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from `from` to `to` using the allowance mechanism\\n     * and then calls {IERC1363Receiver-onTransferReceived} on `to`.\\n     * @param from The address which you want to send tokens from.\\n     * @param to The address which you want to transfer to.\\n     * @param value The amount of tokens to be transferred.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function transferFromAndCall(address from, address to, uint256 value) external returns (bool);\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from `from` to `to` using the allowance mechanism\\n     * and then calls {IERC1363Receiver-onTransferReceived} on `to`.\\n     * @param from The address which you want to send tokens from.\\n     * @param to The address which you want to transfer to.\\n     * @param value The amount of tokens to be transferred.\\n     * @param data Additional data with no specified format, sent in call to `to`.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function transferFromAndCall(address from, address to, uint256 value, bytes calldata data) external returns (bool);\\n\\n    /**\\n     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the\\n     * caller's tokens and then calls {IERC1363Spender-onApprovalReceived} on `spender`.\\n     * @param spender The address which will spend the funds.\\n     * @param value The amount of tokens to be spent.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function approveAndCall(address spender, uint256 value) external returns (bool);\\n\\n    /**\\n     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the\\n     * caller's tokens and then calls {IERC1363Spender-onApprovalReceived} on `spender`.\\n     * @param spender The address which will spend the funds.\\n     * @param value The amount of tokens to be spent.\\n     * @param data Additional data with no specified format, sent in call to `spender`.\\n     * @return A boolean value indicating whether the operation succeeded unless throwing.\\n     */\\n    function approveAndCall(address spender, uint256 value, bytes calldata data) external returns (bool);\\n}\\n\",\"keccak256\":\"0xd5ea07362ab630a6a3dee4285a74cf2377044ca2e4be472755ad64d7c5d4b69d\",\"license\":\"MIT\"},\"@openzeppelin/contracts/interfaces/IERC165.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.4.0) (interfaces/IERC165.sol)\\n\\npragma solidity >=0.4.16;\\n\\nimport {IERC165} from \\\"../utils/introspection/IERC165.sol\\\";\\n\",\"keccak256\":\"0x0afcb7e740d1537b252cb2676f600465ce6938398569f09ba1b9ca240dde2dfc\",\"license\":\"MIT\"},\"@openzeppelin/contracts/interfaces/IERC20.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.4.0) (interfaces/IERC20.sol)\\n\\npragma solidity >=0.4.16;\\n\\nimport {IERC20} from \\\"../token/ERC20/IERC20.sol\\\";\\n\",\"keccak256\":\"0x1a6221315ce0307746c2c4827c125d821ee796c74a676787762f4778671d4f44\",\"license\":\"MIT\"},\"@openzeppelin/contracts/token/ERC20/IERC20.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.4.0) (token/ERC20/IERC20.sol)\\n\\npragma solidity >=0.4.16;\\n\\n/**\\n * @dev Interface of the ERC-20 standard as defined in the ERC.\\n */\\ninterface IERC20 {\\n    /**\\n     * @dev Emitted when `value` tokens are moved from one account (`from`) to\\n     * another (`to`).\\n     *\\n     * Note that `value` may be zero.\\n     */\\n    event Transfer(address indexed from, address indexed to, uint256 value);\\n\\n    /**\\n     * @dev Emitted when the allowance of a `spender` for an `owner` is set by\\n     * a call to {approve}. `value` is the new allowance.\\n     */\\n    event Approval(address indexed owner, address indexed spender, uint256 value);\\n\\n    /**\\n     * @dev Returns the value of tokens in existence.\\n     */\\n    function totalSupply() external view returns (uint256);\\n\\n    /**\\n     * @dev Returns the value of tokens owned by `account`.\\n     */\\n    function balanceOf(address account) external view returns (uint256);\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from the caller's account to `to`.\\n     *\\n     * Returns a boolean value indicating whether the operation succeeded.\\n     *\\n     * Emits a {Transfer} event.\\n     */\\n    function transfer(address to, uint256 value) external returns (bool);\\n\\n    /**\\n     * @dev Returns the remaining number of tokens that `spender` will be\\n     * allowed to spend on behalf of `owner` through {transferFrom}. This is\\n     * zero by default.\\n     *\\n     * This value changes when {approve} or {transferFrom} are called.\\n     */\\n    function allowance(address owner, address spender) external view returns (uint256);\\n\\n    /**\\n     * @dev Sets a `value` amount of tokens as the allowance of `spender` over the\\n     * caller's tokens.\\n     *\\n     * Returns a boolean value indicating whether the operation succeeded.\\n     *\\n     * IMPORTANT: Beware that changing an allowance with this method brings the risk\\n     * that someone may use both the old and the new allowance by unfortunate\\n     * transaction ordering. One possible solution to mitigate this race\\n     * condition is to first reduce the spender's allowance to 0 and set the\\n     * desired value afterwards:\\n     * https://github.com/ethereum/EIPs/issues/20#issuecomment-263524729\\n     *\\n     * Emits an {Approval} event.\\n     */\\n    function approve(address spender, uint256 value) external returns (bool);\\n\\n    /**\\n     * @dev Moves a `value` amount of tokens from `from` to `to` using the\\n     * allowance mechanism. `value` is then deducted from the caller's\\n     * allowance.\\n     *\\n     * Returns a boolean value indicating whether the operation succeeded.\\n     *\\n     * Emits a {Transfer} event.\\n     */\\n    function transferFrom(address from, address to, uint256 value) external returns (bool);\\n}\\n\",\"keccak256\":\"0x74ed01eb66b923d0d0cfe3be84604ac04b76482a55f9dd655e1ef4d367f95bc2\",\"license\":\"MIT\"},\"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.3.0) (token/ERC20/utils/SafeERC20.sol)\\n\\npragma solidity ^0.8.20;\\n\\nimport {IERC20} from \\\"../IERC20.sol\\\";\\nimport {IERC1363} from \\\"../../../interfaces/IERC1363.sol\\\";\\n\\n/**\\n * @title SafeERC20\\n * @dev Wrappers around ERC-20 operations that throw on failure (when the token\\n * contract returns false). Tokens that return no value (and instead revert or\\n * throw on failure) are also supported, non-reverting calls are assumed to be\\n * successful.\\n * To use this library you can add a `using SafeERC20 for IERC20;` statement to your contract,\\n * which allows you to call the safe operations as `token.safeTransfer(...)`, etc.\\n */\\nlibrary SafeERC20 {\\n    /**\\n     * @dev An operation with an ERC-20 token failed.\\n     */\\n    error SafeERC20FailedOperation(address token);\\n\\n    /**\\n     * @dev Indicates a failed `decreaseAllowance` request.\\n     */\\n    error SafeERC20FailedDecreaseAllowance(address spender, uint256 currentAllowance, uint256 requestedDecrease);\\n\\n    /**\\n     * @dev Transfer `value` amount of `token` from the calling contract to `to`. If `token` returns no value,\\n     * non-reverting calls are assumed to be successful.\\n     */\\n    function safeTransfer(IERC20 token, address to, uint256 value) internal {\\n        _callOptionalReturn(token, abi.encodeCall(token.transfer, (to, value)));\\n    }\\n\\n    /**\\n     * @dev Transfer `value` amount of `token` from `from` to `to`, spending the approval given by `from` to the\\n     * calling contract. If `token` returns no value, non-reverting calls are assumed to be successful.\\n     */\\n    function safeTransferFrom(IERC20 token, address from, address to, uint256 value) internal {\\n        _callOptionalReturn(token, abi.encodeCall(token.transferFrom, (from, to, value)));\\n    }\\n\\n    /**\\n     * @dev Variant of {safeTransfer} that returns a bool instead of reverting if the operation is not successful.\\n     */\\n    function trySafeTransfer(IERC20 token, address to, uint256 value) internal returns (bool) {\\n        return _callOptionalReturnBool(token, abi.encodeCall(token.transfer, (to, value)));\\n    }\\n\\n    /**\\n     * @dev Variant of {safeTransferFrom} that returns a bool instead of reverting if the operation is not successful.\\n     */\\n    function trySafeTransferFrom(IERC20 token, address from, address to, uint256 value) internal returns (bool) {\\n        return _callOptionalReturnBool(token, abi.encodeCall(token.transferFrom, (from, to, value)));\\n    }\\n\\n    /**\\n     * @dev Increase the calling contract's allowance toward `spender` by `value`. If `token` returns no value,\\n     * non-reverting calls are assumed to be successful.\\n     *\\n     * IMPORTANT: If the token implements ERC-7674 (ERC-20 with temporary allowance), and if the \\\"client\\\"\\n     * smart contract uses ERC-7674 to set temporary allowances, then the \\\"client\\\" smart contract should avoid using\\n     * this function. Performing a {safeIncreaseAllowance} or {safeDecreaseAllowance} operation on a token contract\\n     * that has a non-zero temporary allowance (for that particular owner-spender) will result in unexpected behavior.\\n     */\\n    function safeIncreaseAllowance(IERC20 token, address spender, uint256 value) internal {\\n        uint256 oldAllowance = token.allowance(address(this), spender);\\n        forceApprove(token, spender, oldAllowance + value);\\n    }\\n\\n    /**\\n     * @dev Decrease the calling contract's allowance toward `spender` by `requestedDecrease`. If `token` returns no\\n     * value, non-reverting calls are assumed to be successful.\\n     *\\n     * IMPORTANT: If the token implements ERC-7674 (ERC-20 with temporary allowance), and if the \\\"client\\\"\\n     * smart contract uses ERC-7674 to set temporary allowances, then the \\\"client\\\" smart contract should avoid using\\n     * this function. Performing a {safeIncreaseAllowance} or {safeDecreaseAllowance} operation on a token contract\\n     * that has a non-zero temporary allowance (for that particular owner-spender) will result in unexpected behavior.\\n     */\\n    function safeDecreaseAllowance(IERC20 token, address spender, uint256 requestedDecrease) internal {\\n        unchecked {\\n            uint256 currentAllowance = token.allowance(address(this), spender);\\n            if (currentAllowance < requestedDecrease) {\\n                revert SafeERC20FailedDecreaseAllowance(spender, currentAllowance, requestedDecrease);\\n            }\\n            forceApprove(token, spender, currentAllowance - requestedDecrease);\\n        }\\n    }\\n\\n    /**\\n     * @dev Set the calling contract's allowance toward `spender` to `value`. If `token` returns no value,\\n     * non-reverting calls are assumed to be successful. Meant to be used with tokens that require the approval\\n     * to be set to zero before setting it to a non-zero value, such as USDT.\\n     *\\n     * NOTE: If the token implements ERC-7674, this function will not modify any temporary allowance. This function\\n     * only sets the \\\"standard\\\" allowance. Any temporary allowance will remain active, in addition to the value being\\n     * set here.\\n     */\\n    function forceApprove(IERC20 token, address spender, uint256 value) internal {\\n        bytes memory approvalCall = abi.encodeCall(token.approve, (spender, value));\\n\\n        if (!_callOptionalReturnBool(token, approvalCall)) {\\n            _callOptionalReturn(token, abi.encodeCall(token.approve, (spender, 0)));\\n            _callOptionalReturn(token, approvalCall);\\n        }\\n    }\\n\\n    /**\\n     * @dev Performs an {ERC1363} transferAndCall, with a fallback to the simple {ERC20} transfer if the target has no\\n     * code. This can be used to implement an {ERC721}-like safe transfer that rely on {ERC1363} checks when\\n     * targeting contracts.\\n     *\\n     * Reverts if the returned value is other than `true`.\\n     */\\n    function transferAndCallRelaxed(IERC1363 token, address to, uint256 value, bytes memory data) internal {\\n        if (to.code.length == 0) {\\n            safeTransfer(token, to, value);\\n        } else if (!token.transferAndCall(to, value, data)) {\\n            revert SafeERC20FailedOperation(address(token));\\n        }\\n    }\\n\\n    /**\\n     * @dev Performs an {ERC1363} transferFromAndCall, with a fallback to the simple {ERC20} transferFrom if the target\\n     * has no code. This can be used to implement an {ERC721}-like safe transfer that rely on {ERC1363} checks when\\n     * targeting contracts.\\n     *\\n     * Reverts if the returned value is other than `true`.\\n     */\\n    function transferFromAndCallRelaxed(\\n        IERC1363 token,\\n        address from,\\n        address to,\\n        uint256 value,\\n        bytes memory data\\n    ) internal {\\n        if (to.code.length == 0) {\\n            safeTransferFrom(token, from, to, value);\\n        } else if (!token.transferFromAndCall(from, to, value, data)) {\\n            revert SafeERC20FailedOperation(address(token));\\n        }\\n    }\\n\\n    /**\\n     * @dev Performs an {ERC1363} approveAndCall, with a fallback to the simple {ERC20} approve if the target has no\\n     * code. This can be used to implement an {ERC721}-like safe transfer that rely on {ERC1363} checks when\\n     * targeting contracts.\\n     *\\n     * NOTE: When the recipient address (`to`) has no code (i.e. is an EOA), this function behaves as {forceApprove}.\\n     * Opposedly, when the recipient address (`to`) has code, this function only attempts to call {ERC1363-approveAndCall}\\n     * once without retrying, and relies on the returned value to be true.\\n     *\\n     * Reverts if the returned value is other than `true`.\\n     */\\n    function approveAndCallRelaxed(IERC1363 token, address to, uint256 value, bytes memory data) internal {\\n        if (to.code.length == 0) {\\n            forceApprove(token, to, value);\\n        } else if (!token.approveAndCall(to, value, data)) {\\n            revert SafeERC20FailedOperation(address(token));\\n        }\\n    }\\n\\n    /**\\n     * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement\\n     * on the return value: the return value is optional (but if data is returned, it must not be false).\\n     * @param token The token targeted by the call.\\n     * @param data The call data (encoded using abi.encode or one of its variants).\\n     *\\n     * This is a variant of {_callOptionalReturnBool} that reverts if call fails to meet the requirements.\\n     */\\n    function _callOptionalReturn(IERC20 token, bytes memory data) private {\\n        uint256 returnSize;\\n        uint256 returnValue;\\n        assembly (\\\"memory-safe\\\") {\\n            let success := call(gas(), token, 0, add(data, 0x20), mload(data), 0, 0x20)\\n            // bubble errors\\n            if iszero(success) {\\n                let ptr := mload(0x40)\\n                returndatacopy(ptr, 0, returndatasize())\\n                revert(ptr, returndatasize())\\n            }\\n            returnSize := returndatasize()\\n            returnValue := mload(0)\\n        }\\n\\n        if (returnSize == 0 ? address(token).code.length == 0 : returnValue != 1) {\\n            revert SafeERC20FailedOperation(address(token));\\n        }\\n    }\\n\\n    /**\\n     * @dev Imitates a Solidity high-level call (i.e. a regular function call to a contract), relaxing the requirement\\n     * on the return value: the return value is optional (but if data is returned, it must not be false).\\n     * @param token The token targeted by the call.\\n     * @param data The call data (encoded using abi.encode or one of its variants).\\n     *\\n     * This is a variant of {_callOptionalReturn} that silently catches all reverts and returns a bool instead.\\n     */\\n    function _callOptionalReturnBool(IERC20 token, bytes memory data) private returns (bool) {\\n        bool success;\\n        uint256 returnSize;\\n        uint256 returnValue;\\n        assembly (\\\"memory-safe\\\") {\\n            success := call(gas(), token, 0, add(data, 0x20), mload(data), 0, 0x20)\\n            returnSize := returndatasize()\\n            returnValue := mload(0)\\n        }\\n        return success && (returnSize == 0 ? address(token).code.length > 0 : returnValue == 1);\\n    }\\n}\\n\",\"keccak256\":\"0x982c5cb790ab941d1e04f807120a71709d4c313ba0bfc16006447ffbd27fbbd5\",\"license\":\"MIT\"},\"@openzeppelin/contracts/utils/Context.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.0.1) (utils/Context.sol)\\n\\npragma solidity ^0.8.20;\\n\\n/**\\n * @dev Provides information about the current execution context, including the\\n * sender of the transaction and its data. While these are generally available\\n * via msg.sender and msg.data, they should not be accessed in such a direct\\n * manner, since when dealing with meta-transactions the account sending and\\n * paying for execution may not be the actual sender (as far as an application\\n * is concerned).\\n *\\n * This contract is only required for intermediate, library-like contracts.\\n */\\nabstract contract Context {\\n    function _msgSender() internal view virtual returns (address) {\\n        return msg.sender;\\n    }\\n\\n    function _msgData() internal view virtual returns (bytes calldata) {\\n        return msg.data;\\n    }\\n\\n    function _contextSuffixLength() internal view virtual returns (uint256) {\\n        return 0;\\n    }\\n}\\n\",\"keccak256\":\"0x493033a8d1b176a037b2cc6a04dad01a5c157722049bbecf632ca876224dd4b2\",\"license\":\"MIT\"},\"@openzeppelin/contracts/utils/Pausable.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.3.0) (utils/Pausable.sol)\\n\\npragma solidity ^0.8.20;\\n\\nimport {Context} from \\\"../utils/Context.sol\\\";\\n\\n/**\\n * @dev Contract module which allows children to implement an emergency stop\\n * mechanism that can be triggered by an authorized account.\\n *\\n * This module is used through inheritance. It will make available the\\n * modifiers `whenNotPaused` and `whenPaused`, which can be applied to\\n * the functions of your contract. Note that they will not be pausable by\\n * simply including this module, only once the modifiers are put in place.\\n */\\nabstract contract Pausable is Context {\\n    bool private _paused;\\n\\n    /**\\n     * @dev Emitted when the pause is triggered by `account`.\\n     */\\n    event Paused(address account);\\n\\n    /**\\n     * @dev Emitted when the pause is lifted by `account`.\\n     */\\n    event Unpaused(address account);\\n\\n    /**\\n     * @dev The operation failed because the contract is paused.\\n     */\\n    error EnforcedPause();\\n\\n    /**\\n     * @dev The operation failed because the contract is not paused.\\n     */\\n    error ExpectedPause();\\n\\n    /**\\n     * @dev Modifier to make a function callable only when the contract is not paused.\\n     *\\n     * Requirements:\\n     *\\n     * - The contract must not be paused.\\n     */\\n    modifier whenNotPaused() {\\n        _requireNotPaused();\\n        _;\\n    }\\n\\n    /**\\n     * @dev Modifier to make a function callable only when the contract is paused.\\n     *\\n     * Requirements:\\n     *\\n     * - The contract must be paused.\\n     */\\n    modifier whenPaused() {\\n        _requirePaused();\\n        _;\\n    }\\n\\n    /**\\n     * @dev Returns true if the contract is paused, and false otherwise.\\n     */\\n    function paused() public view virtual returns (bool) {\\n        return _paused;\\n    }\\n\\n    /**\\n     * @dev Throws if the contract is paused.\\n     */\\n    function _requireNotPaused() internal view virtual {\\n        if (paused()) {\\n            revert EnforcedPause();\\n        }\\n    }\\n\\n    /**\\n     * @dev Throws if the contract is not paused.\\n     */\\n    function _requirePaused() internal view virtual {\\n        if (!paused()) {\\n            revert ExpectedPause();\\n        }\\n    }\\n\\n    /**\\n     * @dev Triggers stopped state.\\n     *\\n     * Requirements:\\n     *\\n     * - The contract must not be paused.\\n     */\\n    function _pause() internal virtual whenNotPaused {\\n        _paused = true;\\n        emit Paused(_msgSender());\\n    }\\n\\n    /**\\n     * @dev Returns to normal state.\\n     *\\n     * Requirements:\\n     *\\n     * - The contract must be paused.\\n     */\\n    function _unpause() internal virtual whenPaused {\\n        _paused = false;\\n        emit Unpaused(_msgSender());\\n    }\\n}\\n\",\"keccak256\":\"0xdb484371dfbb848cb6f5d70464e9ac9b2900e4164ead76bbce4fef0b44bcc68f\",\"license\":\"MIT\"},\"@openzeppelin/contracts/utils/ReentrancyGuard.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.1.0) (utils/ReentrancyGuard.sol)\\n\\npragma solidity ^0.8.20;\\n\\n/**\\n * @dev Contract module that helps prevent reentrant calls to a function.\\n *\\n * Inheriting from `ReentrancyGuard` will make the {nonReentrant} modifier\\n * available, which can be applied to functions to make sure there are no nested\\n * (reentrant) calls to them.\\n *\\n * Note that because there is a single `nonReentrant` guard, functions marked as\\n * `nonReentrant` may not call one another. This can be worked around by making\\n * those functions `private`, and then adding `external` `nonReentrant` entry\\n * points to them.\\n *\\n * TIP: If EIP-1153 (transient storage) is available on the chain you're deploying at,\\n * consider using {ReentrancyGuardTransient} instead.\\n *\\n * TIP: If you would like to learn more about reentrancy and alternative ways\\n * to protect against it, check out our blog post\\n * https://blog.openzeppelin.com/reentrancy-after-istanbul/[Reentrancy After Istanbul].\\n */\\nabstract contract ReentrancyGuard {\\n    // Booleans are more expensive than uint256 or any type that takes up a full\\n    // word because each write operation emits an extra SLOAD to first read the\\n    // slot's contents, replace the bits taken up by the boolean, and then write\\n    // back. This is the compiler's defense against contract upgrades and\\n    // pointer aliasing, and it cannot be disabled.\\n\\n    // The values being non-zero value makes deployment a bit more expensive,\\n    // but in exchange the refund on every call to nonReentrant will be lower in\\n    // amount. Since refunds are capped to a percentage of the total\\n    // transaction's gas, it is best to keep them low in cases like this one, to\\n    // increase the likelihood of the full refund coming into effect.\\n    uint256 private constant NOT_ENTERED = 1;\\n    uint256 private constant ENTERED = 2;\\n\\n    uint256 private _status;\\n\\n    /**\\n     * @dev Unauthorized reentrant call.\\n     */\\n    error ReentrancyGuardReentrantCall();\\n\\n    constructor() {\\n        _status = NOT_ENTERED;\\n    }\\n\\n    /**\\n     * @dev Prevents a contract from calling itself, directly or indirectly.\\n     * Calling a `nonReentrant` function from another `nonReentrant`\\n     * function is not supported. It is possible to prevent this from happening\\n     * by making the `nonReentrant` function external, and making it call a\\n     * `private` function that does the actual work.\\n     */\\n    modifier nonReentrant() {\\n        _nonReentrantBefore();\\n        _;\\n        _nonReentrantAfter();\\n    }\\n\\n    function _nonReentrantBefore() private {\\n        // On the first call to nonReentrant, _status will be NOT_ENTERED\\n        if (_status == ENTERED) {\\n            revert ReentrancyGuardReentrantCall();\\n        }\\n\\n        // Any calls to nonReentrant after this point will fail\\n        _status = ENTERED;\\n    }\\n\\n    function _nonReentrantAfter() private {\\n        // By storing the original value once again, a refund is triggered (see\\n        // https://eips.ethereum.org/EIPS/eip-2200)\\n        _status = NOT_ENTERED;\\n    }\\n\\n    /**\\n     * @dev Returns true if the reentrancy guard is currently set to \\\"entered\\\", which indicates there is a\\n     * `nonReentrant` function in the call stack.\\n     */\\n    function _reentrancyGuardEntered() internal view returns (bool) {\\n        return _status == ENTERED;\\n    }\\n}\\n\",\"keccak256\":\"0x11a5a79827df29e915a12740caf62fe21ebe27c08c9ae3e09abe9ee3ba3866d3\",\"license\":\"MIT\"},\"@openzeppelin/contracts/utils/introspection/IERC165.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\n// OpenZeppelin Contracts (last updated v5.4.0) (utils/introspection/IERC165.sol)\\n\\npragma solidity >=0.4.16;\\n\\n/**\\n * @dev Interface of the ERC-165 standard, as defined in the\\n * https://eips.ethereum.org/EIPS/eip-165[ERC].\\n *\\n * Implementers can declare support of contract interfaces, which can then be\\n * queried by others ({ERC165Checker}).\\n *\\n * For an implementation, see {ERC165}.\\n */\\ninterface IERC165 {\\n    /**\\n     * @dev Returns true if this contract implements the interface defined by\\n     * `interfaceId`. See the corresponding\\n     * https://eips.ethereum.org/EIPS/eip-165#how-interfaces-are-identified[ERC section]\\n     * to learn more about how these ids are created.\\n     *\\n     * This function call must use less than 30 000 gas.\\n     */\\n    function supportsInterface(bytes4 interfaceId) external view returns (bool);\\n}\\n\",\"keccak256\":\"0x8891738ffe910f0cf2da09566928589bf5d63f4524dd734fd9cedbac3274dd5c\",\"license\":\"MIT\"},\"contracts/ConditionalOrderEngine.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.20;\\n\\nimport \\\"@openzeppelin/contracts/access/Ownable.sol\\\";\\nimport \\\"@openzeppelin/contracts/utils/ReentrancyGuard.sol\\\";\\nimport \\\"@openzeppelin/contracts/utils/Pausable.sol\\\";\\nimport \\\"@openzeppelin/contracts/token/ERC20/IERC20.sol\\\";\\nimport \\\"@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol\\\";\\nimport \\\"./interfaces/ISmartAccount.sol\\\";\\n\\n/**\\n * @title ConditionalOrderEngine\\n * @dev Executes conditional orders based on market conditions and user-defined strategies\\n * @notice This contract handles automated DeFi strategy execution with various trigger conditions\\n */\\ncontract ConditionalOrderEngine is Ownable, ReentrancyGuard, Pausable {\\n    using SafeERC20 for IERC20;\\n\\n    // Order types\\n    enum OrderType {\\n        LIMIT_BUY,\\n        LIMIT_SELL,\\n        STOP_LOSS,\\n        TAKE_PROFIT,\\n        DCA,           // Dollar Cost Averaging\\n        GRID_TRADING,\\n        YIELD_HARVEST,\\n        REBALANCE,\\n        LIQUIDATION_PROTECTION\\n    }\\n\\n    // Order status\\n    enum OrderStatus {\\n        ACTIVE,\\n        EXECUTED,\\n        CANCELLED,\\n        EXPIRED,\\n        FAILED\\n    }\\n\\n    // Condition types for triggers\\n    enum ConditionType {\\n        PRICE_ABOVE,\\n        PRICE_BELOW,\\n        PRICE_CHANGE_PERCENT,\\n        TIME_BASED,\\n        VOLUME_THRESHOLD,\\n        LIQUIDITY_THRESHOLD,\\n        YIELD_THRESHOLD,\\n        CUSTOM_LOGIC\\n    }\\n\\n    // Condition structure\\n    struct Condition {\\n        ConditionType conditionType;\\n        address tokenAddress;\\n        uint256 targetValue;\\n        uint256 currentValue;\\n        bool isMet;\\n        bytes extraData;\\n    }\\n\\n    // Order structure\\n    struct ConditionalOrder {\\n        uint256 orderId;\\n        address owner;\\n        address smartAccount;\\n        OrderType orderType;\\n        OrderStatus status;\\n        Condition[] conditions;\\n        address inputToken;\\n        address outputToken;\\n        uint256 inputAmount;\\n        uint256 minOutputAmount;\\n        uint256 maxGasPrice;\\n        uint256 deadline;\\n        uint256 createdAt;\\n        uint256 executedAt;\\n        address targetContract;\\n        bytes callData;\\n        uint256 executionReward;\\n        bool requiresAllConditions; // AND vs OR logic\\n    }\\n\\n    // DCA specific data\\n    struct DCAData {\\n        uint256 frequency; // in seconds\\n        uint256 amountPerExecution;\\n        uint256 totalBudget;\\n        uint256 spentAmount;\\n        uint256 lastExecutionTime;\\n        uint256 executionCount;\\n        uint256 maxExecutions;\\n    }\\n\\n    // Grid trading data\\n    struct GridData {\\n        uint256 upperPrice;\\n        uint256 lowerPrice;\\n        uint256 gridLevels;\\n        uint256 amountPerGrid;\\n        mapping(uint256 => bool) gridExecuted;\\n    }\\n\\n    // State variables\\n    uint256 public nextOrderId;\\n    mapping(uint256 => ConditionalOrder) public orders;\\n    mapping(uint256 => DCAData) public dcaOrders;\\n    mapping(uint256 => GridData) public gridOrders;\\n    mapping(address => uint256[]) public userOrders;\\n    mapping(address => bool) public authorizedExecutors;\\n    \\n    // Fee structure\\n    uint256 public executionFeePercent = 50; // 0.5% in basis points\\n    uint256 public maxExecutionReward = 0.01 ether;\\n    address public feeRecipient;\\n    \\n    // Price oracle (simplified)\\n    mapping(address => uint256) public tokenPrices;\\n    mapping(address => address) public priceOracles;\\n\\n    // Events\\n    event OrderCreated(\\n        uint256 indexed orderId,\\n        address indexed owner,\\n        OrderType orderType,\\n        address inputToken,\\n        uint256 inputAmount\\n    );\\n    \\n    event OrderExecuted(\\n        uint256 indexed orderId,\\n        address indexed executor,\\n        uint256 gasUsed,\\n        uint256 reward\\n    );\\n    \\n    event OrderCancelled(uint256 indexed orderId, address indexed owner);\\n    event ConditionMet(uint256 indexed orderId, uint256 conditionIndex);\\n    event ExecutorAuthorized(address indexed executor);\\n    event ExecutorRevoked(address indexed executor);\\n\\n    modifier onlyAuthorizedExecutor() {\\n        require(\\n            authorizedExecutors[msg.sender] || msg.sender == owner(),\\n            \\\"ConditionalOrderEngine: Not authorized executor\\\"\\n        );\\n        _;\\n    }\\n\\n    modifier validOrder(uint256 orderId) {\\n        require(orderId < nextOrderId, \\\"ConditionalOrderEngine: Invalid order ID\\\");\\n        require(\\n            orders[orderId].status == OrderStatus.ACTIVE,\\n            \\\"ConditionalOrderEngine: Order not active\\\"\\n        );\\n        _;\\n    }\\n\\n    constructor(address _feeRecipient) Ownable(msg.sender) {\\n        require(_feeRecipient != address(0), \\\"ConditionalOrderEngine: Invalid fee recipient\\\");\\n        feeRecipient = _feeRecipient;\\n        nextOrderId = 1;\\n    }\\n\\n    /**\\n     * @dev Creates a new conditional order\\n     * @param orderType Type of the order\\n     * @param conditions Array of conditions that must be met\\n     * @param inputToken Token to be spent\\n     * @param outputToken Token to be received\\n     * @param inputAmount Amount of input token\\n     * @param minOutputAmount Minimum amount of output token expected\\n     * @param deadline Order expiration timestamp\\n     * @param targetContract Contract to call for execution\\n     * @param callData Call data for the target contract\\n     * @param requiresAllConditions Whether all conditions must be met (AND) or just one (OR)\\n     */\\n    function createOrder(\\n        OrderType orderType,\\n        Condition[] calldata conditions,\\n        address inputToken,\\n        address outputToken,\\n        uint256 inputAmount,\\n        uint256 minOutputAmount,\\n        uint256 deadline,\\n        address targetContract,\\n        bytes calldata callData,\\n        bool requiresAllConditions\\n    ) external nonReentrant whenNotPaused returns (uint256 orderId) {\\n        require(conditions.length > 0, \\\"ConditionalOrderEngine: No conditions provided\\\");\\n        require(inputToken != address(0), \\\"ConditionalOrderEngine: Invalid input token\\\");\\n        require(inputAmount > 0, \\\"ConditionalOrderEngine: Invalid input amount\\\");\\n        require(deadline > block.timestamp, \\\"ConditionalOrderEngine: Invalid deadline\\\");\\n\\n        orderId = nextOrderId++;\\n        \\n        ConditionalOrder storage order = orders[orderId];\\n        order.orderId = orderId;\\n        order.owner = msg.sender;\\n        order.smartAccount = msg.sender; // Assuming caller is smart account\\n        order.orderType = orderType;\\n        order.status = OrderStatus.ACTIVE;\\n        order.inputToken = inputToken;\\n        order.outputToken = outputToken;\\n        order.inputAmount = inputAmount;\\n        order.minOutputAmount = minOutputAmount;\\n        order.maxGasPrice = tx.gasprice * 2; // Allow 2x current gas price\\n        order.deadline = deadline;\\n        order.createdAt = block.timestamp;\\n        order.targetContract = targetContract;\\n        order.callData = callData;\\n        order.requiresAllConditions = requiresAllConditions;\\n\\n        // Copy conditions\\n        for (uint256 i = 0; i < conditions.length; i++) {\\n            order.conditions.push(conditions[i]);\\n        }\\n\\n        // Calculate execution reward\\n        order.executionReward = (inputAmount * executionFeePercent) / 10000;\\n        if (order.executionReward > maxExecutionReward) {\\n            order.executionReward = maxExecutionReward;\\n        }\\n\\n        userOrders[msg.sender].push(orderId);\\n\\n        emit OrderCreated(orderId, msg.sender, orderType, inputToken, inputAmount);\\n\\n        return orderId;\\n    }\\n\\n    /**\\n     * @dev Creates a DCA (Dollar Cost Averaging) order\\n     * @param inputToken Token to spend regularly\\n     * @param outputToken Token to buy regularly\\n     * @param totalBudget Total amount to spend over time\\n     * @param frequency How often to execute (in seconds)\\n     * @param maxExecutions Maximum number of executions\\n     * @param targetContract DEX contract to use\\n     * @param callDataTemplate Template for swap calls\\n     */\\n    function createDCAOrder(\\n        address inputToken,\\n        address outputToken,\\n        uint256 totalBudget,\\n        uint256 frequency,\\n        uint256 maxExecutions,\\n        address targetContract,\\n        bytes calldata callDataTemplate\\n    ) external nonReentrant whenNotPaused returns (uint256 orderId) {\\n        require(totalBudget > 0, \\\"ConditionalOrderEngine: Invalid budget\\\");\\n        require(frequency >= 3600, \\\"ConditionalOrderEngine: Frequency too high\\\"); // Min 1 hour\\n        require(maxExecutions > 0, \\\"ConditionalOrderEngine: Invalid max executions\\\");\\n\\n        uint256 amountPerExecution = totalBudget / maxExecutions;\\n        require(amountPerExecution > 0, \\\"ConditionalOrderEngine: Amount per execution too small\\\");\\n\\n        // Create time-based condition\\n        Condition[] memory conditions = new Condition[](1);\\n        conditions[0] = Condition({\\n            conditionType: ConditionType.TIME_BASED,\\n            tokenAddress: address(0),\\n            targetValue: frequency,\\n            currentValue: 0,\\n            isMet: false,\\n            extraData: \\\"\\\"\\n        });\\n\\n        orderId = this.createOrder(\\n            OrderType.DCA,\\n            conditions,\\n            inputToken,\\n            outputToken,\\n            amountPerExecution,\\n            0, // No min output for DCA\\n            block.timestamp + (frequency * maxExecutions * 2), // Extended deadline\\n            targetContract,\\n            callDataTemplate,\\n            true\\n        );\\n\\n        // Store DCA-specific data\\n        dcaOrders[orderId] = DCAData({\\n            frequency: frequency,\\n            amountPerExecution: amountPerExecution,\\n            totalBudget: totalBudget,\\n            spentAmount: 0,\\n            lastExecutionTime: 0,\\n            executionCount: 0,\\n            maxExecutions: maxExecutions\\n        });\\n\\n        return orderId;\\n    }\\n\\n    /**\\n     * @dev Executes a conditional order if conditions are met\\n     * @param orderId ID of the order to execute\\n     */\\n    function executeOrder(uint256 orderId) \\n        external \\n        nonReentrant \\n        validOrder(orderId) \\n        onlyAuthorizedExecutor \\n        whenNotPaused \\n    {\\n        ConditionalOrder storage order = orders[orderId];\\n        \\n        require(block.timestamp <= order.deadline, \\\"ConditionalOrderEngine: Order expired\\\");\\n        require(tx.gasprice <= order.maxGasPrice, \\\"ConditionalOrderEngine: Gas price too high\\\");\\n\\n        // Check conditions\\n        bool canExecute = _checkConditions(orderId);\\n        require(canExecute, \\\"ConditionalOrderEngine: Conditions not met\\\");\\n\\n        uint256 gasStart = gasleft();\\n\\n        // Execute the order\\n        bool success = _executeOrderLogic(order);\\n        require(success, \\\"ConditionalOrderEngine: Execution failed\\\");\\n\\n        // Update order status\\n        order.status = OrderStatus.EXECUTED;\\n        order.executedAt = block.timestamp;\\n\\n        // Handle DCA specific logic\\n        if (order.orderType == OrderType.DCA) {\\n            _handleDCAExecution(orderId);\\n        }\\n\\n        // Calculate and pay execution reward\\n        uint256 gasUsed = gasStart - gasleft();\\n        uint256 reward = _calculateExecutionReward(gasUsed, order.executionReward);\\n        \\n        if (reward > 0) {\\n            payable(msg.sender).transfer(reward);\\n        }\\n\\n        emit OrderExecuted(orderId, msg.sender, gasUsed, reward);\\n    }\\n\\n    /**\\n     * @dev Cancels an active order\\n     * @param orderId ID of the order to cancel\\n     */\\n    function cancelOrder(uint256 orderId) external nonReentrant {\\n        ConditionalOrder storage order = orders[orderId];\\n        \\n        require(\\n            msg.sender == order.owner || msg.sender == owner(),\\n            \\\"ConditionalOrderEngine: Not authorized to cancel\\\"\\n        );\\n        require(\\n            order.status == OrderStatus.ACTIVE,\\n            \\\"ConditionalOrderEngine: Order not active\\\"\\n        );\\n\\n        order.status = OrderStatus.CANCELLED;\\n\\n        emit OrderCancelled(orderId, msg.sender);\\n    }\\n\\n    /**\\n     * @dev Updates token price (would be called by oracle in production)\\n     * @param token Token address\\n     * @param price New price\\n     */\\n    function updateTokenPrice(address token, uint256 price) external onlyOwner {\\n        tokenPrices[token] = price;\\n    }\\n\\n    /**\\n     * @dev Checks if all conditions for an order are met\\n     * @param orderId Order ID to check\\n     * @return True if conditions allow execution\\n     */\\n    function _checkConditions(uint256 orderId) internal returns (bool) {\\n        ConditionalOrder storage order = orders[orderId];\\n        uint256 conditionsMet = 0;\\n\\n        for (uint256 i = 0; i < order.conditions.length; i++) {\\n            Condition storage condition = order.conditions[i];\\n            bool isMet = false;\\n\\n            if (condition.conditionType == ConditionType.PRICE_ABOVE) {\\n                uint256 currentPrice = tokenPrices[condition.tokenAddress];\\n                isMet = currentPrice >= condition.targetValue;\\n            } else if (condition.conditionType == ConditionType.PRICE_BELOW) {\\n                uint256 currentPrice = tokenPrices[condition.tokenAddress];\\n                isMet = currentPrice <= condition.targetValue;\\n            } else if (condition.conditionType == ConditionType.TIME_BASED) {\\n                if (order.orderType == OrderType.DCA) {\\n                    DCAData storage dcaData = dcaOrders[orderId];\\n                    isMet = block.timestamp >= dcaData.lastExecutionTime + dcaData.frequency;\\n                } else {\\n                    isMet = block.timestamp >= condition.targetValue;\\n                }\\n            }\\n\\n            condition.isMet = isMet;\\n            if (isMet) {\\n                conditionsMet++;\\n                emit ConditionMet(orderId, i);\\n            }\\n        }\\n\\n        if (order.requiresAllConditions) {\\n            return conditionsMet == order.conditions.length;\\n        } else {\\n            return conditionsMet > 0;\\n        }\\n    }\\n\\n    /**\\n     * @dev Executes the actual order logic\\n     * @param order Order to execute\\n     * @return Success status\\n     */\\n    function _executeOrderLogic(ConditionalOrder storage order) internal returns (bool) {\\n        // Call the target contract with the specified call data\\n        (bool success,) = order.targetContract.call(order.callData);\\n        return success;\\n    }\\n\\n    /**\\n     * @dev Handles DCA order execution logic\\n     * @param orderId DCA order ID\\n     */\\n    function _handleDCAExecution(uint256 orderId) internal {\\n        DCAData storage dcaData = dcaOrders[orderId];\\n        ConditionalOrder storage order = orders[orderId];\\n\\n        dcaData.lastExecutionTime = block.timestamp;\\n        dcaData.executionCount++;\\n        dcaData.spentAmount += dcaData.amountPerExecution;\\n\\n        // If max executions reached or budget exhausted, mark as completed\\n        if (dcaData.executionCount >= dcaData.maxExecutions || \\n            dcaData.spentAmount >= dcaData.totalBudget) {\\n            order.status = OrderStatus.EXECUTED;\\n        } else {\\n            // Reset for next execution\\n            order.status = OrderStatus.ACTIVE;\\n        }\\n    }\\n\\n    /**\\n     * @dev Calculates execution reward based on gas used\\n     * @param gasUsed Gas consumed during execution\\n     * @param maxReward Maximum reward allowed\\n     * @return Reward amount\\n     */\\n    function _calculateExecutionReward(uint256 gasUsed, uint256 maxReward) \\n        internal \\n        view \\n        returns (uint256) \\n    {\\n        uint256 gasReward = gasUsed * tx.gasprice * 2; // 2x gas compensation\\n        return gasReward < maxReward ? gasReward : maxReward;\\n    }\\n\\n    /**\\n     * @dev Authorizes an address to execute orders\\n     * @param executor Address to authorize\\n     */\\n    function authorizeExecutor(address executor) external onlyOwner {\\n        authorizedExecutors[executor] = true;\\n        emit ExecutorAuthorized(executor);\\n    }\\n\\n    /**\\n     * @dev Revokes executor authorization\\n     * @param executor Address to revoke\\n     */\\n    function revokeExecutor(address executor) external onlyOwner {\\n        authorizedExecutors[executor] = false;\\n        emit ExecutorRevoked(executor);\\n    }\\n\\n    /**\\n     * @dev Gets order details\\n     * @param orderId Order ID\\n     * @return owner Order owner\\n     * @return orderType Type of order\\n     * @return status Current status\\n     * @return inputToken Input token address\\n     * @return inputAmount Input token amount\\n     * @return deadline Expiration timestamp\\n     */\\n    function getOrder(uint256 orderId) \\n        external \\n        view \\n        returns (\\n            address owner,\\n            OrderType orderType,\\n            OrderStatus status,\\n            address inputToken,\\n            uint256 inputAmount,\\n            uint256 deadline\\n        ) \\n    {\\n        ConditionalOrder storage order = orders[orderId];\\n        return (\\n            order.owner,\\n            order.orderType,\\n            order.status,\\n            order.inputToken,\\n            order.inputAmount,\\n            order.deadline\\n        );\\n    }\\n\\n    /**\\n     * @dev Gets user's orders\\n     * @param user User address\\n     * @return Array of order IDs\\n     */\\n    function getUserOrders(address user) external view returns (uint256[] memory) {\\n        return userOrders[user];\\n    }\\n\\n    /**\\n     * @dev Emergency pause function\\n     */\\n    function pause() external onlyOwner {\\n        _pause();\\n    }\\n\\n    /**\\n     * @dev Unpause function\\n     */\\n    function unpause() external onlyOwner {\\n        _unpause();\\n    }\\n\\n    /**\\n     * @dev Withdraw accumulated fees\\n     */\\n    function withdrawFees() external onlyOwner {\\n        payable(feeRecipient).transfer(address(this).balance);\\n    }\\n\\n    /**\\n     * @dev Receive function to accept ETH for execution rewards\\n     */\\n    receive() external payable {}\\n}\",\"keccak256\":\"0x5fc4d1f3296f196dcc02e21480f0011e5b6faf5e8970ee8d2d6b72211f3d1a6d\",\"license\":\"MIT\"},\"contracts/interfaces/ISmartAccount.sol\":{\"content\":\"// SPDX-License-Identifier: MIT\\npragma solidity ^0.8.20;\\n\\n/**\\n * @title ISmartAccount\\n * @dev Interface for Smart Account contract\\n */\\ninterface ISmartAccount {\\n    /**\\n     * @dev Executes a transaction\\n     * @param dest Destination address\\n     * @param value ETH value to send\\n     * @param func Function call data\\n     */\\n    function execute(\\n        address dest,\\n        uint256 value,\\n        bytes calldata func\\n    ) external;\\n\\n    /**\\n     * @dev Executes multiple transactions in batch\\n     * @param dest Array of destination addresses\\n     * @param value Array of ETH values to send\\n     * @param func Array of function call data\\n     */\\n    function executeBatch(\\n        address[] calldata dest,\\n        uint256[] calldata value,\\n        bytes[] calldata func\\n    ) external;\\n\\n    /**\\n     * @dev Executes an automated operation using session key\\n     * @param dest Destination address\\n     * @param value ETH value to send\\n     * @param func Function call data\\n     * @param sessionKey Session key that should execute this\\n     */\\n    function executeAutomated(\\n        address dest,\\n        uint256 value,\\n        bytes calldata func,\\n        address sessionKey\\n    ) external;\\n\\n    /**\\n     * @dev Returns the owner of the Smart Account\\n     */\\n    function owner() external view returns (address);\\n\\n    /**\\n     * @dev Returns the current nonce for this account\\n     */\\n    function getNonce() external view returns (uint256);\\n\\n    /**\\n     * @dev Creates a new session key for automation\\n     * @param sessionKey Address of the session key\\n     * @param validUntil Expiration timestamp\\n     * @param limitAmount Maximum amount this key can spend\\n     * @param allowedTargets Allowed contract addresses\\n     * @param allowedFunctions Allowed function selectors\\n     */\\n    function createSessionKey(\\n        address sessionKey,\\n        uint256 validUntil,\\n        uint256 limitAmount,\\n        address[] calldata allowedTargets,\\n        bytes4[] calldata allowedFunctions\\n    ) external;\\n\\n    /**\\n     * @dev Revokes a session key\\n     * @param sessionKey Session key to revoke\\n     */\\n    function revokeSessionKey(address sessionKey) external;\\n\\n    /**\\n     * @dev Adds a guardian for emergency recovery\\n     * @param guardian Guardian address to add\\n     */\\n    function addGuardian(address guardian) external;\\n\\n    /**\\n     * @dev Removes a guardian\\n     * @param guardian Guardian address to remove\\n     */\\n    function removeGuardian(address guardian) external;\\n\\n    /**\\n     * @dev Emergency recovery function (requires guardian signatures)\\n     * @param newOwner New owner address\\n     * @param guardianAddresses Array of guardian addresses\\n     * @param guardianSignatures Array of guardian signatures\\n     */\\n    function emergencyRecovery(\\n        address newOwner,\\n        address[] calldata guardianAddresses,\\n        bytes[] calldata guardianSignatures\\n    ) external;\\n}\",\"keccak256\":\"0xbb4cc7a82daefc50c27bedc0caeb3839b657d2bd7b2b305a34f036b292523531\",\"license\":\"MIT\"}},\"version\":1}",
+  "bytecode": "0x6080346200014957601f6200261138819003918201601f19168301916001600160401b038311848410176200014e578084926020946040528339810103126200014957516001600160a01b03808216918290036200014957331562000130576000549060018060a01b0319913383821617600055604051913391167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0600080a3600180556032600955662386f26fc10000600a558215620000d85750600b541617600b5560016003556040516124ac9081620001658239f35b62461bcd60e51b815260206004820152602d60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201526c199959481c9958da5c1a595b9d609a1b6064820152608490fd5b604051631e4fbdf760e01b815260006004820152602490fd5b600080fd5b634e487b7160e01b600052604160045260246000fdfe608080604052600436101561001d575b50361561001b57600080fd5b005b60003560e01c9081630137451814611fa5575080630617ab7114611f875780631d70ccf814611f69578063204120bc14611f2f57806323754115146115fe5780632960f8c5146115915780632a58b330146115735780633f4ba83a146114f157806346904840146114ca578063476343ee14611485578063514fcac7146113565780635c975abb1461133357806363c69f081461127f578063643590f914611215578063679d86a7146111d6578063715018a61461117d5780638456cb5914611123578063856652e9146110cd5780638da5cb5b146110a657806394f6113414610b14578063a85c38ef14610946578063d09ef241146108bf578063d4ee651b1461087f578063d510125114610818578063e3f7477e146107ca578063e864af38146101f75763f2fde38b14610153573861000f565b346101f25760203660031901126101f25761016c611fdd565b61017461225b565b6001600160a01b038091169081156101c157600054826001600160a01b0319821617600055167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0600080a3005b60246040517f1e4fbdf700000000000000000000000000000000000000000000000000000000815260006004820152fd5b600080fd5b346101f25760e03660031901126101f257610210611fdd565b602435906001600160a01b03821682036101f25760a435916001600160a01b03831683036101f25760c43567ffffffffffffffff81116101f257610258903690600401611ff3565b90936102626121ea565b61026a612225565b6044351561076057610e10606435106106f6576084351561068c576084356044350415610622576040519283604081011067ffffffffffffffff6040860111176104e657604084016040526001845260005b602081106105e257506040516102d181612089565b60038152600060208201526064356040820152600060608201526000608082015260405180602081011067ffffffffffffffff6020830111176104e657602081016040526000815260a0820152610327856121d0565b52610331846121d0565b50610340608435606435612130565b808060011b04600214811517156105cc5761035e9060011b426121dd565b90604051957f237541150000000000000000000000000000000000000000000000000000000087526101448701600480890152610140602489015286518091526101646020818a01918360051b8b010198019160005b81811061053a5750505050858588968a6001600160a01b036020988a98828b99818c9a1660448b0152166064890152608435604435046084890152600060a489015260c48801521660e4860152600319858503016101048601528184528584013760008482840101526001610124840152601f8019910116010301816000305af190811561052e576000916104fc575b506040519060e082019180831067ffffffffffffffff8411176104e65760209260405260643581526006838201608435604435048152604083016044358152606084016000815260808501906000825260a08601926000845260c087019460843586528860005260058a526040600020975188555160018801555160028701555160038601555160048501555160058401555191015560018055604051908152f35b634e487b7160e01b600052604160045260246000fd5b90506020813d602011610526575b81610517602093836120a5565b810103126101f2575181610444565b3d915061050a565b6040513d6000823e3d90fd5b90919298610163198b820301845289519081519160088310156105b6576105aa8260c060a0602095946001978796526001600160a01b0386820151168685015260408101516040850152606081015160608501526080810151151560808501520151918160a082015201906120e1565b9b0194019291016103b4565b634e487b7160e01b600052602160045260246000fd5b634e487b7160e01b600052601160045260246000fd5b6020906040516105f181612089565b600081526000838201526000604082015260606000818301526000608083015260a0820152828288010152016102bc565b608460405162461bcd60e51b815260206004820152603660248201527f436f6e646974696f6e616c4f72646572456e67696e653a20416d6f756e74207060448201527f657220657865637574696f6e20746f6f20736d616c6c000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602e60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f6d617820657865637574696f6e730000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204672657175656e6360448201527f7920746f6f2068696768000000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602660248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f62756467657400000000000000000000000000000000000000000000000000006064820152fd5b346101f25760203660031901126101f2576004356000526006602052608060406000208054906001810154906003600282015491015491604051938452602084015260408301526060820152f35b346101f25760203660031901126101f2576001600160a01b03610839611fdd565b61084161225b565b16806000526008602052604060002060ff1981541690557f02dc911aaa0e4aefb4e1898cc626902c4d63f9304bb8cc1fd10c1bf23a1a7d6a600080a2005b346101f25760403660031901126101f2576001600160a01b036108a0611fdd565b6108a861225b565b16600052600c602052602435604060002055600080f35b346101f25760203660031901126101f257600435600052600460205260c060406000206001600160a01b03806001830154169160028101549160048201541661093560096006840154930154936040519586526109256020870160ff8360a01c166120c7565b60ff604087019160a81c166120d4565b6060840152608083015260a0820152f35b346101f25760203660031901126101f2576004356000526004602052604060002080546001600160a01b03600183015416916002810154916001600160a01b03600483015416906001600160a01b03600584015416906006840154600785015460088601546009870154600a88015491600b890154936001600160a01b03600c8b0154169560405198898c600d60009101546109e18161204f565b8084529060018116908115610af85750600114610ab6575b5003610a05908b6120a5565b600e8c01549b600f015460ff169a6040519e8f9e8f916102209c835260208301526001600160a01b0381166040830152606082018160a01c60ff1690610a4a916120c7565b608082019060a81c60ff1690610a5f916120d4565b60a0015260c08d015260e08c01526101008b01526101208a01526101408901526101608801526101808701526101a0860152806101c08601528401610aa3916120e1565b916101e084015215156102008301520390f35b9050600d8e016000526020600020906000915b818310610add5750508101602001386109f9565b80602092948385600194549201015201910190918c92610ac9565b90506020925060ff191682840152151560051b820101386109f9565b346101f2576020806003193601126101f257600435610b316121ea565b60035481101561103c57806000526004825260029060ff826040600020015460a81c1660058110156105b657610b67901561215f565b336000526008835260ff604060002054168015611028575b15610fbe57610b8c612225565b806000526004835260406000209260098401544211610f545760088401543a11610eea57610bb98261229f565b15610e80575a926001600160a01b03600c8601541694600d8101956040516000885498610be58a61204f565b9060019a8b81169081600014610e685750600114610e2f575b505091816000809493819403925af13d15610e2a573d67ffffffffffffffff81116104e65760405190610c3a601f8201601f19168701836120a5565b81526000853d92013e5b15610dc057818101750100000000000000000000000000000000000000000060ff60ff60a81b199282848254161780915542600b86015560a01c1660098110156105b657600414610d33575b50505a85039485116105cc57600e0154610caa3a86612130565b80871b9281840414901517156105cc5780821015610d2b5750905b8180158015610d04575b50506040519384528301527f79e7fef5cd17ce2c61fe594632f498fbf07d1bf082540b02861ad2a3afb745e060403393a38055005b600090610d22575b600080809381933390f11561052e578186610ccf565b506108fc610d0c565b905090610cc5565b85600052600585528360406000206004875260406000209042600482015560058101610d5f8154612121565b809155838c83015491610d77600385019384546121dd565b80935560068401541192831593610db2575b505050600014610da35701918254161790555b8680610c90565b90915001908154169055610d9c565b0154111590508b8381610d89565b6084836040519062461bcd60e51b82526004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20457865637574696f60448201527f6e206661696c65640000000000000000000000000000000000000000000000006064820152fd5b610c44565b90915060005285600020868a6000925b848410610e56575050509082019050816000610bfe565b805484870152019101908a8891610e3f565b60ff1916855250508015150282019050816000610bfe565b6084906040519062461bcd60e51b82526004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20436f6e646974696f60448201527f6e73206e6f74206d6574000000000000000000000000000000000000000000006064820152fd5b6084906040519062461bcd60e51b82526004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20476173207072696360448201527f6520746f6f2068696768000000000000000000000000000000000000000000006064820152fd5b6084906040519062461bcd60e51b82526004820152602560248201527f436f6e646974696f6e616c4f72646572456e67696e653a204f7264657220657860448201527f70697265640000000000000000000000000000000000000000000000000000006064820152fd5b6084836040519062461bcd60e51b82526004820152602f60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f74206175746860448201527f6f72697a6564206578656375746f7200000000000000000000000000000000006064820152fd5b506001600160a01b03600054163314610b7f565b6084826040519062461bcd60e51b82526004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f6f726465722049440000000000000000000000000000000000000000000000006064820152fd5b346101f25760003660031901126101f25760206001600160a01b0360005416604051908152f35b346101f25760403660031901126101f2576110e6611fdd565b6001600160a01b0360243591166000526007602052604060002080548210156101f25760209161111591612021565b90546040519160031b1c8152f35b346101f25760003660031901126101f25761113c61225b565b611144612225565b600160ff1960025416176002557f62e78cea01bee320cd4e420270b5ea74000d11b0c9f74754ebdbfc544b05a2586020604051338152a1005b346101f25760003660031901126101f25761119661225b565b60006001600160a01b0381546001600160a01b031981168355167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e08280a3005b346101f25760203660031901126101f2576001600160a01b036111f7611fdd565b166000526008602052602060ff604060002054166040519015158152f35b346101f25760203660031901126101f2576001600160a01b03611236611fdd565b61123e61225b565b168060005260086020526040600020600160ff198254161790557f52762435f58790076157ea2a4914a5a4d0aa0eb421588891377692f7fd3bc082600080a2005b346101f2576020806003193601126101f2576001600160a01b036112a1611fdd565b1660005260078152604060002060405190818382549182815201908192600052846000209060005b8682821061131f5786866112df828803836120a5565b604051928392818401908285525180915260408401929160005b82811061130857505050500390f35b8351855286955093810193928101926001016112f9565b8354855290930192600192830192016112c9565b346101f25760003660031901126101f257602060ff600254166040519015158152f35b346101f25760203660031901126101f2576004356113726121ea565b80600052600460205260406000206001600160a01b03806001830154163314908115611477575b501561140d57600201805460ff8160a81c1660058110156105b6577502000000000000000000000000000000000000000000916113dc60ff60a81b19921561215f565b1617905533907fc0362da6f2ff36b382b34aec0814f6b3cdf89f5ef282a1d1f114d0c0b036d596600080a360018055005b608460405162461bcd60e51b815260206004820152603060248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f74206175746860448201527f6f72697a656420746f2063616e63656c000000000000000000000000000000006064820152fd5b905060005416331483611399565b346101f25760003660031901126101f25761149e61225b565b60008080806001600160a01b03600b541647908282156114c1575bf11561052e57005b506108fc6114b9565b346101f25760003660031901126101f25760206001600160a01b03600b5416604051908152f35b346101f25760003660031901126101f25761150a61225b565b60025460ff8116156115495760ff19166002557f5db9ee0a495bf2e6ff9c91a7834c1ba4fdd244a5e8aa4e537bd38aeae4b073aa6020604051338152a1005b60046040517f8dfc202b000000000000000000000000000000000000000000000000000000008152fd5b346101f25760003660031901126101f2576020600354604051908152f35b346101f25760203660031901126101f257600435600052600560205260e06040600020805490600181015490600281015460038201546004830154916006600585015494015494604051968752602087015260408601526060850152608084015260a083015260c0820152f35b346101f2576101403660031901126101f257600960043510156101f25767ffffffffffffffff602435116101f2573660236024350112156101f25767ffffffffffffffff60243560040135116101f25736602480356004013560051b81350101116101f2576044356001600160a01b03811681036101f2576064356001600160a01b03811681036101f25760e435906001600160a01b03821682036101f2576101043567ffffffffffffffff81116101f2576116be903690600401611ff3565b9061012435151561012435036101f2576116d66121ea565b6116de612225565b6024356004013515611ec5576001600160a01b03851615611e5b5760843515611df1574260c4351115611d87576003549361171885612121565b60035584600052600460205260406000209385855560018501336001600160a01b03198254161790556002850180547fffffffffffffffffffff000000000000000000000000000000000000000000007fffffffffffffffffffff0000ffffffffffffffffffffffffffffffffffffffff331691161774ff000000000000000000000000000000000000000060043560a01b16179055600485016001600160a01b0388166001600160a01b03198254161790556001600160a01b036005860191166001600160a01b0319825416179055608435600685015560a43560078501553a3a60011b046002143a1517156105cc573a60011b600885015560c435600985015542600a8501556001600160a01b03600c850191166001600160a01b031982541617905567ffffffffffffffff82116104e657819061185b600d85015461204f565b601f8111611d34575b50600090601f8311600114611cc357600092611cb8575b50508160011b916000199060031b1c191617600d8201555b6118af61012435600f83019060ff801983541691151516179055565b60005b6024356004013581106119905750600e6127106118d3600954608435612130565b049101818155600a54809211611988575b5050336000526007602052604060002091825492680100000000000000008410156104e6578361191b916001602096018155612021565b81549060031b9084821b91600019901b19161790556001600160a01b0360405191611948836004356120c7565b16838201526084356040820152817f921ac984368e49c977a8fab5399410567fd274afc06794525e202b3b1bd548e360603393a360018055604051908152f35b5582806118e4565b60248160051b813501013560e2196024353603018112156101f2576003830154680100000000000000008110156104e6578060016119d79201600386015560038501612143565b919091611ca257602481813501013560088110156101f257825460ff19811660ff83161784556024358301604401356001600160a01b03811690036101f2577fffffffffffffffffffffff0000000000000000000000000000000000000000001660ff91909116176024358201604481013560081b74ffffffffffffffffffffffffffffffffffffffff0016919091178355606481013560018401556084810135600284015560a4013580151590036101f257611aab60a482602435010135600384019060ff801983541691151516179055565b6024358101368190036042190160c49091013512156101f25767ffffffffffffffff60248035830160c4810135010135116101f25760248035820160c4810135019081013536036044909101136101f257611b09600483015461204f565b601f8111611c4b575b5060006001601f60248035850160c48101350101351114611b9157600193929160049160009060248035840160c4810135010135611b79575b506000196024803590930160c48101350190920135600381901b9290921c191690851b179101555b016118b2565b602435830160c4810135010160440135905089611b4b565b6004830160005260206000209060005b60248035850160c4810135010135601f19168110611c2657506001949392600492869260249291908335830160c481013501840135601f19811610611bf9575b505081350160c4810135010135811b01910155611b73565b8335830160c481013501908101604401356000199185013560031b60f8169190911c191690558a80611be1565b602435840160c481013501820160440135835560019092019160209182019101611ba1565b6004830160009081526020908190209060248035850160c4810135010135601f810160051c83019111611c9b575b601f830160051c82018110611c8f575050611b12565b60008155600101611c79565b5080611c79565b634e487b7160e01b600052600060045260246000fd5b01359050858061187b565b909250600d84016000526020600020906000935b601f1984168510611d1c576001945083601f19811610611d02575b505050811b01600d820155611893565b0135600019600384901b60f8161c19169055858080611cf2565b81810135835560209485019460019093019201611cd7565b909150600d84016000526020600020601f840160051c810160208510611d80575b90849392915b601f830160051c82018110611d71575050611864565b60008155859450600101611d5b565b5080611d55565b608460405162461bcd60e51b815260206004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f646561646c696e650000000000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602c60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f696e70757420616d6f756e7400000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602b60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f696e70757420746f6b656e0000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602e60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f20636f6e646960448201527f74696f6e732070726f76696465640000000000000000000000000000000000006064820152fd5b346101f25760203660031901126101f2576001600160a01b03611f50611fdd565b16600052600c6020526020604060002054604051908152f35b346101f25760003660031901126101f2576020600954604051908152f35b346101f25760003660031901126101f2576020600a54604051908152f35b346101f25760203660031901126101f2576020906001600160a01b0380611fca611fdd565b16600052600d8352604060002054168152f35b600435906001600160a01b03821682036101f257565b9181601f840112156101f25782359167ffffffffffffffff83116101f257602083818601950101116101f257565b80548210156120395760005260206000200190600090565b634e487b7160e01b600052603260045260246000fd5b90600182811c9216801561207f575b602083101461206957565b634e487b7160e01b600052602260045260246000fd5b91607f169161205e565b60c0810190811067ffffffffffffffff8211176104e657604052565b90601f8019910116810190811067ffffffffffffffff8211176104e657604052565b9060098210156105b65752565b9060058210156105b65752565b919082519283825260005b84811061210d575050826000602080949584010152601f8019910116010190565b6020818301810151848301820152016120ec565b60001981146105cc5760010190565b818102929181159184041417156105cc57565b8054821015612039576000526005602060002091020190600090565b1561216657565b608460405162461bcd60e51b815260206004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a204f72646572206e6f60448201527f74206163746976650000000000000000000000000000000000000000000000006064820152fd5b8051156120395760200190565b919082018092116105cc57565b6002600154146121fb576002600155565b60046040517f3ee5aeb5000000000000000000000000000000000000000000000000000000008152fd5b60ff6002541661223157565b60046040517fd93c0665000000000000000000000000000000000000000000000000000000008152fd5b6001600160a01b0360005416330361226f57565b60246040517f118cdaa7000000000000000000000000000000000000000000000000000000008152336004820152fd5b6000818152600460208181526040808420929594939260039084828201815b8154811015612450576122d18183612143565b50805490600860ff8084169087908383101561243b578a9493929190826123765750505061232c92936001600160a01b03911c168652600c8a5288862054600182015411159283915b019060ff801983541691151516179055565b612339575b6001016122be565b96612345600191612121565b97897f11cb16ff2db1dc0a843e3d4677f01a716b38becfd0498df8f1278d8b2b94a9e7898951848152a29050612331565b600193928085036123ac5750505061232c93946001600160a01b03911c168752600c8b528987205490820154101592839161231a565b919650915084146123c5575b505061232c91839161231a565b9193509150600287015460a01c166009811015612427579161232c918e808a95146000146124185761240891508d885260058c528a8820908101549054906121dd565b4210159283915b918193506123b8565b5081015442101592839161240f565b5060248560218f634e487b7160e01b835252fd5b508f886021602492634e487b7160e01b835252fd5b5096505091505060ff92949550600f915001541660001461247057541490565b5015159056fea26469706673582212208e1ede34cbd709718c6ca5a98b9c75f506c08a2b494cee6b8b0a12712afcfdd864736f6c63430008170033",
+  "deployedBytecode": "0x608080604052600436101561001d575b50361561001b57600080fd5b005b60003560e01c9081630137451814611fa5575080630617ab7114611f875780631d70ccf814611f69578063204120bc14611f2f57806323754115146115fe5780632960f8c5146115915780632a58b330146115735780633f4ba83a146114f157806346904840146114ca578063476343ee14611485578063514fcac7146113565780635c975abb1461133357806363c69f081461127f578063643590f914611215578063679d86a7146111d6578063715018a61461117d5780638456cb5914611123578063856652e9146110cd5780638da5cb5b146110a657806394f6113414610b14578063a85c38ef14610946578063d09ef241146108bf578063d4ee651b1461087f578063d510125114610818578063e3f7477e146107ca578063e864af38146101f75763f2fde38b14610153573861000f565b346101f25760203660031901126101f25761016c611fdd565b61017461225b565b6001600160a01b038091169081156101c157600054826001600160a01b0319821617600055167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e0600080a3005b60246040517f1e4fbdf700000000000000000000000000000000000000000000000000000000815260006004820152fd5b600080fd5b346101f25760e03660031901126101f257610210611fdd565b602435906001600160a01b03821682036101f25760a435916001600160a01b03831683036101f25760c43567ffffffffffffffff81116101f257610258903690600401611ff3565b90936102626121ea565b61026a612225565b6044351561076057610e10606435106106f6576084351561068c576084356044350415610622576040519283604081011067ffffffffffffffff6040860111176104e657604084016040526001845260005b602081106105e257506040516102d181612089565b60038152600060208201526064356040820152600060608201526000608082015260405180602081011067ffffffffffffffff6020830111176104e657602081016040526000815260a0820152610327856121d0565b52610331846121d0565b50610340608435606435612130565b808060011b04600214811517156105cc5761035e9060011b426121dd565b90604051957f237541150000000000000000000000000000000000000000000000000000000087526101448701600480890152610140602489015286518091526101646020818a01918360051b8b010198019160005b81811061053a5750505050858588968a6001600160a01b036020988a98828b99818c9a1660448b0152166064890152608435604435046084890152600060a489015260c48801521660e4860152600319858503016101048601528184528584013760008482840101526001610124840152601f8019910116010301816000305af190811561052e576000916104fc575b506040519060e082019180831067ffffffffffffffff8411176104e65760209260405260643581526006838201608435604435048152604083016044358152606084016000815260808501906000825260a08601926000845260c087019460843586528860005260058a526040600020975188555160018801555160028701555160038601555160048501555160058401555191015560018055604051908152f35b634e487b7160e01b600052604160045260246000fd5b90506020813d602011610526575b81610517602093836120a5565b810103126101f2575181610444565b3d915061050a565b6040513d6000823e3d90fd5b90919298610163198b820301845289519081519160088310156105b6576105aa8260c060a0602095946001978796526001600160a01b0386820151168685015260408101516040850152606081015160608501526080810151151560808501520151918160a082015201906120e1565b9b0194019291016103b4565b634e487b7160e01b600052602160045260246000fd5b634e487b7160e01b600052601160045260246000fd5b6020906040516105f181612089565b600081526000838201526000604082015260606000818301526000608083015260a0820152828288010152016102bc565b608460405162461bcd60e51b815260206004820152603660248201527f436f6e646974696f6e616c4f72646572456e67696e653a20416d6f756e74207060448201527f657220657865637574696f6e20746f6f20736d616c6c000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602e60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f6d617820657865637574696f6e730000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204672657175656e6360448201527f7920746f6f2068696768000000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602660248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f62756467657400000000000000000000000000000000000000000000000000006064820152fd5b346101f25760203660031901126101f2576004356000526006602052608060406000208054906001810154906003600282015491015491604051938452602084015260408301526060820152f35b346101f25760203660031901126101f2576001600160a01b03610839611fdd565b61084161225b565b16806000526008602052604060002060ff1981541690557f02dc911aaa0e4aefb4e1898cc626902c4d63f9304bb8cc1fd10c1bf23a1a7d6a600080a2005b346101f25760403660031901126101f2576001600160a01b036108a0611fdd565b6108a861225b565b16600052600c602052602435604060002055600080f35b346101f25760203660031901126101f257600435600052600460205260c060406000206001600160a01b03806001830154169160028101549160048201541661093560096006840154930154936040519586526109256020870160ff8360a01c166120c7565b60ff604087019160a81c166120d4565b6060840152608083015260a0820152f35b346101f25760203660031901126101f2576004356000526004602052604060002080546001600160a01b03600183015416916002810154916001600160a01b03600483015416906001600160a01b03600584015416906006840154600785015460088601546009870154600a88015491600b890154936001600160a01b03600c8b0154169560405198898c600d60009101546109e18161204f565b8084529060018116908115610af85750600114610ab6575b5003610a05908b6120a5565b600e8c01549b600f015460ff169a6040519e8f9e8f916102209c835260208301526001600160a01b0381166040830152606082018160a01c60ff1690610a4a916120c7565b608082019060a81c60ff1690610a5f916120d4565b60a0015260c08d015260e08c01526101008b01526101208a01526101408901526101608801526101808701526101a0860152806101c08601528401610aa3916120e1565b916101e084015215156102008301520390f35b9050600d8e016000526020600020906000915b818310610add5750508101602001386109f9565b80602092948385600194549201015201910190918c92610ac9565b90506020925060ff191682840152151560051b820101386109f9565b346101f2576020806003193601126101f257600435610b316121ea565b60035481101561103c57806000526004825260029060ff826040600020015460a81c1660058110156105b657610b67901561215f565b336000526008835260ff604060002054168015611028575b15610fbe57610b8c612225565b806000526004835260406000209260098401544211610f545760088401543a11610eea57610bb98261229f565b15610e80575a926001600160a01b03600c8601541694600d8101956040516000885498610be58a61204f565b9060019a8b81169081600014610e685750600114610e2f575b505091816000809493819403925af13d15610e2a573d67ffffffffffffffff81116104e65760405190610c3a601f8201601f19168701836120a5565b81526000853d92013e5b15610dc057818101750100000000000000000000000000000000000000000060ff60ff60a81b199282848254161780915542600b86015560a01c1660098110156105b657600414610d33575b50505a85039485116105cc57600e0154610caa3a86612130565b80871b9281840414901517156105cc5780821015610d2b5750905b8180158015610d04575b50506040519384528301527f79e7fef5cd17ce2c61fe594632f498fbf07d1bf082540b02861ad2a3afb745e060403393a38055005b600090610d22575b600080809381933390f11561052e578186610ccf565b506108fc610d0c565b905090610cc5565b85600052600585528360406000206004875260406000209042600482015560058101610d5f8154612121565b809155838c83015491610d77600385019384546121dd565b80935560068401541192831593610db2575b505050600014610da35701918254161790555b8680610c90565b90915001908154169055610d9c565b0154111590508b8381610d89565b6084836040519062461bcd60e51b82526004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20457865637574696f60448201527f6e206661696c65640000000000000000000000000000000000000000000000006064820152fd5b610c44565b90915060005285600020868a6000925b848410610e56575050509082019050816000610bfe565b805484870152019101908a8891610e3f565b60ff1916855250508015150282019050816000610bfe565b6084906040519062461bcd60e51b82526004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20436f6e646974696f60448201527f6e73206e6f74206d6574000000000000000000000000000000000000000000006064820152fd5b6084906040519062461bcd60e51b82526004820152602a60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20476173207072696360448201527f6520746f6f2068696768000000000000000000000000000000000000000000006064820152fd5b6084906040519062461bcd60e51b82526004820152602560248201527f436f6e646974696f6e616c4f72646572456e67696e653a204f7264657220657860448201527f70697265640000000000000000000000000000000000000000000000000000006064820152fd5b6084836040519062461bcd60e51b82526004820152602f60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f74206175746860448201527f6f72697a6564206578656375746f7200000000000000000000000000000000006064820152fd5b506001600160a01b03600054163314610b7f565b6084826040519062461bcd60e51b82526004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f6f726465722049440000000000000000000000000000000000000000000000006064820152fd5b346101f25760003660031901126101f25760206001600160a01b0360005416604051908152f35b346101f25760403660031901126101f2576110e6611fdd565b6001600160a01b0360243591166000526007602052604060002080548210156101f25760209161111591612021565b90546040519160031b1c8152f35b346101f25760003660031901126101f25761113c61225b565b611144612225565b600160ff1960025416176002557f62e78cea01bee320cd4e420270b5ea74000d11b0c9f74754ebdbfc544b05a2586020604051338152a1005b346101f25760003660031901126101f25761119661225b565b60006001600160a01b0381546001600160a01b031981168355167f8be0079c531659141344cd1fd0a4f28419497f9722a3daafe3b4186f6b6457e08280a3005b346101f25760203660031901126101f2576001600160a01b036111f7611fdd565b166000526008602052602060ff604060002054166040519015158152f35b346101f25760203660031901126101f2576001600160a01b03611236611fdd565b61123e61225b565b168060005260086020526040600020600160ff198254161790557f52762435f58790076157ea2a4914a5a4d0aa0eb421588891377692f7fd3bc082600080a2005b346101f2576020806003193601126101f2576001600160a01b036112a1611fdd565b1660005260078152604060002060405190818382549182815201908192600052846000209060005b8682821061131f5786866112df828803836120a5565b604051928392818401908285525180915260408401929160005b82811061130857505050500390f35b8351855286955093810193928101926001016112f9565b8354855290930192600192830192016112c9565b346101f25760003660031901126101f257602060ff600254166040519015158152f35b346101f25760203660031901126101f2576004356113726121ea565b80600052600460205260406000206001600160a01b03806001830154163314908115611477575b501561140d57600201805460ff8160a81c1660058110156105b6577502000000000000000000000000000000000000000000916113dc60ff60a81b19921561215f565b1617905533907fc0362da6f2ff36b382b34aec0814f6b3cdf89f5ef282a1d1f114d0c0b036d596600080a360018055005b608460405162461bcd60e51b815260206004820152603060248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f74206175746860448201527f6f72697a656420746f2063616e63656c000000000000000000000000000000006064820152fd5b905060005416331483611399565b346101f25760003660031901126101f25761149e61225b565b60008080806001600160a01b03600b541647908282156114c1575bf11561052e57005b506108fc6114b9565b346101f25760003660031901126101f25760206001600160a01b03600b5416604051908152f35b346101f25760003660031901126101f25761150a61225b565b60025460ff8116156115495760ff19166002557f5db9ee0a495bf2e6ff9c91a7834c1ba4fdd244a5e8aa4e537bd38aeae4b073aa6020604051338152a1005b60046040517f8dfc202b000000000000000000000000000000000000000000000000000000008152fd5b346101f25760003660031901126101f2576020600354604051908152f35b346101f25760203660031901126101f257600435600052600560205260e06040600020805490600181015490600281015460038201546004830154916006600585015494015494604051968752602087015260408601526060850152608084015260a083015260c0820152f35b346101f2576101403660031901126101f257600960043510156101f25767ffffffffffffffff602435116101f2573660236024350112156101f25767ffffffffffffffff60243560040135116101f25736602480356004013560051b81350101116101f2576044356001600160a01b03811681036101f2576064356001600160a01b03811681036101f25760e435906001600160a01b03821682036101f2576101043567ffffffffffffffff81116101f2576116be903690600401611ff3565b9061012435151561012435036101f2576116d66121ea565b6116de612225565b6024356004013515611ec5576001600160a01b03851615611e5b5760843515611df1574260c4351115611d87576003549361171885612121565b60035584600052600460205260406000209385855560018501336001600160a01b03198254161790556002850180547fffffffffffffffffffff000000000000000000000000000000000000000000007fffffffffffffffffffff0000ffffffffffffffffffffffffffffffffffffffff331691161774ff000000000000000000000000000000000000000060043560a01b16179055600485016001600160a01b0388166001600160a01b03198254161790556001600160a01b036005860191166001600160a01b0319825416179055608435600685015560a43560078501553a3a60011b046002143a1517156105cc573a60011b600885015560c435600985015542600a8501556001600160a01b03600c850191166001600160a01b031982541617905567ffffffffffffffff82116104e657819061185b600d85015461204f565b601f8111611d34575b50600090601f8311600114611cc357600092611cb8575b50508160011b916000199060031b1c191617600d8201555b6118af61012435600f83019060ff801983541691151516179055565b60005b6024356004013581106119905750600e6127106118d3600954608435612130565b049101818155600a54809211611988575b5050336000526007602052604060002091825492680100000000000000008410156104e6578361191b916001602096018155612021565b81549060031b9084821b91600019901b19161790556001600160a01b0360405191611948836004356120c7565b16838201526084356040820152817f921ac984368e49c977a8fab5399410567fd274afc06794525e202b3b1bd548e360603393a360018055604051908152f35b5582806118e4565b60248160051b813501013560e2196024353603018112156101f2576003830154680100000000000000008110156104e6578060016119d79201600386015560038501612143565b919091611ca257602481813501013560088110156101f257825460ff19811660ff83161784556024358301604401356001600160a01b03811690036101f2577fffffffffffffffffffffff0000000000000000000000000000000000000000001660ff91909116176024358201604481013560081b74ffffffffffffffffffffffffffffffffffffffff0016919091178355606481013560018401556084810135600284015560a4013580151590036101f257611aab60a482602435010135600384019060ff801983541691151516179055565b6024358101368190036042190160c49091013512156101f25767ffffffffffffffff60248035830160c4810135010135116101f25760248035820160c4810135019081013536036044909101136101f257611b09600483015461204f565b601f8111611c4b575b5060006001601f60248035850160c48101350101351114611b9157600193929160049160009060248035840160c4810135010135611b79575b506000196024803590930160c48101350190920135600381901b9290921c191690851b179101555b016118b2565b602435830160c4810135010160440135905089611b4b565b6004830160005260206000209060005b60248035850160c4810135010135601f19168110611c2657506001949392600492869260249291908335830160c481013501840135601f19811610611bf9575b505081350160c4810135010135811b01910155611b73565b8335830160c481013501908101604401356000199185013560031b60f8169190911c191690558a80611be1565b602435840160c481013501820160440135835560019092019160209182019101611ba1565b6004830160009081526020908190209060248035850160c4810135010135601f810160051c83019111611c9b575b601f830160051c82018110611c8f575050611b12565b60008155600101611c79565b5080611c79565b634e487b7160e01b600052600060045260246000fd5b01359050858061187b565b909250600d84016000526020600020906000935b601f1984168510611d1c576001945083601f19811610611d02575b505050811b01600d820155611893565b0135600019600384901b60f8161c19169055858080611cf2565b81810135835560209485019460019093019201611cd7565b909150600d84016000526020600020601f840160051c810160208510611d80575b90849392915b601f830160051c82018110611d71575050611864565b60008155859450600101611d5b565b5080611d55565b608460405162461bcd60e51b815260206004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f646561646c696e650000000000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602c60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f696e70757420616d6f756e7400000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602b60248201527f436f6e646974696f6e616c4f72646572456e67696e653a20496e76616c69642060448201527f696e70757420746f6b656e0000000000000000000000000000000000000000006064820152fd5b608460405162461bcd60e51b815260206004820152602e60248201527f436f6e646974696f6e616c4f72646572456e67696e653a204e6f20636f6e646960448201527f74696f6e732070726f76696465640000000000000000000000000000000000006064820152fd5b346101f25760203660031901126101f2576001600160a01b03611f50611fdd565b16600052600c6020526020604060002054604051908152f35b346101f25760003660031901126101f2576020600954604051908152f35b346101f25760003660031901126101f2576020600a54604051908152f35b346101f25760203660031901126101f2576020906001600160a01b0380611fca611fdd565b16600052600d8352604060002054168152f35b600435906001600160a01b03821682036101f257565b9181601f840112156101f25782359167ffffffffffffffff83116101f257602083818601950101116101f257565b80548210156120395760005260206000200190600090565b634e487b7160e01b600052603260045260246000fd5b90600182811c9216801561207f575b602083101461206957565b634e487b7160e01b600052602260045260246000fd5b91607f169161205e565b60c0810190811067ffffffffffffffff8211176104e657604052565b90601f8019910116810190811067ffffffffffffffff8211176104e657604052565b9060098210156105b65752565b9060058210156105b65752565b919082519283825260005b84811061210d575050826000602080949584010152601f8019910116010190565b6020818301810151848301820152016120ec565b60001981146105cc5760010190565b818102929181159184041417156105cc57565b8054821015612039576000526005602060002091020190600090565b1561216657565b608460405162461bcd60e51b815260206004820152602860248201527f436f6e646974696f6e616c4f72646572456e67696e653a204f72646572206e6f60448201527f74206163746976650000000000000000000000000000000000000000000000006064820152fd5b8051156120395760200190565b919082018092116105cc57565b6002600154146121fb576002600155565b60046040517f3ee5aeb5000000000000000000000000000000000000000000000000000000008152fd5b60ff6002541661223157565b60046040517fd93c0665000000000000000000000000000000000000000000000000000000008152fd5b6001600160a01b0360005416330361226f57565b60246040517f118cdaa7000000000000000000000000000000000000000000000000000000008152336004820152fd5b6000818152600460208181526040808420929594939260039084828201815b8154811015612450576122d18183612143565b50805490600860ff8084169087908383101561243b578a9493929190826123765750505061232c92936001600160a01b03911c168652600c8a5288862054600182015411159283915b019060ff801983541691151516179055565b612339575b6001016122be565b96612345600191612121565b97897f11cb16ff2db1dc0a843e3d4677f01a716b38becfd0498df8f1278d8b2b94a9e7898951848152a29050612331565b600193928085036123ac5750505061232c93946001600160a01b03911c168752600c8b528987205490820154101592839161231a565b919650915084146123c5575b505061232c91839161231a565b9193509150600287015460a01c166009811015612427579161232c918e808a95146000146124185761240891508d885260058c528a8820908101549054906121dd565b4210159283915b918193506123b8565b5081015442101592839161240f565b5060248560218f634e487b7160e01b835252fd5b508f886021602492634e487b7160e01b835252fd5b5096505091505060ff92949550600f915001541660001461247057541490565b5015159056fea26469706673582212208e1ede34cbd709718c6ca5a98b9c75f506c08a2b494cee6b8b0a12712afcfdd864736f6c63430008170033",
+  "devdoc": {
+    "details": "Executes conditional orders based on market conditions and user-defined strategies",
+    "errors": {
+      "EnforcedPause()": [
+        {
+          "details": "The operation failed because the contract is paused."
+        }
+      ],
+      "ExpectedPause()": [
+        {
+          "details": "The operation failed because the contract is not paused."
+        }
+      ],
+      "OwnableInvalidOwner(address)": [
+        {
+          "details": "The owner is not a valid owner account. (eg. `address(0)`)"
+        }
+      ],
+      "OwnableUnauthorizedAccount(address)": [
+        {
+          "details": "The caller account is not authorized to perform an operation."
+        }
+      ],
+      "ReentrancyGuardReentrantCall()": [
+        {
+          "details": "Unauthorized reentrant call."
+        }
+      ]
+    },
+    "events": {
+      "Paused(address)": {
+        "details": "Emitted when the pause is triggered by `account`."
+      },
+      "Unpaused(address)": {
+        "details": "Emitted when the pause is lifted by `account`."
+      }
+    },
+    "kind": "dev",
+    "methods": {
+      "authorizeExecutor(address)": {
+        "details": "Authorizes an address to execute orders",
+        "params": {
+          "executor": "Address to authorize"
+        }
+      },
+      "cancelOrder(uint256)": {
+        "details": "Cancels an active order",
+        "params": {
+          "orderId": "ID of the order to cancel"
+        }
+      },
+      "createDCAOrder(address,address,uint256,uint256,uint256,address,bytes)": {
+        "details": "Creates a DCA (Dollar Cost Averaging) order",
+        "params": {
+          "callDataTemplate": "Template for swap calls",
+          "frequency": "How often to execute (in seconds)",
+          "inputToken": "Token to spend regularly",
+          "maxExecutions": "Maximum number of executions",
+          "outputToken": "Token to buy regularly",
+          "targetContract": "DEX contract to use",
+          "totalBudget": "Total amount to spend over time"
+        }
+      },
+      "createOrder(uint8,(uint8,address,uint256,uint256,bool,bytes)[],address,address,uint256,uint256,uint256,address,bytes,bool)": {
+        "details": "Creates a new conditional order",
+        "params": {
+          "callData": "Call data for the target contract",
+          "conditions": "Array of conditions that must be met",
+          "deadline": "Order expiration timestamp",
+          "inputAmount": "Amount of input token",
+          "inputToken": "Token to be spent",
+          "minOutputAmount": "Minimum amount of output token expected",
+          "orderType": "Type of the order",
+          "outputToken": "Token to be received",
+          "requiresAllConditions": "Whether all conditions must be met (AND) or just one (OR)",
+          "targetContract": "Contract to call for execution"
+        }
+      },
+      "executeOrder(uint256)": {
+        "details": "Executes a conditional order if conditions are met",
+        "params": {
+          "orderId": "ID of the order to execute"
+        }
+      },
+      "getOrder(uint256)": {
+        "details": "Gets order details",
+        "params": {
+          "orderId": "Order ID"
+        },
+        "returns": {
+          "deadline": "Expiration timestamp",
+          "inputAmount": "Input token amount",
+          "inputToken": "Input token address",
+          "orderType": "Type of order",
+          "owner": "Order owner",
+          "status": "Current status"
+        }
+      },
+      "getUserOrders(address)": {
+        "details": "Gets user's orders",
+        "params": {
+          "user": "User address"
+        },
+        "returns": {
+          "_0": "Array of order IDs"
+        }
+      },
+      "owner()": {
+        "details": "Returns the address of the current owner."
+      },
+      "pause()": {
+        "details": "Emergency pause function"
+      },
+      "paused()": {
+        "details": "Returns true if the contract is paused, and false otherwise."
+      },
+      "renounceOwnership()": {
+        "details": "Leaves the contract without owner. It will not be possible to call `onlyOwner` functions. Can only be called by the current owner. NOTE: Renouncing ownership will leave the contract without an owner, thereby disabling any functionality that is only available to the owner."
+      },
+      "revokeExecutor(address)": {
+        "details": "Revokes executor authorization",
+        "params": {
+          "executor": "Address to revoke"
+        }
+      },
+      "transferOwnership(address)": {
+        "details": "Transfers ownership of the contract to a new account (`newOwner`). Can only be called by the current owner."
+      },
+      "unpause()": {
+        "details": "Unpause function"
+      },
+      "updateTokenPrice(address,uint256)": {
+        "details": "Updates token price (would be called by oracle in production)",
+        "params": {
+          "price": "New price",
+          "token": "Token address"
+        }
+      },
+      "withdrawFees()": {
+        "details": "Withdraw accumulated fees"
+      }
+    },
+    "title": "ConditionalOrderEngine",
+    "version": 1
+  },
+  "userdoc": {
+    "kind": "user",
+    "methods": {},
+    "notice": "This contract handles automated DeFi strategy execution with various trigger conditions",
+    "version": 1
+  },
+  "storageLayout": {
+    "storage": [
+      {
+        "astId": 1167,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "_owner",
+        "offset": 0,
+        "slot": "0",
+        "type": "t_address"
+      },
+      {
+        "astId": 3423,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "_status",
+        "offset": 0,
+        "slot": "1",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 3313,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "_paused",
+        "offset": 0,
+        "slot": "2",
+        "type": "t_bool"
+      },
+      {
+        "astId": 11867,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "nextOrderId",
+        "offset": 0,
+        "slot": "3",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 11872,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "orders",
+        "offset": 0,
+        "slot": "4",
+        "type": "t_mapping(t_uint256,t_struct(ConditionalOrder)11837_storage)"
+      },
+      {
+        "astId": 11877,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "dcaOrders",
+        "offset": 0,
+        "slot": "5",
+        "type": "t_mapping(t_uint256,t_struct(DCAData)11852_storage)"
+      },
+      {
+        "astId": 11882,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "gridOrders",
+        "offset": 0,
+        "slot": "6",
+        "type": "t_mapping(t_uint256,t_struct(GridData)11865_storage)"
+      },
+      {
+        "astId": 11887,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "userOrders",
+        "offset": 0,
+        "slot": "7",
+        "type": "t_mapping(t_address,t_array(t_uint256)dyn_storage)"
+      },
+      {
+        "astId": 11891,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "authorizedExecutors",
+        "offset": 0,
+        "slot": "8",
+        "type": "t_mapping(t_address,t_bool)"
+      },
+      {
+        "astId": 11894,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "executionFeePercent",
+        "offset": 0,
+        "slot": "9",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 11897,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "maxExecutionReward",
+        "offset": 0,
+        "slot": "10",
+        "type": "t_uint256"
+      },
+      {
+        "astId": 11899,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "feeRecipient",
+        "offset": 0,
+        "slot": "11",
+        "type": "t_address"
+      },
+      {
+        "astId": 11903,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "tokenPrices",
+        "offset": 0,
+        "slot": "12",
+        "type": "t_mapping(t_address,t_uint256)"
+      },
+      {
+        "astId": 11907,
+        "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+        "label": "priceOracles",
+        "offset": 0,
+        "slot": "13",
+        "type": "t_mapping(t_address,t_address)"
+      }
+    ],
+    "types": {
+      "t_address": {
+        "encoding": "inplace",
+        "label": "address",
+        "numberOfBytes": "20"
+      },
+      "t_array(t_struct(Condition)11796_storage)dyn_storage": {
+        "base": "t_struct(Condition)11796_storage",
+        "encoding": "dynamic_array",
+        "label": "struct ConditionalOrderEngine.Condition[]",
+        "numberOfBytes": "32"
+      },
+      "t_array(t_uint256)dyn_storage": {
+        "base": "t_uint256",
+        "encoding": "dynamic_array",
+        "label": "uint256[]",
+        "numberOfBytes": "32"
+      },
+      "t_bool": {
+        "encoding": "inplace",
+        "label": "bool",
+        "numberOfBytes": "1"
+      },
+      "t_bytes_storage": {
+        "encoding": "bytes",
+        "label": "bytes",
+        "numberOfBytes": "32"
+      },
+      "t_enum(ConditionType)11782": {
+        "encoding": "inplace",
+        "label": "enum ConditionalOrderEngine.ConditionType",
+        "numberOfBytes": "1"
+      },
+      "t_enum(OrderStatus)11773": {
+        "encoding": "inplace",
+        "label": "enum ConditionalOrderEngine.OrderStatus",
+        "numberOfBytes": "1"
+      },
+      "t_enum(OrderType)11767": {
+        "encoding": "inplace",
+        "label": "enum ConditionalOrderEngine.OrderType",
+        "numberOfBytes": "1"
+      },
+      "t_mapping(t_address,t_address)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => address)",
+        "numberOfBytes": "32",
+        "value": "t_address"
+      },
+      "t_mapping(t_address,t_array(t_uint256)dyn_storage)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => uint256[])",
+        "numberOfBytes": "32",
+        "value": "t_array(t_uint256)dyn_storage"
+      },
+      "t_mapping(t_address,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      },
+      "t_mapping(t_address,t_uint256)": {
+        "encoding": "mapping",
+        "key": "t_address",
+        "label": "mapping(address => uint256)",
+        "numberOfBytes": "32",
+        "value": "t_uint256"
+      },
+      "t_mapping(t_uint256,t_bool)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => bool)",
+        "numberOfBytes": "32",
+        "value": "t_bool"
+      },
+      "t_mapping(t_uint256,t_struct(ConditionalOrder)11837_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => struct ConditionalOrderEngine.ConditionalOrder)",
+        "numberOfBytes": "32",
+        "value": "t_struct(ConditionalOrder)11837_storage"
+      },
+      "t_mapping(t_uint256,t_struct(DCAData)11852_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => struct ConditionalOrderEngine.DCAData)",
+        "numberOfBytes": "32",
+        "value": "t_struct(DCAData)11852_storage"
+      },
+      "t_mapping(t_uint256,t_struct(GridData)11865_storage)": {
+        "encoding": "mapping",
+        "key": "t_uint256",
+        "label": "mapping(uint256 => struct ConditionalOrderEngine.GridData)",
+        "numberOfBytes": "32",
+        "value": "t_struct(GridData)11865_storage"
+      },
+      "t_struct(Condition)11796_storage": {
+        "encoding": "inplace",
+        "label": "struct ConditionalOrderEngine.Condition",
+        "members": [
+          {
+            "astId": 11785,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "conditionType",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_enum(ConditionType)11782"
+          },
+          {
+            "astId": 11787,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "tokenAddress",
+            "offset": 1,
+            "slot": "0",
+            "type": "t_address"
+          },
+          {
+            "astId": 11789,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "targetValue",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11791,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "currentValue",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11793,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "isMet",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_bool"
+          },
+          {
+            "astId": 11795,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "extraData",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_bytes_storage"
+          }
+        ],
+        "numberOfBytes": "160"
+      },
+      "t_struct(ConditionalOrder)11837_storage": {
+        "encoding": "inplace",
+        "label": "struct ConditionalOrderEngine.ConditionalOrder",
+        "members": [
+          {
+            "astId": 11798,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "orderId",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11800,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "owner",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_address"
+          },
+          {
+            "astId": 11802,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "smartAccount",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_address"
+          },
+          {
+            "astId": 11805,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "orderType",
+            "offset": 20,
+            "slot": "2",
+            "type": "t_enum(OrderType)11767"
+          },
+          {
+            "astId": 11808,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "status",
+            "offset": 21,
+            "slot": "2",
+            "type": "t_enum(OrderStatus)11773"
+          },
+          {
+            "astId": 11812,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "conditions",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_array(t_struct(Condition)11796_storage)dyn_storage"
+          },
+          {
+            "astId": 11814,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "inputToken",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_address"
+          },
+          {
+            "astId": 11816,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "outputToken",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_address"
+          },
+          {
+            "astId": 11818,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "inputAmount",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11820,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "minOutputAmount",
+            "offset": 0,
+            "slot": "7",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11822,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "maxGasPrice",
+            "offset": 0,
+            "slot": "8",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11824,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "deadline",
+            "offset": 0,
+            "slot": "9",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11826,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "createdAt",
+            "offset": 0,
+            "slot": "10",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11828,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "executedAt",
+            "offset": 0,
+            "slot": "11",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11830,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "targetContract",
+            "offset": 0,
+            "slot": "12",
+            "type": "t_address"
+          },
+          {
+            "astId": 11832,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "callData",
+            "offset": 0,
+            "slot": "13",
+            "type": "t_bytes_storage"
+          },
+          {
+            "astId": 11834,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "executionReward",
+            "offset": 0,
+            "slot": "14",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11836,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "requiresAllConditions",
+            "offset": 0,
+            "slot": "15",
+            "type": "t_bool"
+          }
+        ],
+        "numberOfBytes": "512"
+      },
+      "t_struct(DCAData)11852_storage": {
+        "encoding": "inplace",
+        "label": "struct ConditionalOrderEngine.DCAData",
+        "members": [
+          {
+            "astId": 11839,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "frequency",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11841,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "amountPerExecution",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11843,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "totalBudget",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11845,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "spentAmount",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11847,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "lastExecutionTime",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11849,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "executionCount",
+            "offset": 0,
+            "slot": "5",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11851,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "maxExecutions",
+            "offset": 0,
+            "slot": "6",
+            "type": "t_uint256"
+          }
+        ],
+        "numberOfBytes": "224"
+      },
+      "t_struct(GridData)11865_storage": {
+        "encoding": "inplace",
+        "label": "struct ConditionalOrderEngine.GridData",
+        "members": [
+          {
+            "astId": 11854,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "upperPrice",
+            "offset": 0,
+            "slot": "0",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11856,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "lowerPrice",
+            "offset": 0,
+            "slot": "1",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11858,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "gridLevels",
+            "offset": 0,
+            "slot": "2",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11860,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "amountPerGrid",
+            "offset": 0,
+            "slot": "3",
+            "type": "t_uint256"
+          },
+          {
+            "astId": 11864,
+            "contract": "contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine",
+            "label": "gridExecuted",
+            "offset": 0,
+            "slot": "4",
+            "type": "t_mapping(t_uint256,t_bool)"
+          }
+        ],
+        "numberOfBytes": "160"
+      },
+      "t_uint256": {
+        "encoding": "inplace",
+        "label": "uint256",
+        "numberOfBytes": "32"
+      }
+    }
+  }
+}

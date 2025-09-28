@@ -76,11 +76,14 @@ contract AccountFactory is IAccountFactory, Ownable, ReentrancyGuard {
         
         // Check if account already exists at computed address
         if (account.code.length > 0) {
+            require(
+                isSmartAccount[account],
+                "AccountFactory: Address already in use"
+            );
             accounts[owner] = account;
-            isSmartAccount[account] = true;
             return account;
         }
-        
+
         // Create the account using CREATE2
         bytes memory data = abi.encodeCall(SmartAccount.initialize, (owner));
         

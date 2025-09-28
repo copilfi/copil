@@ -16,6 +16,7 @@ const func: DeployFunction = async function (hre: HardhatRuntimeEnvironment) {
     args: [feeRecipient],
     log: true,
     waitConfirmations: 1,
+    contract: 'contracts/ConditionalOrderEngine.sol:ConditionalOrderEngine',
   });
 
   console.log('ConditionalOrderEngine deployed to:', conditionalOrderEngine.address);

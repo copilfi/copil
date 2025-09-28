@@ -110,18 +110,30 @@ router.get('/summary', authenticateToken, async (req, res) => {
     logger.info(`Portfolio summary requested for user ${userId}, wallet: ${user.walletAddress}`);
 
     // Get user's smart account for portfolio calculations
-    const smartAccount = await prisma.smartAccount.findFirst({
+    const smartAccountRecord = await prisma.smartAccount.findFirst({
       where: {
         userId: userId,
         isActive: true
       }
     });
 
-    logger.info(`Fetching portfolio data - Main wallet: ${user.walletAddress}, Smart account: ${smartAccount?.address || 'none'}`);
+    // Resolve current smart account address directly from blockchain to avoid stale DB state
+    let smartAccountAddress: string | null = smartAccountRecord?.address || null;
+
+    try {
+      const onchainAddress = await blockchainService.getSmartAccountAddress(user.walletAddress);
+      if (onchainAddress) {
+        smartAccountAddress = onchainAddress;
+      }
+    } catch (addressError) {
+      logger.warn('Failed to resolve smart account address from blockchain:', addressError);
+    }
+
+    logger.info(`Fetching portfolio data - Main wallet: ${user.walletAddress}, Smart account: ${smartAccountAddress || 'none'}`);
 
     // Get balances from both wallets
     const mainWalletBalance = await blockchainService.getBalance(user.walletAddress);
-    const smartAccountBalance = smartAccount ? await blockchainService.getBalance(smartAccount.address) : '0.0';
+    const smartAccountBalance = smartAccountAddress ? await blockchainService.getBalance(smartAccountAddress) : '0.0';
 
     const mainValue = parseFloat(mainWalletBalance);
     const smartValue = parseFloat(smartAccountBalance);
@@ -129,11 +141,19 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     logger.info(`Balances - Main wallet: ${mainWalletBalance} SEI, Smart account: ${smartAccountBalance} SEI, Total: ${totalValue} SEI`);
 
-    const tokens = [];
+    let smartAccountIsDeployed = false;
+    if (smartAccountAddress) {
+      try {
+        const smartAccountInfo = await blockchainService.getSmartAccountInfo(smartAccountAddress);
+        smartAccountIsDeployed = Boolean(smartAccountInfo?.isDeployed);
+      } catch (infoError) {
+        logger.warn('Failed to fetch smart account deployment status:', infoError);
+        smartAccountIsDeployed = smartValue > 0;
+      }
+    }
 
-    // Add main wallet balance if > 0
-    if (mainValue > 0) {
-      tokens.push({
+    const tokens = [
+      {
         symbol: 'SEI',
         balance: mainWalletBalance,
         value: mainValue,
@@ -141,34 +161,18 @@ router.get('/summary', authenticateToken, async (req, res) => {
         decimals: 18,
         walletType: 'main',
         walletAddress: user.walletAddress
-      });
-    }
+      }
+    ];
 
-    // Add smart account balance if exists and > 0
-    if (smartAccount && smartValue > 0) {
-      tokens.push({
-        symbol: 'SEI',
-        balance: smartAccountBalance,
-        value: smartValue,
-        address: '0x0000000000000000000000000000000000000000',
-        decimals: 18,
-        walletType: 'smart',
-        walletAddress: smartAccount.address
-      });
-    }
-
-    // If both are empty, show main wallet with 0 balance
-    if (tokens.length === 0) {
-      tokens.push({
-        symbol: 'SEI',
-        balance: '0.0',
-        value: 0,
-        address: '0x0000000000000000000000000000000000000000',
-        decimals: 18,
-        walletType: 'main',
-        walletAddress: user.walletAddress
-      });
-    }
+    tokens.push({
+      symbol: 'SEI',
+      balance: smartAccountBalance,
+      value: smartValue,
+      address: '0x0000000000000000000000000000000000000000',
+      decimals: 18,
+      walletType: 'smart',
+      walletAddress: smartAccountAddress
+    });
 
     const summary = {
       totalValue: totalValue,
@@ -180,11 +184,11 @@ router.get('/summary', authenticateToken, async (req, res) => {
           balance: mainWalletBalance,
           value: mainValue
         },
-        smart: smartAccount ? {
-          address: smartAccount.address,
+        smart: smartAccountAddress ? {
+          address: smartAccountAddress,
           balance: smartAccountBalance,
           value: smartValue,
-          isDeployed: true
+          isDeployed: smartAccountIsDeployed
         } : {
           address: null,
           balance: '0.0',

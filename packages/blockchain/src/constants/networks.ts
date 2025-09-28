@@ -1,5 +1,12 @@
 import type { NetworkConfig } from '../types';
 
+const {
+  SEI_TESTNET_ACCOUNT_FACTORY_ADDRESS = '',
+  SEI_TESTNET_CONDITIONAL_ENGINE_ADDRESS = '',
+  SEI_MAINNET_ACCOUNT_FACTORY_ADDRESS = '',
+  SEI_MAINNET_CONDITIONAL_ENGINE_ADDRESS = ''
+} = process.env;
+
 export const SEI_TESTNET: NetworkConfig = {
   chainId: 713715,
   name: 'Sei Testnet',
@@ -13,9 +20,8 @@ export const SEI_TESTNET: NetworkConfig = {
   },
   contracts: {
     entryPoint: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789', // Standard EntryPoint v0.6
-    // These will be populated after deployment
-    accountFactory: '',
-    conditionalOrderEngine: '',
+    accountFactory: SEI_TESTNET_ACCOUNT_FACTORY_ADDRESS,
+    conditionalOrderEngine: SEI_TESTNET_CONDITIONAL_ENGINE_ADDRESS,
   },
 };
 
@@ -32,8 +38,8 @@ export const SEI_MAINNET: NetworkConfig = {
   },
   contracts: {
     entryPoint: '0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789',
-    accountFactory: '',
-    conditionalOrderEngine: '',
+    accountFactory: SEI_MAINNET_ACCOUNT_FACTORY_ADDRESS,
+    conditionalOrderEngine: SEI_MAINNET_CONDITIONAL_ENGINE_ADDRESS,
   },
 };
 

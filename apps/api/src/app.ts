@@ -49,18 +49,20 @@ class App {
     this.express.use(compression());
 
     // Rate limiting
-    const limiter = rateLimit({
-      windowMs: env.RATE_LIMIT_WINDOW_MS,
-      max: env.RATE_LIMIT_MAX_REQUESTS,
-      message: {
-        error: 'Too many requests from this IP, please try again later',
-        retryAfter: Math.ceil(env.RATE_LIMIT_WINDOW_MS / 1000)
-      },
-      standardHeaders: true,
-      legacyHeaders: false,
-    });
-    
-    this.express.use('/api', limiter);
+    if (env.NODE_ENV !== 'development') {
+      const limiter = rateLimit({
+        windowMs: env.RATE_LIMIT_WINDOW_MS,
+        max: env.RATE_LIMIT_MAX_REQUESTS,
+        message: {
+          error: 'Too many requests from this IP, please try again later',
+          retryAfter: Math.ceil(env.RATE_LIMIT_WINDOW_MS / 1000)
+        },
+        standardHeaders: true,
+        legacyHeaders: false,
+      });
+
+      this.express.use('/api', limiter);
+    }
 
     // Request parsing
     this.express.use(express.json({ limit: '10mb' }));
