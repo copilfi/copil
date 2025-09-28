@@ -6,6 +6,7 @@ import SmartAccountService, { SmartAccountConfig, SessionKeyConfig } from '../..
 import SessionKeyWallet from '../../../../packages/blockchain/src/services/SessionKeyWallet';
 import TestWalletService, { TestWalletConfig } from '../../../../packages/blockchain/src/services/TestWalletService';
 import UserOperationBundler, { BundlerConfig } from '../../../../packages/blockchain/src/services/UserOperationBundler';
+import BalanceService, { WalletBalances } from '../../../../packages/blockchain/src/services/BalanceService';
 
 // Basic ABI for common contract interactions
 const ACCOUNT_FACTORY_ABI = [
@@ -54,6 +55,7 @@ class RealBlockchainService {
   private sessionKeyWallet: SessionKeyWallet;
   private testWalletService: TestWalletService;
   private userOperationBundler: UserOperationBundler;
+  private balanceService: BalanceService;
   private smartAccountClients: Map<string, SmartAccountClient> = new Map();
 
   constructor() {
@@ -78,6 +80,9 @@ class RealBlockchainService {
     
     // Initialize Session Key wallet
     this.sessionKeyWallet = new SessionKeyWallet(this.provider);
+
+    // Initialize balance service for token queries
+    this.balanceService = new BalanceService(this.provider);
     
     // Initialize Test wallet service
     const automationPrivateKey = env.AUTOMATION_PRIVATE_KEY || env.PRIVATE_KEY;
@@ -558,6 +563,23 @@ class RealBlockchainService {
     } catch (error) {
       logger.error(`Failed to get Smart Account info for ${smartAccountAddress}:`, error);
       throw error;
+    }
+  }
+
+  async getWalletTokenBalances(
+    address: string,
+    tokenAddresses: string[] = [],
+    forceRefresh: boolean = false
+  ): Promise<WalletBalances | null> {
+    if (!address) {
+      return null;
+    }
+
+    try {
+      return await this.balanceService.getWalletBalances(address, tokenAddresses, forceRefresh);
+    } catch (error) {
+      logger.error(`Failed to get wallet token balances for ${address}:`, error);
+      return null;
     }
   }
   

@@ -1,0 +1,1469 @@
+{
+  "pacific-1": [
+    {
+      "name": "Sei",
+      "description": "The native token of Sei",
+      "symbol": "SEI",
+      "base": "usei",
+      "display": "sei",
+      "denom_units": [
+        {
+          "denom": "usei",
+          "exponent": 0
+        },
+        {
+          "denom": "sei",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Sei.png"
+      },
+      "type_asset": "sdk.coin",
+      "coingecko_id": "sei-network"
+    },
+    {
+      "name": "GPT Wars",
+      "description": "The native token of GPT Wars",
+      "symbol": "GPTW",
+      "base": "0xcB0DdC112EF317271266c83D7179Bf9186b9C658",
+      "display": "gptw",
+      "denom_units": [
+        {
+          "denom": "0xcB0DdC112EF317271266c83D7179Bf9186b9C658",
+          "exponent": 0
+        },
+        {
+          "denom": "GPTW",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/GPTW_LOGO.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Master",
+      "description": "Master of coins.",
+      "symbol": "SENSEI",
+      "base": "0x9b31ad7d1eE5a37c64a5972275C5F09fFfbC2C6f",
+      "display": "SENSEI",
+      "denom_units": [
+        {
+          "denom": "0x9b31ad7d1eE5a37c64a5972275C5F09fFfbC2C6f",
+          "exponent": 0
+        },
+        {
+          "denom": "SENSEI",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Master.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "SEITAN",
+      "description": "Not evil just misunderstood.",
+      "symbol": "S8N",
+      "base": "0xDF3D7DD2848f491645974215474c566E79F2e538",
+      "display": "S8N",
+      "denom_units": [
+        {
+          "denom": "0xDF3D7DD2848f491645974215474c566E79F2e538",
+          "exponent": 0
+        },
+        {
+          "denom": "S8N",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/SEITAN.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "SEIFUN",
+      "description": "Native token of the Sei.Fun launchpad.",
+      "symbol": "SFN",
+      "base": "0xd0D622dE44A521404dc50e4ABef08dE82269Dcbf",
+      "display": "SFN",
+      "denom_units": [
+        {
+          "denom": "0xd0D622dE44A521404dc50e4ABef08dE82269Dcbf",
+          "exponent": 0
+        },
+        {
+          "denom": "SFN",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/seifun.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Burger",
+      "description": "Me.",
+      "symbol": "SUPERSEIZ",
+      "base": "0xF63980e3818607c0797e994cfD34c1c592968469",
+      "display": "SUPERSEIZ",
+      "denom_units": [
+        {
+          "denom": "0xF63980e3818607c0797e994cfD34c1c592968469",
+          "exponent": 0
+        },
+        {
+          "denom": "SUPERSEIZ",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Burger.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Mid",
+      "description": "The middest memecoin on the planet.",
+      "symbol": "MID",
+      "base": "factory/sei1q0xgrxtje0agpg6y6jy0u6pvruc62yml5e525vn7u0czm70ptusslzmzqd/mid",
+      "display": "mid",
+      "denom_units": [
+        {
+          "denom": "factory/sei1q0xgrxtje0agpg6y6jy0u6pvruc62yml5e525vn7u0czm70ptusslzmzqd/mid",
+          "exponent": 0
+        },
+        {
+          "denom": "mid",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Mid.png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "SEIYAN",
+      "description": "Sei's main memecoin",
+      "symbol": "SEIYAN",
+      "base": "sei1hrndqntlvtmx2kepr0zsfgr7nzjptcc72cr4ppk4yav58vvy7v3s4er8ed",
+      "display": "SEIYAN",
+      "denom_units": [
+        {
+          "denom": "sei1hrndqntlvtmx2kepr0zsfgr7nzjptcc72cr4ppk4yav58vvy7v3s4er8ed",
+          "exponent": 0
+        },
+        {
+          "denom": "SEIYAN",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/SEIYAN.png"
+      },
+      "type_asset": "cw20",
+      "pointer_contract": {
+        "address": "0x5f0E07dFeE5832Faa00c63F2D33A0D79150E8598",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "RED",
+      "description": "Aka Pep-é, King of the Red Chain",
+      "symbol": "RED",
+      "base": "sei15sleqjgvttvxqrejx2xmlme8wlpvxge69f8tccztc9wl2s00ywaq9v0ymx",
+      "display": "RED",
+      "denom_units": [
+        {
+          "denom": "sei15sleqjgvttvxqrejx2xmlme8wlpvxge69f8tccztc9wl2s00ywaq9v0ymx",
+          "exponent": 0
+        },
+        {
+          "denom": "RED",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/RED.png"
+      },
+      "type_asset": "cw20",
+      "pointer_contract": {
+        "address": "0xD049e189ACC1873BCa8c0a314d6B26835684Fb89",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "xSEIYAN",
+      "description": "SEIYAN's governance token",
+      "symbol": "xSEIYAN",
+      "base": "0x9D9b12c69555669966D36596C56061B6Cc0A937D",
+      "display": "xSEIYAN",
+      "denom_units": [
+        {
+          "denom": "0x9D9b12c69555669966D36596C56061B6Cc0A937D",
+          "exponent": 0
+        },
+        {
+          "denom": "xSEIYAN",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/xSEIYAN.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "MILLI",
+      "description": "The first dog on Sei & the fastest memecoin in crypto",
+      "symbol": "MILLI",
+      "base": "sei170949pwl4h36neazkwmdgtrh6nuenh66462n34839e23e8he3pqsnm5r2v",
+      "display": "MILLI",
+      "denom_units": [
+        {
+          "denom": "sei170949pwl4h36neazkwmdgtrh6nuenh66462n34839e23e8he3pqsnm5r2v",
+          "exponent": 0
+        },
+        {
+          "denom": "MILLI",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/MILLI.png"
+      },
+      "type_asset": "cw20",
+      "pointer_contract": {
+        "address": "0x95597EB8D227a7c4B4f5E807a815C5178eE6dBE1",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "iSEI",
+      "description": "Liquid Staking Sei via Silo",
+      "symbol": "iSEI",
+      "base": "factory/sei1e3gttzq5e5k49f9f5gzvrl0rltlav65xu6p9xc0aj7e84lantdjqp7cncc/isei",
+      "display": "iSEI",
+      "denom_units": [
+        {
+          "denom": "factory/sei1e3gttzq5e5k49f9f5gzvrl0rltlav65xu6p9xc0aj7e84lantdjqp7cncc/isei",
+          "exponent": 0
+        },
+        {
+          "denom": "iSEI",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/iSEI.png"
+      },
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x5Cf6826140C1C56Ff49C808A1A75407Cd1DF9423",
+        "type_asset": "erc20"
+      },
+      "coingecko_id": "silo-staked-sei"
+    },
+    {
+      "name": "SEA",
+      "description": "SeaSwap Token",
+      "symbol": "SEA",
+      "base": "factory/sei1g67gjpzn53hc4qsta9jqe7yq40atuqxmuakqkg/sea",
+      "display": "sea",
+      "denom_units": [
+        {
+          "denom": "factory/sei1g67gjpzn53hc4qsta9jqe7yq40atuqxmuakqkg/sea",
+          "exponent": 0
+        },
+        {
+          "denom": "sea",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/SEA.png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "USD Coin (Axelar)",
+      "description": "Circle's stablecoin on Axelar",
+      "symbol": "USDC.axl",
+      "base": "ibc/F082B65C88E4B6D5EF1DB243CDA1D331D002759E938A0F5CD3FFDC5D53B3E349",
+      "display": "axlusdc",
+      "denom_units": [
+        {
+          "denom": "ibc/F082B65C88E4B6D5EF1DB243CDA1D331D002759E938A0F5CD3FFDC5D53B3E349",
+          "exponent": 0
+        },
+        {
+          "denom": "axlusdc",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "axlusdc",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0xa855562b0644FaDFd8F04fC3e2eD0B69577EB816",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Osmosis",
+      "description": "The native token of Osmosis",
+      "symbol": "OSMO",
+      "base": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+      "display": "osmo",
+      "denom_units": [
+        {
+          "denom": "ibc/ED07A3391A112B175915CD8FAF43A2DA8E4790EDE12566649D0C2F97716B8518",
+          "exponent": 0
+        },
+        {
+          "denom": "osmo",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Osmosis.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Osmosis.svg"
+      },
+      "coingecko_id": "osmosis",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0xBdE3bD155613752065C52059f8B2F72f506C4374",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Atom (Osmosis)",
+      "description": "The native staking and governance token of the Cosmos Hub",
+      "symbol": "ATOM",
+      "base": "ibc/6CDD4663F2F09CD62285E2D45891FC149A3568E316CE3EBBE201A71A78A69388",
+      "display": "atom",
+      "denom_units": [
+        {
+          "denom": "ibc/6CDD4663F2F09CD62285E2D45891FC149A3568E316CE3EBBE201A71A78A69388",
+          "exponent": 0
+        },
+        {
+          "denom": "atom",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Atom.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Atom.svg"
+      },
+      "coingecko_id": "cosmos",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0x0E8440025B74605151F5644b93AA861f35906Bec",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Atom",
+      "description": "The native staking and governance token of the Cosmos Hub",
+      "symbol": "ATOM",
+      "base": "ibc/C4CFF46FD6DE35CA4CF4CE031E643C8FDC9BA4B99AE598E9B0ED98FE3A2319F9",
+      "display": "atom",
+      "denom_units": [
+        {
+          "denom": "ibc/C4CFF46FD6DE35CA4CF4CE031E643C8FDC9BA4B99AE598E9B0ED98FE3A2319F9",
+          "exponent": 0
+        },
+        {
+          "denom": "atom",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Atom.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Atom.svg"
+      },
+      "coingecko_id": "cosmos",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0xaF5fd7Df92B103B40b9Ed8D0d002696a5436E4D8",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped Ether (Wormhole)",
+      "description": "Wrapped Ether from Ethereum (Wormhole)",
+      "symbol": "WETH",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/4tLQqCLaoKKfNFuPjA9o39YbKUwhR1F8N29Tz3hEbfP2",
+      "display": "weth",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/4tLQqCLaoKKfNFuPjA9o39YbKUwhR1F8N29Tz3hEbfP2",
+          "exponent": 0
+        },
+        {
+          "denom": "weth",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedEther(Wormhole).png"
+      },
+      "coingecko_id": "weth",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x4636DC75851c28561C4A117Be362Bedd7f9Ad8f8",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from Ethereum)",
+      "description": "Wrapped USDC from Ethereum (Wormhole)",
+      "symbol": "USDC.eth",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/Hq4tuDzhRBnxw3tFA5n6M52NVMVcC19XggbyDiJKCD6H",
+      "display": "usdcet",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/Hq4tuDzhRBnxw3tFA5n6M52NVMVcC19XggbyDiJKCD6H",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcet",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0xa272ee55434655970f7226c95eF0068a22994B84",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped Tether USD (Wormhole from Ethereum)",
+      "description": "Wrapped Tether USD from Ethereum (Wormhole)",
+      "symbol": "USDT.eth",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/HktfLoADCk9mnjv7XJiN4YXK9ayE6xinLzt8wzcsR2rY",
+      "display": "usdtet",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/HktfLoADCk9mnjv7XJiN4YXK9ayE6xinLzt8wzcsR2rY",
+          "exponent": 0
+        },
+        {
+          "denom": "usdtet",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDT.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDT.png"
+      },
+      "coingecko_id": "tether",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x3b5F977957CF3f62a9d357F302311e8B4ab8608a",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped BTC (Wormhole from Ethereum)",
+      "description": "Wrapped Bitcoin from Ethereum (Wormhole)",
+      "symbol": "WBTC",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/7omXa4gryZ5NiBmLep7JsTtTtANCVKXwT9vbN91aS1br",
+      "display": "wbtc",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/7omXa4gryZ5NiBmLep7JsTtTtANCVKXwT9vbN91aS1br",
+          "exponent": 0
+        },
+        {
+          "denom": "wbtc",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedBTC(WormholefromEthereum).png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedBTC(WormholefromEthereum).svg"
+      },
+      "coingecko_id": "bitcoin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0xe369ddC65Ec947FCB10262AA0E08C3fB9823001a",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from Arbitrum)",
+      "description": "Wrapped USDC from Arbitrum (Wormhole)",
+      "symbol": "USDC.arb",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/7edDfnf4mku8So3t4Do215GNHwASEwCWrdhM5GqD51xZ",
+      "display": "usdcar",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/7edDfnf4mku8So3t4Do215GNHwASEwCWrdhM5GqD51xZ",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcar",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0xc60cb642EF30EbaF8D625E38BD73534913388da7",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped Ether (Wormhole from Arbitrum)",
+      "description": "Wrapped Ether from Arbitrum (Wormhole)",
+      "symbol": "WETHar",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9hJDBDaxqQQhF5HhaPUykeLncBa38XQ5uoNxN3tPQu5r",
+      "display": "wethar",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9hJDBDaxqQQhF5HhaPUykeLncBa38XQ5uoNxN3tPQu5r",
+          "exponent": 0
+        },
+        {
+          "denom": "wethar",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedEther(Wormhole).png"
+      },
+      "coingecko_id": "weth",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x28417c04dfB49Ec881051B8930d74f8C740Eb688",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from Polygon)",
+      "description": "Wrapped USDC from Polygon (Wormhole)",
+      "symbol": "USDC.matic",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/DUVFMY2neJdL8aE4d3stcpttDDm5aoyfGyVvm29iA9Yp",
+      "display": "usdcpo",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/DUVFMY2neJdL8aE4d3stcpttDDm5aoyfGyVvm29iA9Yp",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcpo",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0xA186cCd543732B1E6515e8f47AAAe989bA289665",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from Optimism)",
+      "description": "Wrapped USDC from Optimism (Wormhole)",
+      "symbol": "USDC.op",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/3VKKYtbQ9iq8f9CaZfgR6Cr3TUj6ypXPAn6kco6wjcAu",
+      "display": "usdcop",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/3VKKYtbQ9iq8f9CaZfgR6Cr3TUj6ypXPAn6kco6wjcAu",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcop",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x6EBC03CAb85815bc59a4286882c9Bad88a9A09fF",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from Solana)",
+      "description": "Wrapped USDC from Solana (Wormhole)",
+      "symbol": "USDC.sol",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9fELvUhFo6yWL34ZaLgPbCPzdk9MD1tAzMycgH45qShH",
+      "display": "usdcso",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9fELvUhFo6yWL34ZaLgPbCPzdk9MD1tAzMycgH45qShH",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcso",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x8eEDF32a4FC6fB78DDF231Cd3CcF6b7B8dF9D99d",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USD Coin (Wormhole from BSC)",
+      "description": "Wrapped USDC from BSC (Wormhole)",
+      "symbol": "USDC.bsc",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/3Ri4N719RQfQaudHiB9CMCYACtK3aieoz1q1Ph24VdAb",
+      "display": "usdcbs",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/3Ri4N719RQfQaudHiB9CMCYACtK3aieoz1q1Ph24VdAb",
+          "exponent": 0
+        },
+        {
+          "denom": "usdcbs",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x2a5DC09df34c1276162b95415a38E5519E345c7F",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped Ether (Wormhole from BSC)",
+      "description": "Wrapped Ether from BSC (Wormhole)",
+      "symbol": "WETHbs",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9tTHn18vLnfyBvrQaia6N15zwrfRCAebZDshoPZ39ahN",
+      "display": "wethbs",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/9tTHn18vLnfyBvrQaia6N15zwrfRCAebZDshoPZ39ahN",
+          "exponent": 0
+        },
+        {
+          "denom": "wethbs",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedEther(Wormhole).png"
+      },
+      "coingecko_id": "weth",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0x9D128bE5d9C96A4A574A9bd277D7c18e331194bd",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "Wrapped USDT (Wormhole from BSC)",
+      "description": "Binance-Peg BSC-USD from BSC (Wormhole)",
+      "symbol": "USDT.bsc",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/871jbn9unTavWsAe83f2Ma9GJWSv6BKsyWYLiQ6z3Pva",
+      "display": "usdtbs",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/871jbn9unTavWsAe83f2Ma9GJWSv6BKsyWYLiQ6z3Pva",
+          "exponent": 0
+        },
+        {
+          "denom": "usdtbs",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDT.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDT.png"
+      },
+      "coingecko_id": "tether",
+      "type_asset": "sdk.coin",
+      "pointer_contract": {
+        "address": "0xDA9edB031e3dEF95D0350366718e02a1216DB0ED",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "PKS",
+      "description": "Poker Kings Token",
+      "symbol": "PKS",
+      "base": "sei1eavtmc4y00a0ed8l9c7l0m7leesv3yetcptklv2kalz4tsgz02mqlvyea6",
+      "display": "PKS",
+      "denom_units": [
+        {
+          "denom": "sei1eavtmc4y00a0ed8l9c7l0m7leesv3yetcptklv2kalz4tsgz02mqlvyea6",
+          "exponent": 0
+        },
+        {
+          "denom": "PKS",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/PKS.svg"
+      },
+      "type_asset": "cw20",
+      "pointer_contract": {
+        "address": "0x24E4d0Af5a6b1C3BD336Dd60dEEfa64C704b19B7",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "USDT0",
+      "description": "USDT0 is the official standard for USDT on Sei Mainnet. It's backed 1:1 by locked assets on Ethereum and ensures seamless interoperability across blockchain networks via the LayerZero protocol.",
+      "symbol": "USDT",
+      "base": "0x9151434b16b9763660705744891fA906F660EcC5",
+      "display": "USDT",
+      "denom_units": [
+        {
+          "denom": "0x9151434b16b9763660705744891fA906F660EcC5",
+          "exponent": 0
+        },
+        {
+          "denom": "USDT",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/usdt0.png"
+      },
+      "coingecko_id": "usdt0",
+      "type_asset": "erc20",
+      "pointer_contract": {
+        "address": "sei1fmsu3v448uny8hle52c3n8ygk3cgqz5a4j5283kx0q3ar3vs03mqa4v5ca",
+        "type_asset": "cw20"
+      }
+    },
+    {
+      "name": "IBC Bridged USDT",
+      "description": "Tether kavaUSDT (Kava)",
+      "symbol": "kavaUSDT",
+      "base": "ibc/6C00E4AA0CC7618370F81F7378638AE6C48EFF8C9203CE1C2357012B440EBDB7",
+      "display": "kavaUSDT",
+      "denom_units": [
+        {
+          "denom": "ibc/6C00E4AA0CC7618370F81F7378638AE6C48EFF8C9203CE1C2357012B440EBDB7",
+          "exponent": 0
+        },
+        {
+          "denom": "kavaUSDT",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/kavaUSDT.png"
+      },
+      "coingecko_id": "tether",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0xB75D0B03c06A926e488e2659DF1A861F860bD3d1",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "USDC via Noble",
+      "description": "USDC via Noble",
+      "symbol": "USDC.n",
+      "base": "ibc/CA6FBFAF399474A06263E10D0CE5AEBBE15189D6D4B2DD9ADE61007E68EB9DB0",
+      "display": "USDC.n",
+      "denom_units": [
+        {
+          "denom": "ibc/CA6FBFAF399474A06263E10D0CE5AEBBE15189D6D4B2DD9ADE61007E68EB9DB0",
+          "exponent": 0
+        },
+        {
+          "denom": "USDC.n",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.n.svg"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0x3894085Ef7Ff0f0aeDf52E2A2704928d1Ec074F1",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "USDC",
+      "description": "USDC is a digital dollar issued by Circle, also known as a stablecoin, running on many of the world's leading blockchains. Designed to represent US dollars on the internet, USDC is backed 100% by highly liquid cash and cash-equivalent assets so that it's always redeemable 1:1 for USD.",
+      "symbol": "USDC",
+      "base": "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
+      "display": "USDC",
+      "denom_units": [
+        {
+          "denom": "0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392",
+          "exponent": 0
+        },
+        {
+          "denom": "USDC",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg"
+      },
+      "coingecko_id": "usd-coin",
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Basket",
+      "description": "BSKT tracks the top assets across the crypto ecosystem, eliminating the need to track and analyse individual coins.",
+      "symbol": "BSKT",
+      "base": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/FM2av5h53R9EgDZZ8KXr5ujodp9mHZGRn9W3YLorhbsV",
+      "display": "bskt",
+      "denom_units": [
+        {
+          "denom": "factory/sei189adguawugk3e55zn63z8r9ll29xrjwca636ra7v7gxuzn98sxyqwzt47l/FM2av5h53R9EgDZZ8KXr5ujodp9mHZGRn9W3YLorhbsV",
+          "exponent": 0
+        },
+        {
+          "denom": "bskt",
+          "exponent": 5
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Basket.png"
+      },
+      "coingecko_id": "basket",
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "WSEI",
+      "description": "Wrapped SEI",
+      "symbol": "WSEI",
+      "base": "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+      "display": "WSEI",
+      "denom_units": [
+        {
+          "denom": "0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7",
+          "exponent": 0
+        },
+        {
+          "denom": "WSEI",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WSEI.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WSEI.png"
+      },
+      "coingecko_id": "sei-network",
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Gokucity Token",
+      "description": "Gokucity, a Meme token driving a Social Experiment in DeFi gaming and token distribution on Sei's V2 Blockchain",
+      "symbol": "GOKU",
+      "base": "0x019EA1347BD9bc912c0221d24983a74E9386B794",
+      "display": "GOKU",
+      "denom_units": [
+        {
+          "denom": "0x019EA1347BD9bc912c0221d24983a74E9386B794",
+          "exponent": 0
+        },
+        {
+          "denom": "GOKU",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/GOKU.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Bridged Wrapped Ether (Stargate)",
+      "description": "Wrapped Ether from Stargate.",
+      "symbol": "WETH",
+      "base": "0x160345fC359604fC6e70E3c5fAcbdE5F7A9342d8",
+      "display": "WETH",
+      "denom_units": [
+        {
+          "denom": "0x160345fC359604fC6e70E3c5fAcbdE5F7A9342d8",
+          "exponent": 0
+        },
+        {
+          "denom": "WETH",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/BridgedWrappedEther(Stargate).png"
+      },
+      "coingecko_id": "bridged-wrapped-ether-stargate",
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Seibacca",
+      "description": "Seibacca on Sei.",
+      "symbol": "SBC",
+      "base": "0x3ea30c06f4ba6f696d3ba4b660c39da96ed8f686",
+      "display": "SBC",
+      "denom_units": [
+        {
+          "denom": "0x3ea30c06f4ba6f696d3ba4b660c39da96ed8f686",
+          "exponent": 0
+        },
+        {
+          "denom": "SBC",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Seibacca.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Pepei",
+      "description": "The frog is red.",
+      "symbol": "PEPEI",
+      "base": "0x9C367a272f8E318D10118C6367fD69DEf30e430E",
+      "display": "PEPEI",
+      "denom_units": [
+        {
+          "denom": "0x9C367a272f8E318D10118C6367fD69DEf30e430E",
+          "exponent": 0
+        },
+        {
+          "denom": "PEPEI",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Pepei.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "ROCK",
+      "description": "Native token for Zenrock chain",
+      "symbol": "ROCK",
+      "base": "ibc/FA0FFABCBE79011771B811DA987A0B728FB6A469544BAB320CD74C19FA794D46",
+      "display": "ROCK",
+      "denom_units": [
+        {
+          "denom": "ibc/FA0FFABCBE79011771B811DA987A0B728FB6A469544BAB320CD74C19FA794D46",
+          "exponent": 0
+        },
+        {
+          "denom": "ROCK",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/zenrock.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/zenrock.png"
+      },
+      "type_asset": "ics20",
+      "pointer_contract": {
+        "address": "0x83c82f0f959aD3eff528eE513b43808Aa53f4B37",
+        "type_asset": "erc20"
+      }
+    },
+    {
+      "name": "fastUSD",
+      "description": "fastUSD is the native yield bearing stable asset of Sei, made possible by Elixir",
+      "symbol": "fastUSD",
+      "base": "0x37a4dD9CED2b19Cfe8FAC251cd727b5787E45269",
+      "display": "fastUSD",
+      "denom_units": [
+        {
+          "denom": "0x37a4dD9CED2b19Cfe8FAC251cd727b5787E45269",
+          "exponent": 0
+        },
+        {
+          "denom": "fastUSD",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/fastUSD.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Staked fastUSD",
+      "description": "Staked fastUSD, the yield bearing stable asset of Sei, made possible by Elixir",
+      "symbol": "sfastUSD",
+      "base": "0xdf77686D99667Ae56BC18f539B777DBc2BBE3E9F",
+      "display": "sfastUSD",
+      "denom_units": [
+        {
+          "denom": "0xdf77686D99667Ae56BC18f539B777DBc2BBE3E9F",
+          "exponent": 0
+        },
+        {
+          "denom": "sfastUSD",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/sfastUSD.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "ForU AI Genesis",
+      "description": "ForuAI is pioneering a transformative approach to Decentralised identity(DiD) and data monetization by empowering users with unprecedented control over their personal data.",
+      "symbol": "foruaigenesis",
+      "base": "0x1F963C268e711d09f7A9173532665d9c4491120A",
+      "display": "foruaigenesis",
+      "denom_units": [],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/foruaigenesis.png"
+      },
+      "type_asset": "erc721"
+    },
+    {
+      "name": "ForU AI",
+      "description": "ForuAI is pioneering a transformative approach to Decentralised identity(DiD) and data monetization by empowering users with unprecedented control over their personal data.",
+      "symbol": "FORU",
+      "base": "0x04f0542fb2ec871A6e28156039d71fD9a9e85a92",
+      "display": "FORU",
+      "denom_units": [
+        {
+          "denom": "0x04f0542fb2ec871A6e28156039d71fD9a9e85a92",
+          "exponent": 0
+        },
+        {
+          "denom": "FORU",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/foruaigenesis.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Frax USD",
+      "description": "Frax USD (frxUSD) is a fiat-redeemable, fully-collateralized stablecoin issued by the Frax Finance Protocol.",
+      "symbol": "frxUSD",
+      "base": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+      "display": "frxUSD",
+      "denom_units": [
+        {
+          "denom": "0x80Eede496655FB9047dd39d9f418d5483ED600df",
+          "exponent": 0
+        },
+        {
+          "denom": "frxUSD",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/frxUSD.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Staked Frax USD",
+      "description": "Staked Frax USD (sfrxUSD) is the yielding stablecoin implemented as an ERC4626 token.",
+      "symbol": "sfrxUSD",
+      "base": "0x5Bff88cA1442c2496f7E475E9e7786383Bc070c0",
+      "display": "sfrxUSD",
+      "denom_units": [
+        {
+          "denom": "0x5Bff88cA1442c2496f7E475E9e7786383Bc070c0",
+          "exponent": 0
+        },
+        {
+          "denom": "sfrxUSD",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/sfrxUSD.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Frax Ether",
+      "description": "frxETH acts as a stablecoin loosely pegged to ETH, so that 1 frxETH always represents 1 ETH and the amount of frxETH in circulation matches the amount of ETH in the Frax ETH system.",
+      "symbol": "frxETH",
+      "base": "0x43eDD7f3831b08FE70B7555ddD373C8bF65a9050",
+      "display": "frxETH",
+      "denom_units": [
+        {
+          "denom": "0x43eDD7f3831b08FE70B7555ddD373C8bF65a9050",
+          "exponent": 0
+        },
+        {
+          "denom": "frxETH",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/frxETH.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Staked Frax Ether",
+      "description": "sfrxETH is a ERC-4626 vault designed to accrue the staking yield of the Frax ETH validators.",
+      "symbol": "sfrxETH",
+      "base": "0x3Ec3849C33291a9eF4c5dB86De593EB4A37fDe45",
+      "display": "sfrxETH",
+      "denom_units": [
+        {
+          "denom": "0x3Ec3849C33291a9eF4c5dB86De593EB4A37fDe45",
+          "exponent": 0
+        },
+        {
+          "denom": "sfrxETH",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/sfrxETH.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Frax Shares",
+      "description": "FXS is the staking and governance token of the entire Frax ecosystem.",
+      "symbol": "FXS",
+      "base": "0x64445f0aecC51E94aD52d8AC56b7190e764E561a",
+      "display": "FXS",
+      "denom_units": [
+        {
+          "denom": "0x64445f0aecC51E94aD52d8AC56b7190e764E561a",
+          "exponent": 0
+        },
+        {
+          "denom": "FXS",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/FXS.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "MOOZ",
+      "description": "The official token of MOOZ NFT collection",
+      "symbol": "MOOZ",
+      "base": "0x65856bb190955c72d4fd9b1b5700b29067018492",
+      "display": "MOOZ",
+      "denom_units": [
+        {
+          "denom": "0x65856bb190955c72d4fd9b1b5700b29067018492",
+          "exponent": 0
+        },
+        {
+          "denom": "MOOZ",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/MOOZ.png"
+      },
+      "type_asset": "erc20"
+    },
+    {
+      "name": "Fiamma BTC",
+      "description": "Fiamma BTC is a 1:1 pegged wrapped BTC, which is minted by a trust-minimized BTC bridge Powered by BitVM2 protocol. It enables universal cross‑chain interoperability, allowing native Bitcoin liquidity to be safely unlocked and utilized across multiple blockchain ecosystems. By verifying zero‑knowledge proofs on Bitcoin via the BitVM2 protocol to minimize trust assumptions, Fiamma BTC provides a secure and scalable pathway for integrating Bitcoin into DeFi applications.",
+      "symbol": "FIABTC",
+      "base": "0x60C230c38aF6d86b0277a98a1CAeAA345a7B061F",
+      "display": "Fiamma BTC",
+      "denom_units": [
+        {
+          "denom": "0x60C230c38aF6d86b0277a98a1CAeAA345a7B061F",
+          "exponent": 0
+        },
+        {
+          "denom": "FIABTC",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/FiaBTC.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/FiaBTC.svg"
+      },
+      "type_asset": "erc20"
+    }
+  ],
+  "atlantic-2": [
+    {
+      "name": "Sei",
+      "description": "The native token of Sei",
+      "symbol": "SEI",
+      "base": "usei",
+      "display": "sei",
+      "denom_units": [
+        {
+          "denom": "usei",
+          "exponent": 0
+        },
+        {
+          "denom": "sei",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Sei.png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "UST2",
+      "description": "Testnet stablecoin",
+      "symbol": "UST2",
+      "base": "factory/sei1jdppe6fnj2q7hjsepty5crxtrryzhuqsjrj95y/uust2",
+      "display": "ust2",
+      "denom_units": [
+        {
+          "denom": "factory/sei1jdppe6fnj2q7hjsepty5crxtrryzhuqsjrj95y/uust2",
+          "exponent": 0
+        },
+        {
+          "denom": "ust2",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/UST2.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/UST2.png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "Wrapped Ether (Wormhole)",
+      "description": "Wrapped Ether from Wormhole",
+      "symbol": "WETH",
+      "base": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/AAxKX63hpBQrGGf6uhB21dJuXupvHxNTHJaktAETVGh6",
+      "display": "weth",
+      "denom_units": [
+        {
+          "denom": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/AAxKX63hpBQrGGf6uhB21dJuXupvHxNTHJaktAETVGh6",
+          "exponent": 0
+        },
+        {
+          "denom": "weth",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedEther(Wormhole).png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "Wrapped Matic (Wormhole)",
+      "description": "Wrapped Matic from Wormhole",
+      "symbol": "WMATIC",
+      "base": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/8QZuMFhH8FYUGpJNs9YhtuEm76pEzo4NjAYQiYM1vY8y",
+      "display": "wmatic",
+      "denom_units": [
+        {
+          "denom": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/8QZuMFhH8FYUGpJNs9YhtuEm76pEzo4NjAYQiYM1vY8y",
+          "exponent": 0
+        },
+        {
+          "denom": "wmatic",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedMatic.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedMatic.svg"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "Wrapped AVAX (Wormhole)",
+      "description": "Wrapped AVAX from Wormhole",
+      "symbol": "WAVAX",
+      "base": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/Fg1hDnTsAyWPVjDUN2vqjwVThwmnuEXBg2eGUGewWDUp",
+      "display": "wavax",
+      "denom_units": [
+        {
+          "denom": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/Fg1hDnTsAyWPVjDUN2vqjwVThwmnuEXBg2eGUGewWDUp",
+          "exponent": 0
+        },
+        {
+          "denom": "wavax",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedAVAX(Wormhole).svg"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "Wrapped SOL (Wormhole)",
+      "description": "Wrapped SOL from Wormhole",
+      "symbol": "SOL",
+      "base": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/GotfBk8VUDfbqgTJgF1nhV7bfZgUxfWiwADNLKv5PEMS",
+      "display": "wsol",
+      "denom_units": [
+        {
+          "denom": "factory/sei1dkdwdvknx0qav5cp5kw68mkn3r99m3svkyjfvkztwh97dv2lm0ksj6xrak/GotfBk8VUDfbqgTJgF1nhV7bfZgUxfWiwADNLKv5PEMS",
+          "exponent": 0
+        },
+        {
+          "denom": "wsol",
+          "exponent": 8
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedSOL(Wormhole).png"
+      },
+      "type_asset": "sdk.coin"
+    },
+    {
+      "name": "USD Coin",
+      "description": "Circle's stablecoin on Axelar",
+      "symbol": "AUSDC",
+      "base": "ibc/F188CCE5FBD070508295DA9772C250D71484A00FA816229CD9817DF81CFDA069",
+      "display": "ausdc",
+      "denom_units": [
+        {
+          "denom": "ibc/F188CCE5FBD070508295DA9772C250D71484A00FA816229CD9817DF81CFDA069",
+          "exponent": 0
+        },
+        {
+          "denom": "ausdc",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.svg",
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/USDCoin.png"
+      },
+      "type_asset": "ics20"
+    },
+    {
+      "name": "Wrapped Matic",
+      "description": "Wrapped Matic on Axelar",
+      "symbol": "WMATIC",
+      "base": "ibc/6020C0719D983DAF4D6FBAB21A305D5D318DC76FDDD7062AEE8DC41BC3384CD5",
+      "display": "wmatic",
+      "denom_units": [
+        {
+          "denom": "ibc/6020C0719D983DAF4D6FBAB21A305D5D318DC76FDDD7062AEE8DC41BC3384CD5",
+          "exponent": 0
+        },
+        {
+          "denom": "wmatic",
+          "exponent": 18
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedMatic.png",
+        "svg": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/WrappedMatic.svg"
+      },
+      "type_asset": "ics20"
+    },
+    {
+      "name": "TTUNA-X SeiBissa",
+      "description": "TTuna-x SeiBissa Test",
+      "symbol": "TTX",
+      "base": "factory/sei1258fztz9apdg0ylyyj20zanv60jxejp20wy2qs/ttuna-x",
+      "display": "ttuna-x",
+      "denom_units": [
+        {
+          "denom": "factory/sei1258fztz9apdg0ylyyj20zanv60jxejp20wy2qs/ttuna-x",
+          "exponent": 0
+        },
+        {
+          "denom": "uttuna-x",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/TTUNA-XSeiBissa.png"
+      },
+      "type_asset": "sdk.coin"
+    }
+  ],
+  "sei-devnet-3": [
+    {
+      "name": "Sei",
+      "description": "The native token of Sei",
+      "symbol": "SEI",
+      "base": "usei",
+      "display": "sei",
+      "denom_units": [
+        {
+          "denom": "usei",
+          "exponent": 0
+        },
+        {
+          "denom": "sei",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://github.com/cosmos/chain-registry/blob/master/testnets/seitestnet2/images/sei.png"
+      },
+      "type_asset": "sdk.coin"
+    }
+  ],
+  "arctic-1": [
+    {
+      "name": "Sei",
+      "description": "The native token of Sei",
+      "symbol": "SEI",
+      "base": "usei",
+      "display": "sei",
+      "denom_units": [
+        {
+          "denom": "usei",
+          "exponent": 0
+        },
+        {
+          "denom": "sei",
+          "exponent": 6
+        }
+      ],
+      "images": {
+        "png": "https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Sei.png"
+      },
+      "type_asset": "sdk.coin"
+    }
+  ]
+}

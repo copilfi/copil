@@ -1,9 +1,50 @@
 import { PrismaClient } from '@prisma/client';
+import assetList from './assetlist.json';
 
 const prisma = new PrismaClient();
 
 async function main() {
   console.log('🌱 Starting database seed...');
+
+  // Sync EVM token registry entries from asset list
+  const pacificAssets = (assetList as any)['pacific-1'] ?? [];
+
+  for (const asset of pacificAssets) {
+    if (!asset || asset.type_asset !== 'erc20') {
+      continue;
+    }
+
+    const address: string | undefined = asset.base;
+    if (!address || typeof address !== 'string' || !address.startsWith('0x')) {
+      continue;
+    }
+
+    const denomUnits = Array.isArray(asset.denom_units) ? asset.denom_units : [];
+    const decimals: number = denomUnits.length > 0
+      ? Number(denomUnits[denomUnits.length - 1].exponent ?? 18)
+      : 18;
+
+    await prisma.tokenRegistry.upsert({
+      where: { address },
+      update: {
+        symbol: asset.symbol || asset.display || address,
+        name: asset.name || asset.symbol || address,
+        decimals,
+        logoURI: asset.images?.png || asset.images?.svg || null,
+        isVerified: true,
+        isActive: true
+      },
+      create: {
+        address,
+        symbol: asset.symbol || asset.display || address,
+        name: asset.name || asset.symbol || address,
+        decimals,
+        logoURI: asset.images?.png || asset.images?.svg || null,
+        isVerified: true,
+        isActive: true
+      }
+    });
+  }
 
   // Create test user
   const testUser = await prisma.user.upsert({

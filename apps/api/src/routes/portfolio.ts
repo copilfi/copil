@@ -6,6 +6,7 @@ import { validateBody } from '@/middleware/validation';
 import { authenticateToken } from '@/middleware/auth';
 import rateLimit from 'express-rate-limit';
 import blockchainService from '@/services/RealBlockchainService';
+import assetList from '../../prisma/assetlist.json';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -18,6 +19,36 @@ const portfolioRateLimit = rateLimit({
 });
 
 router.use(portfolioRateLimit);
+
+type AssetMapEntry = { address: string; symbol: string; name: string };
+
+function buildAssetTokenMetadata() {
+  const pacificAssets = (assetList as any)['pacific-1'] ?? [];
+  const metadata = new Map<string, AssetMapEntry>();
+
+  const addMetadata = (address?: string | null, symbol?: string | null, name?: string | null) => {
+    if (!address || typeof address !== 'string' || !address.toLowerCase().startsWith('0x')) {
+      return;
+    }
+
+    const normalized = address.toLowerCase();
+    if (!metadata.has(normalized)) {
+      metadata.set(normalized, {
+        address,
+        symbol: symbol || address,
+        name: name || symbol || address
+      });
+    }
+  };
+
+  for (const asset of pacificAssets) {
+    if (asset?.type_asset === 'erc20') {
+      addMetadata(asset.base, asset.symbol, asset.name);
+    }
+  }
+
+  return metadata;
+}
 
 // Joi validation schemas
 const createPortfolioSchema = Joi.object({
@@ -131,9 +162,44 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     logger.info(`Fetching portfolio data - Main wallet: ${user.walletAddress}, Smart account: ${smartAccountAddress || 'none'}`);
 
-    // Get balances from both wallets
-    const mainWalletBalance = await blockchainService.getBalance(user.walletAddress);
-    const smartAccountBalance = smartAccountAddress ? await blockchainService.getBalance(smartAccountAddress) : '0.0';
+    const tokenMetadata = buildAssetTokenMetadata();
+
+    const dbTokens = await prisma.tokenRegistry.findMany({
+      where: { isActive: true }
+    });
+
+    for (const token of dbTokens) {
+      if (!token.address || typeof token.address !== 'string') {
+        continue;
+      }
+
+      const normalized = token.address.toLowerCase();
+      if (!tokenMetadata.has(normalized) && token.address.startsWith('0x')) {
+        tokenMetadata.set(normalized, {
+          address: token.address,
+          symbol: token.symbol || token.address,
+          name: token.name || token.symbol || token.address
+        });
+      }
+    }
+
+    const trackedTokenAddresses = Array.from(new Set(
+      Array.from(tokenMetadata.values())
+        .map(entry => entry.address)
+    ));
+
+    const mainWalletBalances = await blockchainService.getWalletTokenBalances(
+      user.walletAddress,
+      trackedTokenAddresses,
+      true
+    );
+
+    const smartAccountBalances = smartAccountAddress
+      ? await blockchainService.getWalletTokenBalances(smartAccountAddress, trackedTokenAddresses, true)
+      : null;
+
+    const mainWalletBalance = mainWalletBalances?.nativeBalance ?? '0.0';
+    const smartAccountBalance = smartAccountBalances?.nativeBalance ?? '0.0';
 
     const mainValue = parseFloat(mainWalletBalance);
     const smartValue = parseFloat(smartAccountBalance);
@@ -161,18 +227,90 @@ router.get('/summary', authenticateToken, async (req, res) => {
         decimals: 18,
         walletType: 'main',
         walletAddress: user.walletAddress
+      },
+      {
+        symbol: 'SEI',
+        balance: smartAccountBalance,
+        value: smartValue,
+        address: '0x0000000000000000000000000000000000000000',
+        decimals: 18,
+        walletType: 'smart',
+        walletAddress: smartAccountAddress
       }
     ];
 
-    tokens.push({
-      symbol: 'SEI',
-      balance: smartAccountBalance,
-      value: smartValue,
-      address: '0x0000000000000000000000000000000000000000',
-      decimals: 18,
-      walletType: 'smart',
-      walletAddress: smartAccountAddress
-    });
+    const aggregatedTokens = new Map<string, { address: string; symbol: string; name: string; amount: number }>();
+
+    const recordToken = (
+      address: string | null,
+      amount: number,
+      fallbackSymbol?: string,
+      fallbackName?: string
+    ) => {
+      if (amount <= 0) {
+        return;
+      }
+
+      const normalizedAddress = address ? address.toLowerCase() : null;
+      const metadata = normalizedAddress ? tokenMetadata.get(normalizedAddress) : undefined;
+
+      const entryAddress = metadata?.address || address || fallbackSymbol || 'UNKNOWN';
+      const entrySymbol = metadata?.symbol || fallbackSymbol || 'UNKNOWN';
+      const entryName = metadata?.name || fallbackName || entrySymbol;
+      const mapKey = (metadata?.address || address || entrySymbol).toLowerCase();
+
+      const existing = aggregatedTokens.get(mapKey) || {
+        address: entryAddress,
+        symbol: entrySymbol,
+        name: entryName,
+        amount: 0
+      };
+
+      existing.amount += amount;
+      aggregatedTokens.set(mapKey, existing);
+    };
+
+    const addTokenBalances = (walletBalances: typeof mainWalletBalances | null) => {
+      if (!walletBalances) {
+        return;
+      }
+
+      walletBalances.tokenBalances.forEach(tokenBalance => {
+        const amount = parseFloat(tokenBalance.formattedBalance || '0');
+        if (amount <= 0) {
+          return;
+        }
+
+        recordToken(
+          tokenBalance.token.address || tokenBalance.token.symbol || null,
+          amount,
+          tokenBalance.token.symbol,
+          tokenBalance.token.name
+        );
+      });
+    };
+
+    addTokenBalances(mainWalletBalances);
+    addTokenBalances(smartAccountBalances);
+
+    const nativeTotal = parseFloat(mainWalletBalance) + parseFloat(smartAccountBalance);
+    if (nativeTotal > 0) {
+      recordToken('sei-native', nativeTotal, 'SEI', 'Sei');
+    }
+
+    const totalAssetAmount = Array.from(aggregatedTokens.values())
+      .reduce((sum, entry) => sum + entry.amount, 0);
+
+    const assetAllocation = Array.from(aggregatedTokens.values())
+      .filter(entry => entry.amount > 0)
+      .map(entry => ({
+        address: entry.address,
+        symbol: entry.symbol,
+        name: entry.name,
+        amount: entry.amount,
+        percentage: totalAssetAmount > 0 ? (entry.amount / totalAssetAmount) * 100 : 0
+      }))
+      .sort((a, b) => b.amount - a.amount);
 
     const summary = {
       totalValue: totalValue,
@@ -196,6 +334,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
           isDeployed: false
         }
       },
+      assetAllocation,
       lastUpdated: new Date().toISOString()
     };
 
@@ -214,6 +353,7 @@ router.get('/summary', authenticateToken, async (req, res) => {
         totalValue: 0,
         dailyChange: 0,
         tokens: [],
+        assetAllocation: [],
         lastUpdated: new Date().toISOString()
       }
     });
@@ -236,13 +376,23 @@ router.get('/history', authenticateToken, async (req, res) => {
     const period = req.query.period as string || '24h';
     logger.info(`Portfolio history requested for user ${userId}, period: ${period}`);
 
-    // Get user's smart account for history calculations
-    const smartAccount = await prisma.smartAccount.findFirst({
+    const smartAccountRecord = await prisma.smartAccount.findFirst({
       where: {
         userId: userId,
         isActive: true
       }
     });
+
+    let smartAccountAddress: string | null = smartAccountRecord?.address || null;
+
+    try {
+      const onchainAddress = await blockchainService.getSmartAccountAddress(user.walletAddress);
+      if (onchainAddress) {
+        smartAccountAddress = onchainAddress;
+      }
+    } catch (addressError) {
+      logger.warn('History address resolution failed:', addressError);
+    }
 
     // Calculate time range based on period
     const now = new Date();
@@ -265,9 +415,44 @@ router.get('/history', authenticateToken, async (req, res) => {
         startTime.setDate(now.getDate() - 1);
     }
 
-    // Get current balances from both wallets
-    const mainWalletBalance = await blockchainService.getBalance(user.walletAddress);
-    const smartAccountBalance = smartAccount ? await blockchainService.getBalance(smartAccount.address) : '0.0';
+    const historyTokenMetadata = buildAssetTokenMetadata();
+
+    const historyDbTokens = await prisma.tokenRegistry.findMany({
+      where: { isActive: true }
+    });
+
+    for (const token of historyDbTokens) {
+      if (!token.address || typeof token.address !== 'string') {
+        continue;
+      }
+
+      const normalized = token.address.toLowerCase();
+      if (!historyTokenMetadata.has(normalized) && token.address.startsWith('0x')) {
+        historyTokenMetadata.set(normalized, {
+          address: token.address,
+          symbol: token.symbol || token.address,
+          name: token.name || token.symbol || token.address
+        });
+      }
+    }
+
+    const historyTrackedTokenAddresses = Array.from(new Set(
+      Array.from(historyTokenMetadata.values())
+        .map(entry => entry.address)
+    ));
+
+    const mainWalletBalances = await blockchainService.getWalletTokenBalances(
+      user.walletAddress,
+      historyTrackedTokenAddresses,
+      true
+    );
+
+    const smartAccountBalances = smartAccountAddress
+      ? await blockchainService.getWalletTokenBalances(smartAccountAddress, historyTrackedTokenAddresses, true)
+      : null;
+
+    const mainWalletBalance = mainWalletBalances?.nativeBalance ?? '0.0';
+    const smartAccountBalance = smartAccountBalances?.nativeBalance ?? '0.0';
 
     const mainValue = parseFloat(mainWalletBalance);
     const smartValue = parseFloat(smartAccountBalance);
@@ -278,58 +463,21 @@ router.get('/history', authenticateToken, async (req, res) => {
 
     const history = Array.from({ length: dataPoints }, (_, i) => {
       const timestamp = new Date(startTime.getTime() + (i * timeInterval));
-      // Add small random variation to simulate realistic price movement
-      const variation = (Math.random() - 0.5) * 0.1; // ±5% variation
-      const value = Math.max(0, currentValue * (1 + variation));
 
       return {
         timestamp: timestamp.toISOString(),
-        value: value,
-        tokens: [
-          {
-            symbol: 'SEI',
-            balance: value.toFixed(6),
-            value: value
-          }
-        ]
+        value: currentValue,
+        mainWalletValue: mainValue,
+        smartAccountValue: smartValue
       };
     });
 
-    // Ensure the last data point matches current balance
     if (history.length > 0) {
-      const tokens = [];
-
-      if (mainValue > 0) {
-        tokens.push({
-          symbol: 'SEI',
-          balance: mainWalletBalance,
-          value: mainValue,
-          walletType: 'main'
-        });
-      }
-
-      if (smartValue > 0) {
-        tokens.push({
-          symbol: 'SEI',
-          balance: smartAccountBalance,
-          value: smartValue,
-          walletType: 'smart'
-        });
-      }
-
-      if (tokens.length === 0) {
-        tokens.push({
-          symbol: 'SEI',
-          balance: '0.0',
-          value: 0,
-          walletType: 'main'
-        });
-      }
-
       history[history.length - 1] = {
         timestamp: now.toISOString(),
         value: currentValue,
-        tokens: tokens
+        mainWalletValue: mainValue,
+        smartAccountValue: smartValue
       };
     }
 
