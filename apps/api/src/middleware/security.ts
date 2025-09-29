@@ -8,11 +8,8 @@ import { prisma } from '@/config/database';
 
 // Extended Request interface for security context
 export interface SecureRequest extends Request {
-  user?: {
-    id: string;
-    walletAddress: string;
+  user?: Express.AuthenticatedUser & {
     apiKey?: string;
-    permissions?: string[];
   };
   signature?: {
     timestamp: number;
@@ -50,7 +47,6 @@ export const validateApiKey = async (
       select: {
         id: true,
         walletAddress: true,
-        apiKeyHash: true,
         permissions: true
       }
     });
@@ -65,11 +61,17 @@ export const validateApiKey = async (
     }
 
     // Add user to request context
+    const walletAddress = user.walletAddress as `0x${string}`;
+    const permissions = Array.isArray(user.permissions)
+      ? (user.permissions as unknown[]).map((value) => String(value))
+      : [];
+
     req.user = {
       id: user.id,
-      walletAddress: user.walletAddress,
+      walletAddress,
+      address: walletAddress,
       apiKey,
-      permissions: user.permissions as string[] || []
+      permissions
     };
 
     next();
@@ -208,7 +210,7 @@ export const createTieredRateLimit = () => {
         max: maxRequests,
         keyGenerator: (req) => {
           const secureReq = req as SecureRequest;
-          return secureReq.user?.id || req.ip;
+          return secureReq.user?.id ?? req.ip ?? 'anonymous';
         },
         message: {
           success: false,

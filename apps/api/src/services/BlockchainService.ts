@@ -9,7 +9,7 @@ import env from '@/config/env';
 import redis from '@/config/redis';
 
 class BlockchainService {
-  private seiProvider?: SeiProvider;
+  private seiProvider: SeiProvider;
   private smartAccountClients: Map<string, SmartAccountClient> = new Map();
   private orderEngine?: ConditionalOrderEngineContract;
   private accountFactory?: AccountFactoryContract;

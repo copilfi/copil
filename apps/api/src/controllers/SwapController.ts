@@ -1,10 +1,9 @@
 import { Request, Response } from 'express';
 import { DexExecutor } from '@copil/blockchain';
-import { BlockchainLogger } from '@copil/blockchain';
-import { TokenResolver } from '@copil/ai-agent/src/utils/TokenResolver';
+import { TokenResolver } from '@copil/ai-agent';
 import { z } from 'zod';
-
-const logger = BlockchainLogger.getInstance();
+import { AuthenticatedRequest } from '@/middleware/auth';
+import { logger } from '@/utils/logger';
 
 // Request validation schemas
 const SwapQuoteSchema = z.object({
@@ -37,7 +36,7 @@ export class SwapController {
   /**
    * Get real swap quote from DEX aggregator
    */
-  getSwapQuote = async (req: Request, res: Response) => {
+  getSwapQuote = async (req: Request, res: Response): Promise<void> => {
     try {
       const validatedData = SwapQuoteSchema.parse(req.body);
 
@@ -46,46 +45,42 @@ export class SwapController {
       const tokenOutMatch = await this.tokenResolver.resolveToken(validatedData.tokenOut);
 
       if (!tokenInMatch || !tokenOutMatch) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Token not found',
           message: `Could not resolve tokens: ${!tokenInMatch ? validatedData.tokenIn : ''} ${!tokenOutMatch ? validatedData.tokenOut : ''}`
         });
+        return;
       }
 
       // Convert amount to wei
       const amountInWei = BigInt(Math.floor(validatedData.amountIn * Math.pow(10, tokenInMatch.decimals)));
 
-      let quote;
-      
+      let protocolUsed: string;
+      let quoteResult:
+        | (Awaited<ReturnType<typeof this.dexExecutor.getQuote>> & { protocol?: string })
+        | Awaited<ReturnType<typeof this.dexExecutor.getBestQuote>>;
+
       if (validatedData.protocol) {
-        // Get quote from specific protocol
-        quote = await this.dexExecutor.getQuote({
+        quoteResult = await this.dexExecutor.getQuote({
           protocol: validatedData.protocol as any,
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
         });
+        protocolUsed = validatedData.protocol;
       } else {
-        // Get best quote across all protocols
         const bestQuote = await this.dexExecutor.getBestQuote({
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
         });
-        
-        quote = {
-          amountOut: bestQuote.amountOut,
-          priceImpact: bestQuote.priceImpact,
-          gasEstimate: bestQuote.gasEstimate
-        };
-        
-        // Add protocol info to response
-        quote.protocol = bestQuote.protocol;
+        quoteResult = bestQuote;
+        protocolUsed = bestQuote.protocol;
       }
 
       // Convert output amount to human readable
-      const amountOutFormatted = Number(quote.amountOut) / Math.pow(10, tokenOutMatch.decimals);
+      const amountOutFormatted = Number(quoteResult.amountOut) / Math.pow(10, tokenOutMatch.decimals);
 
       res.json({
         success: true,
@@ -105,43 +100,47 @@ export class SwapController {
           inputAmount: validatedData.amountIn,
           outputAmount: amountOutFormatted,
           rate: amountOutFormatted / validatedData.amountIn,
-          priceImpact: quote.priceImpact,
-          gasEstimate: quote.gasEstimate.toString(),
-          protocol: quote.protocol || validatedData.protocol,
+          priceImpact: quoteResult.priceImpact,
+          gasEstimate: quoteResult.gasEstimate.toString(),
+          protocol: protocolUsed,
           route: [tokenInMatch.address, tokenOutMatch.address], // Simplified route
           timestamp: new Date().toISOString()
         }
       });
+      return;
 
     } catch (error) {
       logger.error('Failed to get swap quote', error);
       
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid request data',
           details: error.errors
         });
+        return;
       }
 
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to get swap quote'
       });
+      return;
     }
   };
 
   /**
    * Execute real swap transaction
    */
-  executeSwap = async (req: Request, res: Response) => {
+  executeSwap = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const validatedData = ExecuteSwapSchema.parse(req.body);
@@ -151,11 +150,12 @@ export class SwapController {
       const tokenOutMatch = await this.tokenResolver.resolveToken(validatedData.tokenOut);
 
       if (!tokenInMatch || !tokenOutMatch) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Token not found',
           message: `Could not resolve tokens: ${!tokenInMatch ? validatedData.tokenIn : ''} ${!tokenOutMatch ? validatedData.tokenOut : ''}`
         });
+        return;
       }
 
       // Convert amounts to wei
@@ -189,6 +189,10 @@ export class SwapController {
         finalAmountOutMin = BigInt(Math.floor(Number(quote.amountOut) * slippageMultiplier));
       }
 
+      const recipientAddress = validatedData.recipient && validatedData.recipient.startsWith('0x')
+        ? (validatedData.recipient as `0x${string}`)
+        : undefined;
+
       // Execute the swap
       const swapResult = await this.dexExecutor.executeSwap({
         protocol: protocol as any,
@@ -196,7 +200,7 @@ export class SwapController {
         tokenOut: tokenOutMatch.address,
         amountIn: amountInWei,
         amountOutMin: finalAmountOutMin,
-        recipient: validatedData.recipient,
+        recipient: recipientAddress,
         slippageTolerance: validatedData.slippage ? validatedData.slippage / 100 : undefined
       });
 
@@ -226,29 +230,32 @@ export class SwapController {
           timestamp: new Date().toISOString()
         }
       });
+      return;
 
     } catch (error) {
       logger.error('Failed to execute swap', error);
       
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid request data',
           details: error.errors
         });
+        return;
       }
 
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Failed to execute swap'
       });
+      return;
     }
   };
 
   /**
    * Get all supported tokens
    */
-  getSupportedTokens = async (req: Request, res: Response) => {
+  getSupportedTokens = async (req: Request, res: Response): Promise<void> => {
     try {
       const tokens = this.tokenResolver.getAllTokens();
       
@@ -272,22 +279,24 @@ export class SwapController {
         success: false,
         error: 'Failed to retrieve supported tokens'
       });
+      return;
     }
   };
 
   /**
    * Get token information by symbol or address
    */
-  getTokenInfo = async (req: Request, res: Response) => {
+  getTokenInfo = async (req: Request, res: Response): Promise<void> => {
     try {
       const identifier = req.params.identifier;
       const tokenMatch = await this.tokenResolver.resolveToken(identifier);
 
       if (!tokenMatch) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'Token not found'
         });
+        return;
       }
 
       res.json({
@@ -307,21 +316,23 @@ export class SwapController {
         success: false,
         error: 'Failed to retrieve token information'
       });
+      return;
     }
   };
 
   /**
    * Search tokens by query
    */
-  searchTokens = async (req: Request, res: Response) => {
+  searchTokens = async (req: Request, res: Response): Promise<void> => {
     try {
       const query = req.query.q as string;
       
       if (!query || query.length < 2) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Query must be at least 2 characters long'
         });
+        return;
       }
 
       const results = this.tokenResolver.searchTokens(query);
@@ -338,13 +349,14 @@ export class SwapController {
         success: false,
         error: 'Failed to search tokens'
       });
+      return;
     }
   };
 
   /**
    * Get supported protocols/DEXes
    */
-  getSupportedProtocols = async (req: Request, res: Response) => {
+  getSupportedProtocols = async (req: Request, res: Response): Promise<void> => {
     try {
       const protocols = [
         {
@@ -375,6 +387,7 @@ export class SwapController {
         success: false,
         error: 'Failed to retrieve supported protocols'
       });
+      return;
     }
   };
 }

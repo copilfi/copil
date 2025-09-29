@@ -46,7 +46,7 @@ export class PrivateKeyService {
       const key = crypto.scryptSync(env.JWT_SECRET || 'fallback-secret', salt, 32);
       
       // Create cipher
-      const cipher = crypto.createCipherGCM(this.ENCRYPTION_ALGORITHM, key, iv);
+      const cipher = crypto.createCipheriv(this.ENCRYPTION_ALGORITHM, key, iv, { authTagLength: 16 });
       
       // Encrypt private key
       let encryptedData = cipher.update(privateKey, 'utf8', 'hex');
@@ -83,7 +83,7 @@ export class PrivateKeyService {
       const key = crypto.scryptSync(env.JWT_SECRET || 'fallback-secret', salt, 32);
       
       // Create decipher
-      const decipher = crypto.createDecipherGCM(this.ENCRYPTION_ALGORITHM, key, iv);
+      const decipher = crypto.createDecipheriv(this.ENCRYPTION_ALGORITHM, key, iv, { authTagLength: 16 });
       decipher.setAuthTag(authTag);
       
       // Decrypt
@@ -131,7 +131,7 @@ export class PrivateKeyService {
       const key = `${this.SESSION_KEY_PREFIX}${sessionKey}`;
       const expireSeconds = expiryMinutes * 60;
       
-      await redis.client.setex(key, expireSeconds, JSON.stringify(sessionData));
+      await redis.set(key, JSON.stringify(sessionData), expireSeconds);
       
       logger.info(`Secure session created for ${userAddress} (${sessionKey.substring(0, 8)}...)`);
       
@@ -148,7 +148,7 @@ export class PrivateKeyService {
   static async getSessionData(sessionKey: string): Promise<SessionKeyData | null> {
     try {
       const key = `${this.SESSION_KEY_PREFIX}${sessionKey}`;
-      const data = await redis.client.get(key);
+      const data = await redis.get(key);
       
       if (!data) {
         logger.warn(`Session not found: ${sessionKey.substring(0, 8)}...`);
@@ -199,7 +199,7 @@ export class PrivateKeyService {
   static async invalidateSession(sessionKey: string): Promise<void> {
     try {
       const key = `${this.SESSION_KEY_PREFIX}${sessionKey}`;
-      await redis.client.del(key);
+      await redis.del(key);
       
       logger.info(`Session invalidated: ${sessionKey.substring(0, 8)}...`);
     } catch (error) {
@@ -270,7 +270,7 @@ export class PrivateKeyService {
       
       // Store in Redis for quick access
       const key = `${this.ENCRYPTED_KEY_PREFIX}${keyId}`;
-      await redis.client.setex(key, 24 * 60 * 60, JSON.stringify(encryptedKey)); // 24 hours
+      await redis.set(key, JSON.stringify(encryptedKey), 24 * 60 * 60); // 24 hours
       
       logger.info(`Encrypted private key stored for ${userAddress} (${keyId})`);
       
@@ -287,7 +287,7 @@ export class PrivateKeyService {
   static async getEncryptedKey(keyId: string): Promise<EncryptedPrivateKey | null> {
     try {
       const key = `${this.ENCRYPTED_KEY_PREFIX}${keyId}`;
-      const data = await redis.client.get(key);
+      const data = await redis.get(key);
       
       if (!data) {
         return null;
@@ -310,11 +310,11 @@ export class PrivateKeyService {
       let cleaned = 0;
       
       for (const key of keys) {
-        const data = await redis.client.get(key);
+        const data = await redis.get(key);
         if (data) {
           const sessionData: SessionKeyData = JSON.parse(data);
           if (Date.now() > sessionData.expiresAt) {
-            await redis.client.del(key);
+            await redis.del(key);
             cleaned++;
           }
         }

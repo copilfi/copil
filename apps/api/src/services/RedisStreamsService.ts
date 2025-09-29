@@ -97,7 +97,7 @@ class RedisStreamsService {
         this.streams.TRANSACTIONS,
         '*',
         'data', JSON.stringify(eventData)
-      );
+      ) as string;
       
       logger.debug(`Added transaction event to stream: ${id}`);
       return id;
@@ -121,7 +121,7 @@ class RedisStreamsService {
         this.streams.NOTIFICATIONS,
         '*',
         'data', JSON.stringify(eventData)
-      );
+      ) as string;
       
       logger.debug(`Added notification event to stream: ${id}`);
       return id;
@@ -145,7 +145,7 @@ class RedisStreamsService {
         this.streams.ANALYSIS,
         '*',
         'data', JSON.stringify(eventData)
-      );
+      ) as string;
       
       logger.debug(`Added analysis event to stream: ${id}`);
       return id;
@@ -169,7 +169,7 @@ class RedisStreamsService {
         this.streams.BLOCKCHAIN,
         '*',
         'data', JSON.stringify(eventData)
-      );
+      ) as string;
       
       logger.debug(`Added blockchain event to stream: ${id}`);
       return id;
@@ -203,14 +203,20 @@ class RedisStreamsService {
           'COUNT', '10',
           'BLOCK', '1000',
           'STREAMS', this.streams.TRANSACTIONS, '>'
-        );
+        ) as Array<[string, Array<[string, string[]]>]> | null;
 
         if (results && results.length > 0) {
-          const [streamName, messages] = results[0];
+          const [, messages] = results[0];
           
           for (const [messageId, fields] of messages) {
             try {
-              const eventData = JSON.parse(fields[1]) as TransactionEvent;
+              const payload = fields.length >= 2 ? fields[1] : undefined;
+              if (typeof payload !== 'string') {
+                logger.warn(`Skipping malformed transaction event payload for ${messageId}`);
+                continue;
+              }
+
+              const eventData = JSON.parse(payload) as TransactionEvent;
               await handler(eventData);
               
               // Acknowledge processed message
@@ -255,14 +261,20 @@ class RedisStreamsService {
           'COUNT', '20',
           'BLOCK', '1000',
           'STREAMS', this.streams.BLOCKCHAIN, '>'
-        );
+        ) as Array<[string, Array<[string, string[]]>]> | null;
 
         if (results && results.length > 0) {
-          const [streamName, messages] = results[0];
+          const [, messages] = results[0];
           
           for (const [messageId, fields] of messages) {
             try {
-              const eventData = JSON.parse(fields[1]) as BlockchainEvent;
+              const payload = fields.length >= 2 ? fields[1] : undefined;
+              if (typeof payload !== 'string') {
+                logger.warn(`Skipping malformed blockchain event payload for ${messageId}`);
+                continue;
+              }
+
+              const eventData = JSON.parse(payload) as BlockchainEvent;
               await handler(eventData);
               
               // Acknowledge processed message

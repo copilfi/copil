@@ -35,7 +35,7 @@ export abstract class BaseDeFiTool extends Tool {
     
     // Create a LangChain compatible schema after calling super()
     this.schema = z.object({
-      input: z.string().optional().nullable()
+      input: z.string().optional()
     }).transform((data) => data.input);
   }
 

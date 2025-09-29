@@ -1,6 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
 import { logger } from '@/utils/logger';
-import { prisma } from '@/config/database';
 
 export interface IPWhitelistConfig {
   enabled: boolean;
@@ -91,32 +90,11 @@ export const ipWhitelist = (customConfig?: Partial<IPWhitelistConfig>) => {
     const clientIP = getClientIP(req);
     
     try {
-      // Check database for dynamic IP whitelist
-      const dbWhitelist = await prisma.iPWhitelist.findMany({
-        where: { isActive: true },
-        select: { ipAddress: true, ipRange: true }
-      });
-      
-      // Add database IPs to allowed list
-      const dbAllowedIPs = dbWhitelist
-        .filter(entry => entry.ipAddress)
-        .map(entry => entry.ipAddress!);
-      
-      const dbAllowedRanges = dbWhitelist
-        .filter(entry => entry.ipRange)
-        .map(entry => entry.ipRange!);
-      
-      const extendedConfig = {
-        ...config,
-        allowedIPs: [...config.allowedIPs, ...dbAllowedIPs],
-        allowedRanges: [...config.allowedRanges, ...dbAllowedRanges]
-      };
-      
-      if (isIPAllowed(clientIP, extendedConfig)) {
+      if (isIPAllowed(clientIP, config)) {
         next();
         return;
       }
-      
+
       // Log unauthorized access attempt
       logger.warn(`Unauthorized IP access attempt: ${clientIP} to ${req.method} ${req.path}`);
       
@@ -127,8 +105,7 @@ export const ipWhitelist = (customConfig?: Partial<IPWhitelistConfig>) => {
       
     } catch (error) {
       logger.error('IP whitelist error:', error);
-      
-      // Fallback to static config on database error
+
       if (isIPAllowed(clientIP, config)) {
         next();
         return;
@@ -163,41 +140,16 @@ export const adminIPWhitelist = () => {
 // Middleware to add IP to whitelist (admin only)
 export const addIPToWhitelist = async (
   req: Request,
-  res: Response,
-  next: NextFunction
+  res: Response
 ): Promise<void> => {
-  try {
-    const { ipAddress, ipRange, description } = req.body;
-    
-    if (!ipAddress && !ipRange) {
-      res.status(400).json({
-        success: false,
-        error: 'Either ipAddress or ipRange is required'
-      });
-      return;
-    }
-    
-    await prisma.iPWhitelist.create({
-      data: {
-        ipAddress: ipAddress || null,
-        ipRange: ipRange || null,
-        description: description || 'Added via API',
-        isActive: true,
-        createdAt: new Date()
-      }
-    });
-    
-    logger.info(`IP ${ipAddress || ipRange} added to whitelist`);
-    
-    res.json({
-      success: true,
-      message: 'IP added to whitelist successfully'
-    });
-    
-  } catch (error) {
-    logger.error('Error adding IP to whitelist:', error);
-    next(error);
-  }
+  logger.warn('IP whitelist persistence is not configured; request ignored', {
+    requestIP: req.body?.ipAddress || req.body?.ipRange
+  });
+
+  res.status(501).json({
+    success: false,
+    error: 'Dynamic IP whitelist management is not enabled'
+  });
 };
 
 // Get current client IP (utility endpoint)

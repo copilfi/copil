@@ -9,8 +9,8 @@ const LimitOrderToolSchema = z.object({
   amount: z.number().positive().describe('Amount of tokens to swap'),
   targetPrice: z.number().positive().describe('Target price for the limit order'),
   orderType: z.enum(['buy', 'sell']).describe('Whether this is a buy or sell limit order'),
-  deadline: z.number().optional().nullable().describe('Order deadline in hours (default: 24)'),
-  protocol: z.enum(['dragonswap', 'symphony']).optional().nullable().describe('DEX protocol to use (default: dragonswap)'),
+  deadline: z.number().optional().describe('Order deadline in hours (default: 24)'),
+  protocol: z.enum(['dragonswap', 'symphony']).optional().describe('DEX protocol to use (default: dragonswap)'),
 });
 
 export class LimitOrderTool extends BaseDeFiTool {

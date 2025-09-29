@@ -6,12 +6,7 @@ import env from '@/config/env';
 import TokenService, { TokenPayload } from '@/services/TokenService';
 
 export interface AuthenticatedRequest extends Request {
-  user?: {
-    id: string;
-    address: string;
-    walletAddress: string; // Add walletAddress for backward compatibility
-    email?: string;
-  };
+  user?: Express.AuthenticatedUser;
 }
 
 export const authenticateToken = async (
@@ -48,10 +43,12 @@ export const authenticateToken = async (
       return;
     }
 
+    const walletAddress = user.walletAddress as `0x${string}`;
+
     req.user = {
       id: user.id,
-      address: user.walletAddress,
-      walletAddress: user.walletAddress, // Add walletAddress for backward compatibility
+      address: walletAddress,
+      walletAddress,
       email: user.email || undefined
     };
 
@@ -96,10 +93,12 @@ export const optionalAuth = async (
     });
 
     if (user && user.isActive) {
+      const walletAddress = user.walletAddress as `0x${string}`;
+
       req.user = {
         id: user.id,
-        address: user.walletAddress,
-        walletAddress: user.walletAddress, // Add walletAddress for backward compatibility
+        address: walletAddress,
+        walletAddress,
         email: user.email || undefined
       };
     }

@@ -1,6 +1,5 @@
 import crypto from 'crypto';
 import { logger } from '@/utils/logger';
-import { prisma } from '@/config/database';
 import env from '@/config/env';
 
 export interface SecurityEvent {
@@ -62,22 +61,7 @@ export class SecurityService {
       securityEvent
     });
 
-    try {
-      // Store in database for persistence
-      await prisma.securityEvent.create({
-        data: {
-          type: event.type,
-          severity: event.severity,
-          userId: event.userId,
-          ipAddress: event.ipAddress,
-          userAgent: event.userAgent,
-          details: event.details,
-          timestamp: securityEvent.timestamp
-        }
-      });
-    } catch (error) {
-      logger.error('Failed to store security event in database:', error);
-    }
+    // Persistence layer not implemented in current schema
   }
 
   /**
@@ -96,7 +80,7 @@ export class SecurityService {
 
     this.logSecurityEvent({
       type: 'failed_auth',
-      severity: failedAttempt.count > 5 ? 'HIGH' : 'MEDIUM',
+      severity: failedAttempt.count > 5 ? 'high' : 'medium',
       userId,
       ipAddress,
       userAgent,
@@ -148,7 +132,7 @@ export class SecurityService {
 
     this.logSecurityEvent({
       type: 'suspicious_activity',
-      severity: newLevel >= 100 ? 'CRITICAL' : 'HIGH',
+      severity: newLevel >= 100 ? 'critical' : 'high',
       ipAddress,
       details: {
         reason,

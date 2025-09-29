@@ -366,15 +366,10 @@ export class SmartAccountController {
       // Log transaction
       await prisma.transaction.create({
         data: {
-          txHash: txHash,
+          txHash,
           userId: req.user.id,
           type: 'SMART_ACCOUNT_EXECUTION',
-          status: 'PENDING',
-          details: {
-            to,
-            value: value || '0',
-            data: data || '0x'
-          }
+          status: 'PENDING'
         }
       });
 
@@ -422,14 +417,10 @@ export class SmartAccountController {
       // Log batch transaction
       await prisma.transaction.create({
         data: {
-          txHash: txHash,
+          txHash,
           userId: req.user.id,
           type: 'SMART_ACCOUNT_BATCH',
-          status: 'PENDING',
-          details: {
-            batchSize: transactions.length,
-            transactions
-          }
+          status: 'PENDING'
         }
       });
 
@@ -498,10 +489,27 @@ export class SmartAccountController {
         throw new AppError('Smart Account not found', 404);
       }
 
+      const activeSession = await prisma.userSession.findFirst({
+        where: {
+          userId: req.user.id,
+          isActive: true
+        },
+        orderBy: {
+          lastActiveAt: 'desc'
+        },
+        select: {
+          id: true
+        }
+      });
+
+      if (!activeSession) {
+        throw new AppError('Active user session not found', 400);
+      }
+
       // Save session key to database
       const dbSessionKey = await prisma.sessionKey.create({
         data: {
-          sessionId: req.user.sessions?.[0]?.id || 'default-session',
+          sessionId: activeSession.id,
           address: sessionKey,
           validUntil: new Date(validUntil * 1000),
           validAfter: new Date(),

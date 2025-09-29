@@ -1,4 +1,4 @@
-import { ethers, Wallet, Contract, Provider } from 'ethers';
+import { ethers, Wallet, Contract } from 'ethers';
 import { BlockchainLogger } from '../utils/Logger';
 
 const logger = BlockchainLogger.getInstance();
@@ -80,11 +80,25 @@ export interface SessionKeyConfig {
   allowedFunctions: string[];
 }
 
+type AccountFactoryContract = Contract & {
+  createAccount(owner: string, salt: string): Promise<ethers.TransactionResponse>;
+};
+
+type EntryPointHandleOps = ((ops: any[], beneficiary: string, overrides?: any) => Promise<ethers.TransactionResponse>) & {
+  estimateGas: (ops: any[], beneficiary: string) => Promise<bigint>;
+};
+
+type EntryPointContract = Contract & {
+  handleOps: EntryPointHandleOps;
+  getNonce(sender: string, key: number): Promise<bigint>;
+  getUserOpHash(userOp: any): Promise<string>;
+};
+
 export class SmartAccountService {
   private provider: ethers.JsonRpcProvider;
   private config: SmartAccountConfig;
-  private factoryContract: Contract;
-  private entryPointContract: Contract;
+  private factoryContract: AccountFactoryContract;
+  private entryPointContract: EntryPointContract;
   private accounts: Map<string, Contract> = new Map();
 
   constructor(config: SmartAccountConfig) {
@@ -95,13 +109,13 @@ export class SmartAccountService {
       config.factoryAddress,
       SMART_ACCOUNT_FACTORY_ABI,
       this.provider
-    );
+    ) as AccountFactoryContract;
     
     this.entryPointContract = new Contract(
       config.entryPointAddress,
       ENTRY_POINT_ABI,
       this.provider
-    );
+    ) as EntryPointContract;
 
     logger.info(`SmartAccountService initialized for chain ${config.chainId}`);
   }
@@ -143,11 +157,14 @@ export class SmartAccountService {
 
       // Deploy if signer wallet is provided
       if (signerWallet) {
-        const factoryWithSigner = this.factoryContract.connect(signerWallet);
+        const factoryWithSigner = this.factoryContract.connect(signerWallet) as AccountFactoryContract;
         
         logger.info(`Deploying Smart Account for owner ${ownerAddress}...`);
         const tx = await factoryWithSigner.createAccount(ownerAddress, salt);
         const receipt = await tx.wait();
+        if (!receipt) {
+          throw new Error('Deployment transaction did not return a receipt');
+        }
         
         // Find AccountCreated event
         const accountCreatedEvent = receipt.logs.find((log: any) => {
@@ -168,7 +185,9 @@ export class SmartAccountService {
             data: accountCreatedEvent.data
           });
           
-          const deployedAddress = parsedLog?.args.account;
+          const args = parsedLog?.args as unknown as { account?: string } | { [key: string]: any } | undefined;
+          const derivedAddress = args?.account || (Array.isArray(parsedLog?.args) ? (parsedLog?.args as any)[0] : undefined);
+          const deployedAddress = derivedAddress ? ethers.getAddress(derivedAddress) : predictedAddress;
           logger.info(`✅ Smart Account deployed at ${deployedAddress}`);
           
           return { address: deployedAddress, isDeployed: true };
@@ -357,7 +376,7 @@ export class SmartAccountService {
           owner = await smartAccount.owner();
           nonce = (await smartAccount.getNonce()).toString();
         } catch (error: unknown) {
-          logger.warn(`Could not get owner/nonce for ${smartAccountAddress}:`, error);
+          logger.warn(`Could not get owner/nonce for ${smartAccountAddress}:`, { error });
         }
       }
 
@@ -402,7 +421,8 @@ export class SmartAccountService {
   ): Promise<UserOperation> {
     try {
       // Get nonce
-      const nonce = await this.entryPointContract.getNonce(smartAccountAddress, 0);
+      const entryPoint = this.entryPointContract as any;
+      const nonce = await entryPoint.getNonce(smartAccountAddress, 0);
       
       // Encode call data
       const smartAccountInterface = new ethers.Interface(SMART_ACCOUNT_ABI);
@@ -464,7 +484,8 @@ export class SmartAccountService {
 
       // Sign the UserOperation if wallet is provided
       if (sessionKeyWallet) {
-        const userOpHash = await this.entryPointContract.getUserOpHash(userOp);
+        const entryPoint = this.entryPointContract as any;
+        const userOpHash = await entryPoint.getUserOpHash(userOp);
         const signature = await sessionKeyWallet.signMessage(ethers.getBytes(userOpHash));
         userOp.signature = signature;
       }
@@ -489,7 +510,7 @@ export class SmartAccountService {
       // For now, we'll simulate bundler functionality
       // In production, this would go through a bundler service
       const adminWallet = new Wallet(process.env.PRIVATE_KEY!, this.provider);
-      const entryPointWithSigner = this.entryPointContract.connect(adminWallet);
+      const entryPointWithSigner = this.entryPointContract.connect(adminWallet) as EntryPointContract;
       
       const tx = await entryPointWithSigner.handleOps(
         [userOp],
@@ -497,6 +518,9 @@ export class SmartAccountService {
       );
       
       const receipt = await tx.wait();
+      if (!receipt) {
+        throw new Error('UserOperation transaction did not return a receipt');
+      }
       logger.info(`✅ UserOperation submitted: ${receipt.hash}`);
       
       return receipt.hash;

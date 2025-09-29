@@ -1,20 +1,42 @@
 {
   "extends": "../../tsconfig.json",
   "compilerOptions": {
-    "outDir": "./dist",
-    "rootDir": "./src",
-    "baseUrl": "./src",
+    "outDir": "../../dist/apps/api",
+    "rootDir": "../..",
+    "baseUrl": ".",
     "paths": {
-      "@/*": ["*"],
-      "@/config/*": ["config/*"],
-      "@/controllers/*": ["controllers/*"],
-      "@/middleware/*": ["middleware/*"],
-      "@/routes/*": ["routes/*"],
-      "@/services/*": ["services/*"],
-      "@/utils/*": ["utils/*"],
-      "@/types/*": ["types/*"]
-    }
+      "@/*": ["./src/*"],
+      "@/config/*": ["./src/config/*"],
+      "@/controllers/*": ["./src/controllers/*"],
+      "@/middleware/*": ["./src/middleware/*"],
+      "@/routes/*": ["./src/routes/*"],
+      "@/services/*": ["./src/services/*"],
+      "@/utils/*": ["./src/utils/*"],
+      "@/types/*": ["./src/types/*"],
+      "@copil/blockchain": ["../../packages/blockchain/src"],
+      "@copil/blockchain/*": ["../../packages/blockchain/src/*"],
+      "@copil/core": ["../../packages/core/src"],
+      "@copil/core/*": ["../../packages/core/src/*"],
+      "@copil/utils": ["../../packages/utils/src"],
+      "@copil/utils/*": ["../../packages/utils/src/*"],
+      "@copil/database": ["../../packages/database/src"],
+      "@copil/database/*": ["../../packages/database/src/*"],
+      "@copil/ai-agent": ["../../packages/ai-agent/src"],
+      "@copil/ai-agent/*": ["../../packages/ai-agent/src/*"]
+    },
+    "typeRoots": ["./types", "../../node_modules/@types"],
+    "types": ["node"],
+    "noEmit": false,
+    "allowImportingTsExtensions": false
   },
-  "include": ["src/**/*"],
+  "include": [
+    "src/**/*.ts",
+    "types/**/*.d.ts",
+    "../../packages/blockchain/src/**/*.ts",
+    "../../packages/core/src/**/*.ts",
+    "../../packages/utils/src/**/*.ts",
+    "../../packages/database/src/**/*.ts",
+    "../../packages/ai-agent/src/**/*.ts"
+  ],
   "exclude": ["node_modules", "dist", "**/*.test.ts"]
 }

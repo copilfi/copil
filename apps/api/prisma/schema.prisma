@@ -315,3 +315,52 @@ model SmartAccount {
   
   @@map("smart_accounts")
 }
+
+// Indexed smart contracts for event processing
+model IndexedContract {
+  id               String   @id @default(cuid())
+  name             String
+  address          String   @unique
+  chainId          Int      @map("chain_id")
+  lastIndexedBlock Int      @default(0) @map("last_indexed_block")
+  isActive         Boolean  @default(true) @map("is_active")
+  metadata         Json     @default("{}")
+  createdAt        DateTime @default(now()) @map("created_at")
+  updatedAt        DateTime @updatedAt @map("updated_at")
+
+  events BlockchainEvent[]
+
+  @@map("indexed_contracts")
+}
+
+// Indexed blockchain events
+model BlockchainEvent {
+  id              String          @id @default(cuid())
+  contractId      String          @map("contract_id")
+  eventName       String          @map("event_name")
+  blockNumber     Int             @map("block_number")
+  transactionHash String          @map("transaction_hash")
+  logIndex        Int             @map("log_index")
+  blockHash       String          @map("block_hash")
+  args            Json
+  timestamp       DateTime
+  processed       Boolean         @default(false)
+  processedAt     DateTime?       @map("processed_at")
+
+  contract IndexedContract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+
+  @@unique([transactionHash, logIndex], name: "transactionHash_logIndex")
+  @@index([blockNumber], name: "idx_blockchain_events_block")
+  @@map("blockchain_events")
+}
+
+// Generic cursors for event processors
+model EventCursor {
+  id          Int      @id @default(autoincrement())
+  key         String   @unique
+  blockNumber Int      @map("block_number")
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
+
+  @@map("event_cursors")
+}

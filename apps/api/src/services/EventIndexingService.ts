@@ -1,582 +1,553 @@
-import { ethers, Contract } from 'ethers';
+import { Contract, EventFragment, EventLog, Interface, JsonRpcProvider, Log, Result } from 'ethers';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
-import { prisma } from '@/config/mockDatabase';
-import redis from '@/config/redis';
-import blockchainService from './BlockchainService';
 import env from '@/config/env';
-import redisStreamsService, { BlockchainEvent as StreamBlockchainEvent } from './RedisStreamsService';
+import { redisStreamsService, BlockchainEvent as StreamBlockchainEvent } from './RedisStreamsService';
+import WebSocketService from './WebSocketService';
 
-export interface BlockchainEvent {
+interface ContractConfig {
+  key: string;
+  name: string;
   address: string;
-  topics: string[];
-  data: string;
-  blockNumber: number;
-  transactionHash: string;
-  transactionIndex: number;
-  blockHash: string;
-  logIndex: number;
-  removed: boolean;
+  abi: string[];
 }
 
-export interface ProcessedEvent {
-  id: string;
-  contractAddress: string;
-  eventName: string;
-  blockNumber: number;
-  transactionHash: string;
-  logIndex: number;
-  args: Record<string, any>;
-  timestamp: Date;
-  processed: boolean;
+interface ContractMetadata {
+  config: ContractConfig;
+  contractId: string;
+  contract: Contract;
+  iface: Interface;
+  lastIndexedBlock: number;
+  listeners: Map<string, (...args: unknown[]) => void>;
 }
 
-class EventIndexingService {
-  private provider: ethers.Provider;
-  private isRunning: boolean = false;
-  private lastProcessedBlock: number = 0;
-  private eventSubscriptions: Map<string, Contract> = new Map();
-  private processingQueue: BlockchainEvent[] = [];
-  private readonly BATCH_SIZE = 50;
-  private readonly BLOCK_RANGE = 100;
+interface EventIndexingOptions {
+  prisma: PrismaClient;
+  provider: JsonRpcProvider;
+  redisService?: typeof redisStreamsService;
+  webSocketService?: WebSocketService;
+}
 
-  constructor() {
-    this.provider = new ethers.JsonRpcProvider(
-      env.NODE_ENV === 'production' ? env.SEI_MAINNET_RPC_URL : env.SEI_TESTNET_RPC_URL
-    );
-    this.initializeService();
+const ACCOUNT_FACTORY_ABI = [
+  'event AccountCreated(address indexed account, address indexed owner, bytes32 indexed salt)'
+];
+
+const CONDITIONAL_ORDER_ENGINE_ABI = [
+  'event OrderCreated(uint256 indexed orderId, address indexed user, uint8 orderType)',
+  'event OrderExecuted(uint256 indexed orderId, address indexed executor)',
+  'event OrderCancelled(uint256 indexed orderId, address indexed user)'
+];
+
+const BLOCK_RANGE = 250;
+const POLL_INTERVAL_MS = 15000;
+const BLOCK_CACHE_SIZE = 128;
+
+export class EventIndexingService {
+  private readonly prisma: PrismaClient;
+  private readonly provider: JsonRpcProvider;
+  private readonly redisService: typeof redisStreamsService;
+  private webSocketService?: WebSocketService;
+
+  private isRunning = false;
+  private isProcessing = false;
+  private pollTimer?: NodeJS.Timeout;
+  private chainId: number | null = null;
+
+  private readonly contractRegistry: Map<string, ContractMetadata> = new Map();
+  private readonly blockTimestampCache: Map<number, Date> = new Map();
+
+  constructor(options: EventIndexingOptions) {
+    this.prisma = options.prisma;
+    this.provider = options.provider;
+    this.redisService = options.redisService ?? redisStreamsService;
+    this.webSocketService = options.webSocketService;
   }
 
-  private async initializeService(): Promise<void> {
-    try {
-      // Get the last processed block from database
-      const lastEvent = await prisma.blockchainEvent.findFirst({
-        orderBy: { blockNumber: 'desc' },
-        select: { blockNumber: true }
-      });
-
-      if (lastEvent) {
-        this.lastProcessedBlock = lastEvent.blockNumber;
-      } else {
-        // Start from current block if no events processed yet
-        this.lastProcessedBlock = await this.provider.getBlockNumber();
-      }
-
-      logger.info(`📊 Event indexing service initialized. Last processed block: ${this.lastProcessedBlock}`);
-    } catch (error) {
-      logger.error('❌ Failed to initialize event indexing service:', error);
-    }
+  setWebSocketService(service: WebSocketService): void {
+    this.webSocketService = service;
   }
 
-  /**
-   * Start the event indexing service
-   */
+  isStarted(): boolean {
+    return this.isRunning;
+  }
+
   async start(): Promise<void> {
     if (this.isRunning) {
-      logger.warn('⚠️ Event indexing service is already running');
+      logger.warn('Event indexing service already running');
+      return;
+    }
+
+    await this.initializeContracts();
+
+    if (this.contractRegistry.size === 0) {
+      logger.warn('Event indexing service: no contracts configured, skipping start');
       return;
     }
 
     this.isRunning = true;
-    logger.info('🚀 Starting event indexing service...');
 
-    // Start historical event processing
-    this.processHistoricalEvents();
+    await this.catchUpHistoricalEvents();
+    this.registerRealtimeListeners();
+    this.startPolling();
 
-    // Start real-time event monitoring
-    this.startRealTimeMonitoring();
-
-    // Start processing queue
-    this.startQueueProcessor();
-
-    logger.info('✅ Event indexing service started');
+    logger.info('Event indexing service started');
   }
 
-  /**
-   * Stop the event indexing service
-   */
   async stop(): Promise<void> {
+    if (!this.isRunning) {
+      return;
+    }
+
     this.isRunning = false;
-    
-    // Clear subscriptions
-    this.eventSubscriptions.clear();
-    
-    logger.info('🛑 Event indexing service stopped');
+
+    if (this.pollTimer) {
+      clearInterval(this.pollTimer);
+      this.pollTimer = undefined;
+    }
+
+    for (const metadata of this.contractRegistry.values()) {
+      for (const [eventName, listener] of metadata.listeners.entries()) {
+        metadata.contract.off(eventName, listener);
+      }
+      metadata.listeners.clear();
+    }
+
+    this.contractRegistry.clear();
+    this.blockTimestampCache.clear();
+
+    logger.info('Event indexing service stopped');
   }
 
-  /**
-   * Process historical events in batches
-   */
-  private async processHistoricalEvents(): Promise<void> {
+  private async initializeContracts(): Promise<void> {
     try {
-      const currentBlock = await this.provider.getBlockNumber();
-      let fromBlock = this.lastProcessedBlock + 1;
+      const network = await this.provider.getNetwork();
+      this.chainId = Number(network.chainId);
+      const latestBlock = await this.provider.getBlockNumber();
 
-      while (fromBlock < currentBlock && this.isRunning) {
-        const toBlock = Math.min(fromBlock + this.BLOCK_RANGE - 1, currentBlock);
+      const configs = this.buildContractConfigs();
+      this.contractRegistry.clear();
 
-        logger.info(`📖 Processing historical events from block ${fromBlock} to ${toBlock}`);
-
-        await this.processBlockRange(fromBlock, toBlock);
-        
-        fromBlock = toBlock + 1;
-        this.lastProcessedBlock = toBlock;
-
-        // Save progress
-        await redis.set('last_processed_block', toBlock.toString());
-
-        // Small delay to avoid overwhelming the RPC
-        await new Promise(resolve => setTimeout(resolve, 100));
-      }
-
-      logger.info('✅ Historical event processing completed');
-    } catch (error) {
-      logger.error('❌ Error processing historical events:', error);
-    }
-  }
-
-  /**
-   * Process events in a specific block range
-   */
-  private async processBlockRange(fromBlock: number, toBlock: number): Promise<void> {
-    try {
-      const filter = {
-        fromBlock,
-        toBlock,
-        // Monitor our deployed contracts
-        address: [
-          env.ACCOUNT_FACTORY_ADDRESS,
-          env.CONDITIONAL_ORDER_ENGINE_ADDRESS
-        ].filter(Boolean) as string[] // Remove undefined addresses
-      };
-
-      const logs = await this.provider.getLogs(filter);
-      
-      for (const log of logs) {
-        await this.processEvent({
-          address: log.address,
-          topics: [...log.topics],
-          data: log.data,
-          blockNumber: log.blockNumber,
-          transactionHash: log.transactionHash,
-          transactionIndex: log.transactionIndex,
-          blockHash: log.blockHash,
-          logIndex: log.index,
-          removed: log.removed
-        });
-      }
-
-      logger.info(`📝 Processed ${logs.length} events in blocks ${fromBlock}-${toBlock}`);
-    } catch (error) {
-      logger.error(`❌ Error processing block range ${fromBlock}-${toBlock}:`, error);
-    }
-  }
-
-  /**
-   * Start real-time event monitoring
-   */
-  private startRealTimeMonitoring(): void {
-    // Monitor new blocks
-    this.provider.on('block', async (blockNumber: number) => {
-      if (!this.isRunning) return;
-
-      try {
-        // Process the new block
-        await this.processBlockRange(blockNumber, blockNumber);
-        this.lastProcessedBlock = blockNumber;
-        
-        // Update cache
-        await redis.set('last_processed_block', blockNumber.toString());
-      } catch (error) {
-        logger.error(`❌ Error processing block ${blockNumber}:`, error);
-      }
-    });
-
-    // Set up specific event listeners if contracts are available
-    this.setupContractEventListeners();
-  }
-
-  /**
-   * Set up specific contract event listeners
-   */
-  private setupContractEventListeners(): void {
-    // Account Factory events
-    if (env.ACCOUNT_FACTORY_ADDRESS) {
-      try {
-        const accountFactory = new Contract(
-          env.ACCOUNT_FACTORY_ADDRESS,
-          [
-            'event AccountCreated(address indexed account, address indexed owner, bytes32 indexed salt)',
-          ],
-          this.provider
-        );
-
-        accountFactory.on('AccountCreated', async (account, owner, salt, event) => {
-          logger.info(`🏭 Smart Account created: ${account} for owner: ${owner}`);
-          
-          await this.handleAccountCreatedEvent({
-            account,
-            owner,
-            salt,
-            ...event
-          });
-        });
-
-        this.eventSubscriptions.set('AccountFactory', accountFactory);
-      } catch (error) {
-        logger.error('❌ Failed to set up AccountFactory event listener:', error);
-      }
-    }
-
-    // Conditional Order Engine events
-    if (env.CONDITIONAL_ORDER_ENGINE_ADDRESS) {
-      try {
-        const orderEngine = new Contract(
-          env.CONDITIONAL_ORDER_ENGINE_ADDRESS,
-          [
-            'event OrderCreated(uint256 indexed orderId, address indexed user, uint8 orderType)',
-            'event OrderExecuted(uint256 indexed orderId, address indexed executor)',
-            'event OrderCancelled(uint256 indexed orderId, address indexed user)',
-          ],
-          this.provider
-        );
-
-        orderEngine.on('OrderCreated', async (orderId, user, orderType, event) => {
-          logger.info(`📋 Conditional order created: ${orderId} by ${user}`);
-          
-          await this.handleOrderCreatedEvent({
-            orderId,
-            user,
-            orderType,
-            ...event
-          });
-        });
-
-        orderEngine.on('OrderExecuted', async (orderId, executor, event) => {
-          logger.info(`✅ Conditional order executed: ${orderId} by ${executor}`);
-          
-          await this.handleOrderExecutedEvent({
-            orderId,
-            executor,
-            ...event
-          });
-        });
-
-        this.eventSubscriptions.set('ConditionalOrderEngine', orderEngine);
-      } catch (error) {
-        logger.error('❌ Failed to set up ConditionalOrderEngine event listener:', error);
-      }
-    }
-  }
-
-  /**
-   * Process a single blockchain event
-   */
-  private async processEvent(event: BlockchainEvent): Promise<void> {
-    try {
-      // Get block timestamp
-      const block = await this.provider.getBlock(event.blockNumber);
-      const timestamp = new Date(block!.timestamp * 1000);
-
-      // Determine event name and decode args
-      const { eventName, args } = await this.decodeEvent(event);
-
-      // Save to database
-      await prisma.blockchainEvent.upsert({
-        where: {
-          transactionHash_logIndex: {
-            transactionHash: event.transactionHash,
-            logIndex: event.logIndex
-          }
-        },
-        update: {
-          processed: true,
-          processedAt: new Date()
-        },
-        create: {
-          contractAddress: event.address.toLowerCase(),
-          eventName,
-          blockNumber: event.blockNumber,
-          transactionHash: event.transactionHash,
-          logIndex: event.logIndex,
-          args,
-          timestamp,
-          processed: true,
-          processedAt: new Date(),
-          blockHash: event.blockHash
+      for (const config of configs) {
+        if (!config.address) {
+          continue;
         }
-      });
 
-      // Emit real-time notification if applicable
-      await this.emitRealtimeNotification(eventName, args, event);
-      
-      // Publish to Redis Streams
-      await this.publishToStreams(eventName, args, event, timestamp);
-
-    } catch (error) {
-      logger.error('❌ Error processing event:', error);
-    }
-  }
-
-  /**
-   * Decode event based on contract and signature
-   */
-  private async decodeEvent(event: BlockchainEvent): Promise<{ eventName: string; args: any }> {
-    try {
-      const eventSignature = event.topics[0];
-      
-      // Common event signatures
-      const eventSignatures: Record<string, { name: string; inputs: any[] }> = {
-        '0x4f51faf6c4561ff95f067657e43439f0f856d97c04d9ec9070a6199ad418e235': {
-          name: 'AccountCreated',
-          inputs: [
-            { name: 'account', type: 'address', indexed: true },
-            { name: 'owner', type: 'address', indexed: true },
-            { name: 'salt', type: 'bytes32', indexed: true }
-          ]
-        },
-        // Add more event signatures as needed
-      };
-
-      const eventDef = eventSignatures[eventSignature];
-      
-      if (eventDef) {
-        const iface = new ethers.Interface([
-          `event ${eventDef.name}(${eventDef.inputs.map(i => 
-            `${i.type}${i.indexed ? ' indexed' : ''} ${i.name}`
-          ).join(', ')})`
-        ]);
-        
-        const parsedLog = iface.parseLog({
-          topics: event.topics,
-          data: event.data
-        });
-
-        return {
-          eventName: eventDef.name,
-          args: parsedLog ? Object.fromEntries(
-            Object.entries(parsedLog.args).filter(([key]) => isNaN(Number(key)))
-          ) : {}
-        };
-      }
-
-      return {
-        eventName: 'UnknownEvent',
-        args: { topics: event.topics, data: event.data }
-      };
-    } catch (error) {
-      logger.error('❌ Error decoding event:', error);
-      return {
-        eventName: 'DecodeError',
-        args: { error: (error as Error).message, topics: event.topics, data: event.data }
-      };
-    }
-  }
-
-  /**
-   * Handle AccountCreated event
-   */
-  private async handleAccountCreatedEvent(eventData: any): Promise<void> {
-    try {
-      const { account, owner } = eventData;
-
-      // Update user's Smart Account in database
-      const user = await prisma.user.findUnique({
-        where: { address: owner.toLowerCase() }
-      });
-
-      if (user) {
-        await prisma.smartAccount.upsert({
-          where: { address: account.toLowerCase() },
+        const normalizedAddress = config.address.toLowerCase();
+        const contractRecord = await this.prisma.indexedContract.upsert({
+          where: { address: normalizedAddress },
           update: {
-            isActive: true
+            name: config.name,
+            chainId: this.chainId,
+            isActive: true,
+            metadata: {
+              key: config.key,
+              abiHash: config.abi.join('|')
+            }
           },
           create: {
-            address: account.toLowerCase(),
-            userId: user.id,
-            isActive: true
-          }
-        });
-
-        logger.info(`✅ Smart Account ${account} linked to user ${owner}`);
-      }
-    } catch (error) {
-      logger.error('❌ Error handling AccountCreated event:', error);
-    }
-  }
-
-  /**
-   * Handle OrderCreated event
-   */
-  private async handleOrderCreatedEvent(eventData: any): Promise<void> {
-    try {
-      const { orderId, user, orderType } = eventData;
-
-      // Update strategy status if this is related to a strategy
-      const strategy = await prisma.strategy.findFirst({
-        where: {
-          user: { address: user.toLowerCase() },
-          status: 'PENDING'
-        },
-        orderBy: { createdAt: 'desc' }
-      });
-
-      if (strategy) {
-        await prisma.strategy.update({
-          where: { id: strategy.id },
-          data: { 
-            status: 'ACTIVE',
-            conditionalOrderId: orderId.toString()
-          }
-        });
-
-        logger.info(`✅ Strategy ${strategy.id} activated with order ${orderId}`);
-      }
-    } catch (error) {
-      logger.error('❌ Error handling OrderCreated event:', error);
-    }
-  }
-
-  /**
-   * Handle OrderExecuted event
-   */
-  private async handleOrderExecutedEvent(eventData: any): Promise<void> {
-    try {
-      const { orderId, executor } = eventData;
-
-      // Find and update related strategy
-      const strategy = await prisma.strategy.findFirst({
-        where: { conditionalOrderId: orderId.toString() }
-      });
-
-      if (strategy) {
-        await prisma.strategy.update({
-          where: { id: strategy.id },
-          data: { 
-            status: 'COMPLETED',
-            completedAt: new Date()
-          }
-        });
-
-        // Create transaction record
-        await prisma.transaction.create({
-          data: {
-            hash: eventData.transactionHash,
-            userId: strategy.userId,
-            strategyId: strategy.id,
-            type: 'STRATEGY_EXECUTION',
-            status: 'COMPLETED',
-            details: {
-              orderId: orderId.toString(),
-              executor,
-              strategy: strategy.name
+            name: config.name,
+            address: normalizedAddress,
+            chainId: this.chainId,
+            lastIndexedBlock: latestBlock,
+            metadata: {
+              key: config.key,
+              abiHash: config.abi.join('|')
             }
           }
         });
 
-        logger.info(`✅ Strategy ${strategy.id} completed via order ${orderId}`);
+        const contract = new Contract(config.address, config.abi, this.provider);
+        const iface = new Interface(config.abi);
+
+        this.contractRegistry.set(normalizedAddress, {
+          config,
+          contractId: contractRecord.id,
+          contract,
+          iface,
+          lastIndexedBlock: contractRecord.lastIndexedBlock || latestBlock,
+          listeners: new Map()
+        });
+      }
+
+      if (this.contractRegistry.size === 0) {
+        logger.warn('Event indexing service initialized without active contracts');
+      } else {
+        logger.info(
+          `Event indexing service initialized with ${this.contractRegistry.size} contract(s); latest block ${latestBlock}`
+        );
       }
     } catch (error) {
-      logger.error('❌ Error handling OrderExecuted event:', error);
+      logger.error('Failed to initialize event indexing service', error);
     }
   }
 
-  /**
-   * Publish blockchain event to Redis Streams
-   */
-  private async publishToStreams(eventName: string, args: any, event: BlockchainEvent, timestamp: Date): Promise<void> {
+  private buildContractConfigs(): ContractConfig[] {
+    const configs: ContractConfig[] = [];
+
+    if (env.ACCOUNT_FACTORY_ADDRESS) {
+      configs.push({
+        key: 'account-factory',
+        name: 'AccountFactory',
+        address: env.ACCOUNT_FACTORY_ADDRESS,
+        abi: ACCOUNT_FACTORY_ABI
+      });
+    }
+
+    if (env.CONDITIONAL_ORDER_ENGINE_ADDRESS) {
+      configs.push({
+        key: 'conditional-order-engine',
+        name: 'ConditionalOrderEngine',
+        address: env.CONDITIONAL_ORDER_ENGINE_ADDRESS,
+        abi: CONDITIONAL_ORDER_ENGINE_ABI
+      });
+    }
+
+    return configs;
+  }
+
+  private async catchUpHistoricalEvents(): Promise<void> {
+    if (!this.isRunning) {
+      return;
+    }
+
     try {
-      const streamEvent: StreamBlockchainEvent = {
-        contractAddress: event.address,
+      const latestBlock = await this.provider.getBlockNumber();
+
+      for (const metadata of this.contractRegistry.values()) {
+        let fromBlock = Math.max(metadata.lastIndexedBlock + 1, latestBlock - BLOCK_RANGE);
+        if (fromBlock < 0) {
+          fromBlock = 0;
+        }
+
+        if (fromBlock > latestBlock) {
+          continue;
+        }
+
+        while (fromBlock <= latestBlock && this.isRunning) {
+          const toBlock = Math.min(fromBlock + BLOCK_RANGE - 1, latestBlock);
+
+          logger.info(
+            `Event indexing: fetching logs for ${metadata.config.name} blocks ${fromBlock} → ${toBlock}`
+          );
+
+          const logs = await this.provider.getLogs({
+            address: metadata.config.address,
+            fromBlock,
+            toBlock
+          });
+
+          for (const log of logs) {
+            await this.processEventLog(metadata, log);
+          }
+
+          metadata.lastIndexedBlock = Math.max(metadata.lastIndexedBlock, toBlock);
+          await this.updateLastIndexedBlock(metadata.contractId, metadata.lastIndexedBlock);
+
+          fromBlock = toBlock + 1;
+        }
+      }
+    } catch (error) {
+      logger.error('Event indexing: historical catch-up failed', error);
+    }
+  }
+
+  private registerRealtimeListeners(): void {
+    for (const metadata of this.contractRegistry.values()) {
+      const eventFragments = metadata.contract.interface.fragments.filter(
+        (fragment): fragment is EventFragment => fragment.type === 'event'
+      );
+
+      for (const fragment of eventFragments) {
+        const eventName = fragment.name;
+
+        const listener = async (...args: unknown[]) => {
+          const event = args[args.length - 1] as EventLog | undefined;
+          if (!event || !this.isRunning) {
+            return;
+          }
+
+          try {
+            await this.processEventLog(metadata, event);
+            metadata.lastIndexedBlock = Math.max(metadata.lastIndexedBlock, event.blockNumber);
+            await this.updateLastIndexedBlock(metadata.contractId, metadata.lastIndexedBlock);
+          } catch (error) {
+            logger.error(`Event indexing: failed to process realtime event ${eventName}`, error);
+          }
+        };
+
+        metadata.contract.on(eventName, listener);
+        metadata.listeners.set(eventName, listener);
+      }
+
+      logger.info(`Event indexing: subscribed to realtime events for ${metadata.config.name}`);
+    }
+  }
+
+  private startPolling(): void {
+    this.pollTimer = setInterval(() => {
+      if (!this.isRunning || this.isProcessing) {
+        return;
+      }
+
+      this.isProcessing = true;
+      this.catchUpHistoricalEvents()
+        .catch(error => {
+          logger.error('Event indexing: polling catch-up failed', error);
+        })
+        .finally(() => {
+          this.isProcessing = false;
+        });
+    }, POLL_INTERVAL_MS);
+  }
+
+  private async processEventLog(metadata: ContractMetadata, log: Log | EventLog): Promise<void> {
+    const logIndex = typeof log.index === 'number' ? log.index : 0;
+    const blockHash = (log as { blockHash?: string }).blockHash ?? '';
+    const transactionHash = (log as { transactionHash?: string }).transactionHash ?? '';
+
+    let eventName = 'UnknownEvent';
+    let decodedArgs: Record<string, unknown> = {};
+
+    try {
+      const parsed = metadata.iface.parseLog(log);
+      if (parsed) {
+        eventName = parsed.name;
+        decodedArgs = this.normalizeArgs(parsed.args);
+      }
+    } catch (error) {
+      logger.warn('Event indexing: failed to decode log', {
+        address: log.address,
+        topics: log.topics,
+        error: error instanceof Error ? error.message : 'unknown'
+      });
+      decodedArgs = {
+        topics: log.topics,
+        data: log.data
+      };
+    }
+
+    const timestamp = await this.getBlockTimestamp(log.blockNumber);
+
+    await this.prisma.blockchainEvent.upsert({
+      where: {
+        transactionHash_logIndex: {
+          transactionHash,
+          logIndex
+        }
+      },
+      update: {
+        contractId: metadata.contractId,
         eventName,
-        blockNumber: event.blockNumber,
-        transactionHash: event.transactionHash,
+        blockNumber: log.blockNumber,
+        blockHash,
+        args: decodedArgs as Prisma.JsonObject,
+        timestamp,
+        processed: true,
+        processedAt: new Date()
+      },
+      create: {
+        contractId: metadata.contractId,
+        eventName,
+        blockNumber: log.blockNumber,
+        transactionHash,
+        logIndex,
+        blockHash,
+        args: decodedArgs as Prisma.JsonObject,
+        timestamp,
+        processed: true,
+        processedAt: new Date()
+      }
+    });
+
+    await this.applyDomainSideEffects(eventName, decodedArgs, log, timestamp);
+    await this.publishEvent(eventName, decodedArgs, log, timestamp);
+  }
+
+  private async applyDomainSideEffects(
+    eventName: string,
+    args: Record<string, unknown>,
+    log: Log | EventLog,
+    timestamp: Date
+  ): Promise<void> {
+    switch (eventName) {
+      case 'AccountCreated':
+        await this.handleAccountCreated(args, timestamp);
+        break;
+      case 'OrderCreated':
+      case 'OrderExecuted':
+      case 'OrderCancelled':
+        logger.info(`Indexed ${eventName} event`, {
+          transactionHash: (log as Partial<EventLog>).transactionHash,
+          orderId: args.orderId
+        });
+        break;
+      default:
+        break;
+    }
+  }
+
+  private async handleAccountCreated(args: Record<string, unknown>, timestamp: Date): Promise<void> {
+    const account = typeof args.account === 'string' ? args.account.toLowerCase() : null;
+    const owner = typeof args.owner === 'string' ? args.owner.toLowerCase() : null;
+    const salt = typeof args.salt === 'string' ? args.salt : null;
+
+    if (!account || !owner) {
+      logger.warn('AccountCreated event missing account or owner field', { args });
+      return;
+    }
+
+    try {
+      const user = await this.prisma.user.findFirst({
+        where: { walletAddress: owner }
+      });
+
+      if (!user) {
+        logger.info('AccountCreated event for unknown owner', { owner });
+        return;
+      }
+
+      await this.prisma.smartAccount.upsert({
+        where: { address: account },
+        update: {
+          isActive: true,
+          saltNonce: salt ?? '0x0',
+          lastUsedAt: timestamp
+        },
+        create: {
+          address: account,
+          userId: user.id,
+          saltNonce: salt ?? '0x0',
+          deployedAt: timestamp,
+          lastUsedAt: timestamp,
+          isActive: true
+        }
+      });
+
+      await this.prisma.user.update({
+        where: { id: user.id },
+        data: { smartAccountAddress: account }
+      }).catch(error => {
+        logger.warn('Failed to update user smart account address', {
+          owner,
+          error: error instanceof Error ? error.message : 'unknown'
+        });
+      });
+
+      logger.info(`Linked smart account ${account} to owner ${owner}`);
+    } catch (error) {
+      logger.error('Failed to process AccountCreated event', error);
+    }
+  }
+
+  private async publishEvent(
+    eventName: string,
+    args: Record<string, unknown>,
+    log: Log | EventLog,
+    timestamp: Date
+  ): Promise<void> {
+    try {
+      const payload: StreamBlockchainEvent = {
+        contractAddress: log.address,
+        eventName,
+        blockNumber: log.blockNumber,
+        transactionHash: (log as Partial<EventLog>).transactionHash ?? '',
         args,
         timestamp: timestamp.toISOString()
       };
-      
-      await redisStreamsService.addBlockchainEvent(streamEvent);
-      
-      // Also add to transaction stream if it's a transaction-related event
-      if (eventName.includes('Order') || eventName.includes('Swap') || eventName.includes('Transaction')) {
-        await redisStreamsService.addTransactionEvent({
-          userId: args.user || args.from || 'system',
-          type: 'execute_order',
-          data: streamEvent
-        });
-      }
-      
-      logger.debug(`📡 Published ${eventName} event to Redis Streams`);
+
+      await this.redisService.addBlockchainEvent(payload);
+      this.webSocketService?.broadcastBlockchainEvent(payload);
     } catch (error) {
-      logger.error('❌ Error publishing to Redis Streams:', error);
+      logger.error('Failed to publish blockchain event to downstream services', error);
     }
   }
 
-  /**
-   * Emit real-time notification via WebSocket
-   */
-  private async emitRealtimeNotification(eventName: string, args: any, event: BlockchainEvent): Promise<void> {
+  private async updateLastIndexedBlock(contractId: string, blockNumber: number): Promise<void> {
     try {
-      // This would integrate with the WebSocket server from the main app
-      const notificationData = {
-        type: 'blockchain_event',
-        eventName,
-        contractAddress: event.address,
-        blockNumber: event.blockNumber,
-        transactionHash: event.transactionHash,
-        args,
-        timestamp: new Date().toISOString()
-      };
+      await this.prisma.indexedContract.update({
+        where: { id: contractId },
+        data: { lastIndexedBlock: blockNumber }
+      });
+    } catch (error) {
+      logger.warn('Failed to update indexed contract progress', {
+        contractId,
+        blockNumber,
+        error: error instanceof Error ? error.message : 'unknown'
+      });
+    }
+  }
 
-      // Cache for WebSocket pickup
-      await redis.setJSON(
-        `notification:${event.transactionHash}:${event.logIndex}`,
-        notificationData,
-        60 // 1 minute TTL
+  private async getBlockTimestamp(blockNumber: number): Promise<Date> {
+    const cached = this.blockTimestampCache.get(blockNumber);
+    if (cached) {
+      return cached;
+    }
+
+    try {
+      const block = await this.provider.getBlock(blockNumber);
+      const timestamp = block?.timestamp
+        ? new Date(Number(block.timestamp) * 1000)
+        : new Date();
+
+      this.blockTimestampCache.set(blockNumber, timestamp);
+
+      if (this.blockTimestampCache.size > BLOCK_CACHE_SIZE) {
+        const oldestKey = Array.from(this.blockTimestampCache.keys()).sort((a, b) => a - b)[0];
+        this.blockTimestampCache.delete(oldestKey);
+      }
+
+      return timestamp;
+    } catch (error) {
+      logger.warn('Failed to fetch block timestamp', {
+        blockNumber,
+        error: error instanceof Error ? error.message : 'unknown'
+      });
+      return new Date();
+    }
+  }
+
+  private normalizeArgs(result: Result): Record<string, unknown> {
+    const output: Record<string, unknown> = {};
+
+    for (const [key, value] of Object.entries(result)) {
+      if (!Number.isNaN(Number(key))) {
+        continue;
+      }
+
+      output[key] = this.serializeValue(value);
+    }
+
+    return output;
+  }
+
+  private serializeValue(value: unknown): unknown {
+    if (typeof value === 'bigint') {
+      return value.toString();
+    }
+
+    if (Array.isArray(value)) {
+      return value.map(item => this.serializeValue(item));
+    }
+
+    if (value && typeof value === 'object') {
+      const entries = Object.entries(value as Record<string, unknown>).filter(
+        ([key]) => Number.isNaN(Number(key))
       );
 
-      logger.info(`📡 Real-time notification queued for event: ${eventName}`);
-    } catch (error) {
-      logger.error('❌ Error emitting real-time notification:', error);
-    }
-  }
-
-  /**
-   * Start the queue processor for batching
-   */
-  private startQueueProcessor(): void {
-    setInterval(async () => {
-      if (this.processingQueue.length === 0) return;
-
-      const batch = this.processingQueue.splice(0, this.BATCH_SIZE);
-      
-      try {
-        await Promise.all(batch.map(event => this.processEvent(event)));
-        logger.info(`✅ Processed batch of ${batch.length} events`);
-      } catch (error) {
-        logger.error('❌ Error processing event batch:', error);
-        // Re-add failed events to queue
-        this.processingQueue.unshift(...batch);
+      if (entries.length === 0) {
+        const stringified = value.toString();
+        return stringified === '[object Object]' ? null : stringified;
       }
-    }, 5000); // Process every 5 seconds
-  }
 
-  /**
-   * Get service status
-   */
-  getStatus(): {
-    isRunning: boolean;
-    lastProcessedBlock: number;
-    queueSize: number;
-    subscriptions: number;
-  } {
-    return {
-      isRunning: this.isRunning,
-      lastProcessedBlock: this.lastProcessedBlock,
-      queueSize: this.processingQueue.length,
-      subscriptions: this.eventSubscriptions.size
-    };
+      const serialized: Record<string, unknown> = {};
+      for (const [key, innerValue] of entries) {
+        serialized[key] = this.serializeValue(innerValue);
+      }
+      return serialized;
+    }
+
+    return value;
   }
 }
 
-export const eventIndexingService = new EventIndexingService();
-export default eventIndexingService;
+export default EventIndexingService;

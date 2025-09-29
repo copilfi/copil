@@ -181,11 +181,11 @@ export class AIAgentService {
       const recentTransactions = await this.prisma.transaction.findMany({
         where: { userId },
         take: 10,
-        orderBy: { createdAt: 'desc' }
+        orderBy: { executedAt: 'desc' }
       });
 
       return {
-        walletAddress: user.address,
+        walletAddress: user.walletAddress,
         strategies: user.strategies,
         recentTransactions,
         preferences: {

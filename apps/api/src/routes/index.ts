@@ -59,7 +59,8 @@ router.get('/health', async (_req, res: Response) => {
 
     res.status(allHealthy ? 200 : 503).json(health);
   } catch (error) {
-    res.status(500).json({ status: 'ERROR', error: error.message });
+    const message = error instanceof Error ? error.message : 'Internal server error';
+    res.status(500).json({ status: 'ERROR', error: message });
   }
 });
 
@@ -88,7 +89,8 @@ router.get('/info', async (_req, res: Response) => {
       }
     });
   } catch (error) {
-    res.status(500).json({ success: false, error: error.message });
+    const message = error instanceof Error ? error.message : 'Failed to load info';
+    res.status(500).json({ success: false, error: message });
   }
 });
 
@@ -100,28 +102,32 @@ try {
   router.use('/dex', createDEXRoutes(dexService));
   console.log('✅ DEX routes registered');
 } catch (error) {
-  console.error('❌ DEX routes failed:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ DEX routes failed:', message);
 }
 
 try {
   router.use('/oracle', createOracleRoutes());
   console.log('✅ Oracle routes registered');
 } catch (error) {
-  console.error('❌ Oracle routes failed:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ Oracle routes failed:', message);
 }
 
 try {
   router.use('/market', createMarketRoutes());
   console.log('✅ Market routes registered');
 } catch (error) {
-  console.error('❌ Market routes failed:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ Market routes failed:', message);
 }
 
 try {
   router.use('/fee-analytics', feeAnalyticsRoutes);
   console.log('✅ Fee Analytics routes registered');
 } catch (error) {
-  console.error('❌ Fee Analytics routes failed:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ Fee Analytics routes failed:', message);
 }
 
 // Enable auth routes with security enhancements
@@ -142,7 +148,8 @@ try {
     console.log('⚠️ AI routes skipped - OPENAI_API_KEY not configured');
   }
 } catch (error) {
-  console.error('❌ AI routes failed:', error.message);
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ AI routes failed:', message);
 }
 
 // Root endpoint

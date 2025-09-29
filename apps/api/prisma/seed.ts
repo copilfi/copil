@@ -1,6 +1,37 @@
 import { PrismaClient } from '@prisma/client';
 import assetList from './assetlist.json';
 
+const REAL_TOKENS = {
+  USDC: {
+    address: '0xe15fC38F6D8c56aF07bbCBe3BAf5708A2Bf42392',
+    symbol: 'USDC',
+    name: 'USD Coin',
+    decimals: 6,
+    coingeckoId: 'usd-coin',
+    logo: 'https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png'
+  },
+  WSEI: {
+    address: '0xE30feDd158A2e3b13e9badaeABaFc5516e95e8C7',
+    symbol: 'WSEI',
+    name: 'Wrapped Sei',
+    decimals: 18,
+    coingeckoId: 'sei-network',
+    logo: 'https://raw.githubusercontent.com/Seitrace/sei-assetlist/main/images/Sei.png'
+  },
+  WETH: {
+    address: '0x160345fC359604fC6e70E3c5fAcbdE5F7A9342d8',
+    symbol: 'WETH',
+    name: 'Wrapped Ether',
+    decimals: 18,
+    coingeckoId: 'weth',
+    logo: 'https://assets.coingecko.com/coins/images/2518/thumb/weth.png'
+  }
+} as const;
+
+const ACTIVE_TOKEN_ADDRESSES = new Set(
+  Object.values(REAL_TOKENS).map(token => token.address.toLowerCase())
+);
+
 const prisma = new PrismaClient();
 
 async function main() {
@@ -8,6 +39,8 @@ async function main() {
 
   // Sync EVM token registry entries from asset list
   const pacificAssets = (assetList as any)['pacific-1'] ?? [];
+
+  const validAssetAddresses = new Set<string>();
 
   for (const asset of pacificAssets) {
     if (!asset || asset.type_asset !== 'erc20') {
@@ -19,10 +52,14 @@ async function main() {
       continue;
     }
 
+    validAssetAddresses.add(address.toLowerCase());
+
     const denomUnits = Array.isArray(asset.denom_units) ? asset.denom_units : [];
     const decimals: number = denomUnits.length > 0
       ? Number(denomUnits[denomUnits.length - 1].exponent ?? 18)
       : 18;
+
+    const isActive = ACTIVE_TOKEN_ADDRESSES.has(address.toLowerCase());
 
     await prisma.tokenRegistry.upsert({
       where: { address },
@@ -32,7 +69,7 @@ async function main() {
         decimals,
         logoURI: asset.images?.png || asset.images?.svg || null,
         isVerified: true,
-        isActive: true
+        isActive
       },
       create: {
         address,
@@ -41,9 +78,24 @@ async function main() {
         decimals,
         logoURI: asset.images?.png || asset.images?.svg || null,
         isVerified: true,
-        isActive: true
+        isActive
       }
     });
+  }
+
+  const dbTokens = await prisma.tokenRegistry.findMany();
+  for (const token of dbTokens) {
+    if (!token.address) {
+      continue;
+    }
+
+    const normalized = token.address.toLowerCase();
+    if (token.address.startsWith('0x') && !validAssetAddresses.has(normalized)) {
+      await prisma.tokenRegistry.update({
+        where: { address: token.address },
+        data: { isActive: false }
+      });
+    }
   }
 
   // Create test user
@@ -174,8 +226,8 @@ async function main() {
         }
       ],
       parameters: {
-        tokenIn: { symbol: 'USDC', address: '0x3999999999999999999999999999999999999999' },
-        tokenOut: { symbol: 'SEI', address: '0x4444444444444444444444444444444444444444' },
+        tokenIn: { symbol: REAL_TOKENS.USDC.symbol, address: REAL_TOKENS.USDC.address },
+        tokenOut: { symbol: REAL_TOKENS.WSEI.symbol, address: REAL_TOKENS.WSEI.address },
         amountIn: '100',
         frequency: 'daily',
         totalOrders: 30,
@@ -198,8 +250,8 @@ async function main() {
         }
       ],
       parameters: {
-        tokenIn: { symbol: 'USDC', address: '0x3999999999999999999999999999999999999999' },
-        tokenOut: { symbol: 'SEI', address: '0x4444444444444444444444444444444444444444' },
+        tokenIn: { symbol: REAL_TOKENS.USDC.symbol, address: REAL_TOKENS.USDC.address },
+        tokenOut: { symbol: REAL_TOKENS.WSEI.symbol, address: REAL_TOKENS.WSEI.address },
         amountIn: '500',
         slippage: 1.0,
         maxGasPrice: '25000000000'
@@ -219,9 +271,9 @@ async function main() {
       ],
       parameters: {
         targetAllocations: {
-          'SEI': 40,
-          'USDC': 40,
-          'WETH': 20
+          [REAL_TOKENS.WSEI.symbol]: 40,
+          [REAL_TOKENS.USDC.symbol]: 40,
+          [REAL_TOKENS.WETH.symbol]: 20
         },
         rebalanceThreshold: 5, // 5% deviation
         slippage: 1.0,
@@ -252,20 +304,20 @@ async function main() {
       isDefault: true,
       assets: [
         {
-          tokenAddress: '0x4444444444444444444444444444444444444444',
-          symbol: 'SEI',
+          tokenAddress: REAL_TOKENS.WSEI.address,
+          symbol: REAL_TOKENS.WSEI.symbol,
           balance: '1000.0',
           value: '450.0'
         },
         {
-          tokenAddress: '0x3999999999999999999999999999999999999999',
-          symbol: 'USDC',
+          tokenAddress: REAL_TOKENS.USDC.address,
+          symbol: REAL_TOKENS.USDC.symbol,
           balance: '2000.0',
           value: '2000.0'
         },
         {
-          tokenAddress: '0x5555555555555555555555555555555555555555',
-          symbol: 'WETH',
+          tokenAddress: REAL_TOKENS.WETH.address,
+          symbol: REAL_TOKENS.WETH.symbol,
           balance: '0.5',
           value: '1200.0'
         }
@@ -278,40 +330,29 @@ async function main() {
   });
 
   // Create token registry entries
-  const tokens = [
-    {
-      address: '0x4444444444444444444444444444444444444444',
-      symbol: 'SEI',
-      name: 'Sei Network Token',
-      decimals: 18,
-      logoURI: 'https://assets.coingecko.com/coins/images/28205/thumb/Sei_Logo_-_Transparent.png',
-      coingeckoId: 'sei-network',
-      isVerified: true
-    },
-    {
-      address: '0x3999999999999999999999999999999999999999',
-      symbol: 'USDC',
-      name: 'USD Coin',
-      decimals: 6,
-      logoURI: 'https://assets.coingecko.com/coins/images/6319/thumb/USD_Coin_icon.png',
-      coingeckoId: 'usd-coin',
-      isVerified: true
-    },
-    {
-      address: '0x5555555555555555555555555555555555555555',
-      symbol: 'WETH',
-      name: 'Wrapped Ether',
-      decimals: 18,
-      logoURI: 'https://assets.coingecko.com/coins/images/2518/thumb/weth.png',
-      coingeckoId: 'weth',
-      isVerified: true
-    }
-  ];
+  const tokens = Object.values(REAL_TOKENS).map(token => ({
+    address: token.address,
+    symbol: token.symbol,
+    name: token.name,
+    decimals: token.decimals,
+    logoURI: token.logo,
+    coingeckoId: token.coingeckoId,
+    isVerified: true,
+    isActive: true
+  }));
 
   for (const token of tokens) {
     await prisma.tokenRegistry.upsert({
       where: { address: token.address },
-      update: {},
+      update: {
+        symbol: token.symbol,
+        name: token.name,
+        decimals: token.decimals,
+        logoURI: token.logoURI,
+        coingeckoId: token.coingeckoId,
+        isVerified: true,
+        isActive: true
+      },
       create: token
     });
   }
@@ -363,7 +404,7 @@ async function main() {
   const marketData = [
     {
       timestamp: now,
-      tokenAddress: '0x4444444444444444444444444444444444444444',
+      tokenAddress: REAL_TOKENS.WSEI.address,
       price: '0.45',
       volume24h: '5000000',
       liquidity: '12000000',
@@ -371,7 +412,7 @@ async function main() {
     },
     {
       timestamp: now,
-      tokenAddress: '0x3999999999999999999999999999999999999999',
+      tokenAddress: REAL_TOKENS.USDC.address,
       price: '1.00',
       volume24h: '15000000',
       liquidity: '50000000',
@@ -379,7 +420,7 @@ async function main() {
     },
     {
       timestamp: now,
-      tokenAddress: '0x5555555555555555555555555555555555555555',
+      tokenAddress: REAL_TOKENS.WETH.address,
       price: '2400.00',
       volume24h: '8000000',
       liquidity: '25000000',
@@ -411,7 +452,7 @@ async function main() {
       totalPnL: '1250.50',
       winRate: 68.0,
       averageHoldTime: 432000, // 5 days in seconds
-      favoriteTokens: ['SEI', 'USDC', 'WETH'],
+      favoriteTokens: [REAL_TOKENS.WSEI.symbol, REAL_TOKENS.USDC.symbol, REAL_TOKENS.WETH.symbol],
       riskScore: 42.5
     }
   });

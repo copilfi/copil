@@ -6,7 +6,6 @@ import { validateBody } from '@/middleware/validation';
 import { authenticateToken } from '@/middleware/auth';
 import rateLimit from 'express-rate-limit';
 import blockchainService from '@/services/RealBlockchainService';
-import assetList from '../../prisma/assetlist.json';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -21,34 +20,6 @@ const portfolioRateLimit = rateLimit({
 router.use(portfolioRateLimit);
 
 type AssetMapEntry = { address: string; symbol: string; name: string };
-
-function buildAssetTokenMetadata() {
-  const pacificAssets = (assetList as any)['pacific-1'] ?? [];
-  const metadata = new Map<string, AssetMapEntry>();
-
-  const addMetadata = (address?: string | null, symbol?: string | null, name?: string | null) => {
-    if (!address || typeof address !== 'string' || !address.toLowerCase().startsWith('0x')) {
-      return;
-    }
-
-    const normalized = address.toLowerCase();
-    if (!metadata.has(normalized)) {
-      metadata.set(normalized, {
-        address,
-        symbol: symbol || address,
-        name: name || symbol || address
-      });
-    }
-  };
-
-  for (const asset of pacificAssets) {
-    if (asset?.type_asset === 'erc20') {
-      addMetadata(asset.base, asset.symbol, asset.name);
-    }
-  }
-
-  return metadata;
-}
 
 // Joi validation schemas
 const createPortfolioSchema = Joi.object({
@@ -162,26 +133,29 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     logger.info(`Fetching portfolio data - Main wallet: ${user.walletAddress}, Smart account: ${smartAccountAddress || 'none'}`);
 
-    const tokenMetadata = buildAssetTokenMetadata();
-
     const dbTokens = await prisma.tokenRegistry.findMany({
       where: { isActive: true }
     });
 
-    for (const token of dbTokens) {
-      if (!token.address || typeof token.address !== 'string') {
-        continue;
+    const tokenMetadata = new Map<string, AssetMapEntry>();
+    const addTokenMetadata = (address?: string | null, symbol?: string | null, name?: string | null) => {
+      if (!address || typeof address !== 'string' || !address.toLowerCase().startsWith('0x')) {
+        return;
       }
 
-      const normalized = token.address.toLowerCase();
-      if (!tokenMetadata.has(normalized) && token.address.startsWith('0x')) {
+      const normalized = address.toLowerCase();
+      if (!tokenMetadata.has(normalized)) {
         tokenMetadata.set(normalized, {
-          address: token.address,
-          symbol: token.symbol || token.address,
-          name: token.name || token.symbol || token.address
+          address,
+          symbol: symbol || address,
+          name: name || symbol || address
         });
       }
-    }
+    };
+
+    dbTokens.forEach(token => {
+      addTokenMetadata(token.address, token.symbol, token.name);
+    });
 
     const trackedTokenAddresses = Array.from(new Set(
       Array.from(tokenMetadata.values())
@@ -218,6 +192,50 @@ router.get('/summary', authenticateToken, async (req, res) => {
       }
     }
 
+    const tokenDetails: Array<{
+      symbol: string;
+      balance: string;
+      value: number;
+      valueUsd?: number;
+      address: string;
+      decimals: number;
+      walletType: string;
+      walletAddress: string | null;
+      priceUsd?: number;
+    }> = [];
+
+    const appendTokenDetails = (
+      walletBalances: typeof mainWalletBalances | null,
+      walletType: 'main' | 'smart',
+      walletAddress: string | null
+    ) => {
+      if (!walletBalances) {
+        return;
+      }
+
+      walletBalances.tokenBalances.forEach(tokenBalance => {
+        const amount = parseFloat(tokenBalance.formattedBalance || '0');
+        if (amount <= 0) {
+          return;
+        }
+
+        tokenDetails.push({
+          symbol: tokenBalance.token.symbol || tokenBalance.token.address,
+          balance: tokenBalance.formattedBalance,
+          value: amount,
+          valueUsd: tokenBalance.valueUsd,
+          address: tokenBalance.token.address,
+          decimals: tokenBalance.token.decimals,
+          walletType,
+          walletAddress,
+          priceUsd: tokenBalance.priceUsd
+        });
+      });
+    };
+
+    appendTokenDetails(mainWalletBalances, 'main', user.walletAddress);
+    appendTokenDetails(smartAccountBalances, 'smart', smartAccountAddress);
+
     const tokens = [
       {
         symbol: 'SEI',
@@ -236,7 +254,8 @@ router.get('/summary', authenticateToken, async (req, res) => {
         decimals: 18,
         walletType: 'smart',
         walletAddress: smartAccountAddress
-      }
+      },
+      ...tokenDetails
     ];
 
     const aggregatedTokens = new Map<string, { address: string; symbol: string; name: string; amount: number }>();
@@ -415,26 +434,29 @@ router.get('/history', authenticateToken, async (req, res) => {
         startTime.setDate(now.getDate() - 1);
     }
 
-    const historyTokenMetadata = buildAssetTokenMetadata();
-
     const historyDbTokens = await prisma.tokenRegistry.findMany({
       where: { isActive: true }
     });
 
-    for (const token of historyDbTokens) {
-      if (!token.address || typeof token.address !== 'string') {
-        continue;
+    const historyTokenMetadata = new Map<string, AssetMapEntry>();
+    const addHistoryToken = (address?: string | null, symbol?: string | null, name?: string | null) => {
+      if (!address || typeof address !== 'string' || !address.toLowerCase().startsWith('0x')) {
+        return;
       }
 
-      const normalized = token.address.toLowerCase();
-      if (!historyTokenMetadata.has(normalized) && token.address.startsWith('0x')) {
+      const normalized = address.toLowerCase();
+      if (!historyTokenMetadata.has(normalized)) {
         historyTokenMetadata.set(normalized, {
-          address: token.address,
-          symbol: token.symbol || token.address,
-          name: token.name || token.symbol || token.address
+          address,
+          symbol: symbol || address,
+          name: name || symbol || address
         });
       }
-    }
+    };
+
+    historyDbTokens.forEach(token => {
+      addHistoryToken(token.address, token.symbol, token.name);
+    });
 
     const historyTrackedTokenAddresses = Array.from(new Set(
       Array.from(historyTokenMetadata.values())

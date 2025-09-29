@@ -3,6 +3,21 @@ import { BlockchainLogger } from '../utils/Logger';
 
 const logger = BlockchainLogger.getInstance();
 
+export interface TokenPriceProvider {
+  getTokenPrice(address: string, symbol?: string): Promise<number | null>;
+  getNativeTokenPrice(): Promise<number | null>;
+}
+
+class MissingContractError extends Error {
+  address: string;
+
+  constructor(address: string) {
+    super(`No contract bytecode found at address ${address}`);
+    this.name = 'MissingContractError';
+    this.address = address;
+  }
+}
+
 // Standard ERC-20 ABI
 const ERC20_ABI = [
   'function name() view returns (string)',
@@ -55,12 +70,60 @@ export class BalanceService {
   private provider: ethers.Provider;
   private tokenInfoCache: Map<string, TokenInfo> = new Map();
   private balanceCache: Map<string, WalletBalances> = new Map();
+  private contractCodeCache: Map<string, boolean> = new Map();
+  private missingContractAddresses: Set<string> = new Set();
+  private priceProvider?: TokenPriceProvider;
   private readonly CACHE_DURATION = 30000; // 30 seconds
   private readonly MAX_UINT256 = '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff';
 
   constructor(provider: ethers.Provider) {
     this.provider = provider;
     logger.info('BalanceService initialized');
+  }
+
+  setPriceProvider(provider: TokenPriceProvider): void {
+    this.priceProvider = provider;
+  }
+
+  private async ensureContractExists(tokenAddress: string): Promise<void> {
+    const normalized = tokenAddress.toLowerCase();
+
+    if (!tokenAddress.startsWith('0x')) {
+      throw new MissingContractError(tokenAddress);
+    }
+
+    if (normalized === ethers.ZeroAddress.toLowerCase()) {
+      return;
+    }
+
+    if (this.contractCodeCache.has(normalized)) {
+      const hasCode = this.contractCodeCache.get(normalized)!;
+      if (!hasCode) {
+        throw new MissingContractError(tokenAddress);
+      }
+      return;
+    }
+
+    try {
+      const code = await this.provider.getCode(tokenAddress);
+      const hasCode = typeof code === 'string' && code !== '0x';
+      this.contractCodeCache.set(normalized, hasCode);
+
+      if (!hasCode) {
+        if (!this.missingContractAddresses.has(normalized)) {
+          logger.warn(`Skipping token ${tokenAddress}: no contract bytecode at address`);
+          this.missingContractAddresses.add(normalized);
+        }
+        throw new MissingContractError(tokenAddress);
+      }
+    } catch (error: unknown) {
+      if (error instanceof MissingContractError) {
+        throw error;
+      }
+
+      logger.error(`Failed to inspect contract code for ${tokenAddress}:`, error as Error);
+      throw error;
+    }
   }
 
   /**
@@ -74,6 +137,7 @@ export class BalanceService {
     }
 
     try {
+      await this.ensureContractExists(tokenAddress);
       const contract = new Contract(tokenAddress, ERC20_ABI, this.provider);
       
       const [name, symbol, decimals, totalSupply] = await Promise.all([
@@ -96,6 +160,10 @@ export class BalanceService {
       
       return tokenInfo;
     } catch (error: unknown) {
+      if (error instanceof MissingContractError) {
+        throw error;
+      }
+
       logger.error(`Failed to get token info for ${tokenAddress}:`, error as Error);
       
       // Return default token info on failure
@@ -131,21 +199,41 @@ export class BalanceService {
     tokenAddress: string
   ): Promise<TokenBalance> {
     try {
+      await this.ensureContractExists(tokenAddress);
       const tokenInfo = await this.getTokenInfo(tokenAddress);
       const contract = new Contract(tokenAddress, ERC20_ABI, this.provider);
       
       const balance = await contract.balanceOf(walletAddress);
       const formattedBalance = ethers.formatUnits(balance, tokenInfo.decimals);
 
+      let priceUsd = 0;
+      let valueUsd = 0;
+
+      if (this.priceProvider) {
+        try {
+          const fetchedPrice = await this.priceProvider.getTokenPrice(tokenAddress, tokenInfo.symbol);
+          if (typeof fetchedPrice === 'number') {
+            priceUsd = fetchedPrice;
+            valueUsd = fetchedPrice * parseFloat(formattedBalance);
+          }
+        } catch (priceError) {
+          logger.warn(`Failed to fetch price for ${tokenInfo.symbol} (${tokenAddress}):`, priceError as Error);
+        }
+      }
+
       return {
         token: tokenInfo,
         balance: balance.toString(),
         formattedBalance,
-        priceUsd: 0, // Would be fetched from price oracle in production
-        valueUsd: 0
+        priceUsd,
+        valueUsd
       };
     } catch (error: unknown) {
-      logger.error(`Failed to get token balance for ${tokenAddress}:`, error as Error);
+      if (error instanceof MissingContractError) {
+        logger.warn(`Skipping balance lookup for ${tokenAddress}: ${error.message}`);
+      } else {
+        logger.error(`Failed to get token balance for ${tokenAddress}:`, error as Error);
+      }
       throw error;
     }
   }
@@ -206,9 +294,21 @@ export class BalanceService {
         ? await this.getTokenBalances(walletAddress, tokenAddresses)
         : [];
 
-      // Calculate total value (would use real price data in production)
-      const totalValueUsd = parseFloat(nativeBalance) * 100 + // Mock native price
-        tokenBalances.reduce((sum, token) => sum + (token.valueUsd || 0), 0);
+      let nativePriceUsd = 0;
+      if (this.priceProvider) {
+        try {
+          const fetchedPrice = await this.priceProvider.getNativeTokenPrice();
+          if (typeof fetchedPrice === 'number') {
+            nativePriceUsd = fetchedPrice;
+          }
+        } catch (priceError) {
+          logger.warn(`Failed to fetch native token price:`, priceError as Error);
+        }
+      }
+
+      const nativeValueUsd = nativePriceUsd * parseFloat(nativeBalance || '0');
+      const tokenValueUsd = tokenBalances.reduce((sum, token) => sum + (token.valueUsd || 0), 0);
+      const totalValueUsd = nativeValueUsd + tokenValueUsd;
 
       const walletBalances: WalletBalances = {
         address: walletAddress,

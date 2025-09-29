@@ -1,4 +1,4 @@
-import { ethers, Wallet } from 'ethers';
+import { ethers, Wallet, EventLog } from 'ethers';
 import { BlockchainLogger } from '../utils/Logger';
 import { UserOperation } from './SmartAccountService';
 
@@ -126,7 +126,8 @@ export class UserOperationBundler {
   ): Promise<string> {
     try {
       // Calculate UserOp hash
-      const userOpHash = await this.entryPointContract.getUserOpHash(userOp);
+      const entryPoint = this.entryPointContract as any;
+      const userOpHash = await entryPoint.getUserOpHash(userOp);
       
       // Validate UserOperation
       await this.validateUserOperation(userOp);
@@ -240,8 +241,9 @@ export class UserOperationBundler {
    */
   private async executeBundle(userOps: UserOperation[]): Promise<any> {
     try {
+      const entryPoint = this.entryPointContract as any;
       // Estimate gas for the bundle
-      const gasEstimate = await this.entryPointContract.handleOps.estimateGas(
+      const gasEstimate = await entryPoint.handleOps.estimateGas(
         userOps,
         this.bundlerWallet.address
       );
@@ -250,7 +252,7 @@ export class UserOperationBundler {
       logger.info(`Estimated gas: ${gasEstimate.toString()}`);
 
       // Execute handleOps transaction
-      const tx = await this.entryPointContract.handleOps(
+      const tx = await entryPoint.handleOps(
         userOps,
         this.bundlerWallet.address,
         {
@@ -334,17 +336,20 @@ export class UserOperationBundler {
         return null;
       }
       
-      const event = events[0];
+      const event = events[0] as EventLog;
+      if (!event.args) {
+        return null;
+      }
       const receipt = await event.getTransactionReceipt();
       
       return {
         userOpHash,
         transactionHash: receipt.hash,
         blockNumber: receipt.blockNumber,
-        success: event.args.success,
+        success: Boolean(event.args.success),
         actualGasCost: event.args.actualGasCost.toString(),
         actualGasUsed: event.args.actualGasUsed.toString(),
-        logs: receipt.logs
+        logs: Array.from(receipt.logs)
       };
       
     } catch (error: unknown) {

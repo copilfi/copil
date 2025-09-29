@@ -1,16 +1,14 @@
-import jwt from 'jsonwebtoken';
+import jwt, { JwtPayload, Secret, SignOptions } from 'jsonwebtoken';
 import { v4 as uuidv4 } from 'uuid';
 import redis from '@/config/redis';
 import env from '@/config/env';
 import { logger } from '@/utils/logger';
 
-export interface TokenPayload {
+export interface TokenPayload extends JwtPayload {
   userId: string;
   address: string;
   email?: string;
   jti: string; // JWT ID for blacklisting
-  iat?: number;
-  exp?: number;
 }
 
 export interface RefreshTokenData {
@@ -30,16 +28,20 @@ export class TokenService {
    */
   static generateAccessToken(payload: Omit<TokenPayload, 'jti' | 'iat' | 'exp'>): string {
     const jti = uuidv4(); // Unique identifier for this token
-    const tokenPayload: TokenPayload = {
+    const tokenPayload = {
       ...payload,
       jti
-    };
+    } as TokenPayload;
 
-    const token = jwt.sign(tokenPayload, env.JWT_SECRET, {
-      expiresIn: env.JWT_EXPIRES_IN,
-      issuer: 'copil-defi-api',
-      audience: 'copil-defi-frontend'
-    });
+    const token = jwt.sign(
+      tokenPayload as JwtPayload,
+      env.JWT_SECRET as Secret,
+      {
+        expiresIn: env.JWT_EXPIRES_IN,
+        issuer: 'copil-defi-api',
+        audience: 'copil-defi-frontend'
+      } as SignOptions
+    );
 
     logger.info(`Access token generated for user ${payload.userId} with JTI: ${jti}`);
     return token;
@@ -63,11 +65,11 @@ export class TokenService {
     // Store refresh token data
     const key = `${this.REFRESH_TOKEN_PREFIX}${refreshToken}`;
     const expireSeconds = Math.ceil((expiresAt - Date.now()) / 1000);
-    await redis.client.setex(key, expireSeconds, JSON.stringify(refreshTokenData));
+    await redis.set(key, JSON.stringify(refreshTokenData), expireSeconds);
 
     // Store token family for user
     const familyKey = `${this.TOKEN_FAMILY_PREFIX}${userId}`;
-    await redis.client.setex(familyKey, expireSeconds, tokenFamily);
+    await redis.set(familyKey, tokenFamily, expireSeconds);
 
     logger.info(`Refresh token generated for user ${userId} with family: ${tokenFamily}`);
     return refreshToken;
@@ -114,7 +116,7 @@ export class TokenService {
   } | null> {
     try {
       const key = `${this.REFRESH_TOKEN_PREFIX}${refreshToken}`;
-      const stored = await redis.client.get(key);
+      const stored = await redis.get(key);
       
       if (!stored) {
         logger.warn('Refresh token not found or expired');
@@ -125,7 +127,7 @@ export class TokenService {
 
       // Check if token family is still valid (not compromised)
       const familyKey = `${this.TOKEN_FAMILY_PREFIX}${refreshData.userId}`;
-      const currentFamily = await redis.client.get(familyKey);
+      const currentFamily = await redis.get(familyKey);
 
       if (currentFamily !== refreshData.tokenFamily) {
         logger.error(`Token family mismatch detected for user ${refreshData.userId} - possible token theft`);
@@ -144,7 +146,7 @@ export class TokenService {
       const newRefreshToken = await this.generateRefreshToken(refreshData.userId);
 
       // Invalidate old refresh token
-      await redis.client.del(key);
+      await redis.del(key);
 
       logger.info(`Token rotation completed for user ${refreshData.userId}`);
       return {
@@ -183,7 +185,7 @@ export class TokenService {
           reason,
           blacklistedAt: Date.now(),
           userId: decoded.userId
-        }), 'EX', expireSeconds);
+        }), expireSeconds);
 
         logger.info(`Token blacklisted for user ${decoded.userId} (JTI: ${jti}, reason: ${reason})`);
       }
@@ -220,7 +222,7 @@ export class TokenService {
 
       // Find and blacklist all active access tokens for this user
       const pattern = `${this.TOKEN_BLACKLIST_PREFIX}*`;
-      const keys = await redis.keys(pattern);
+      const keys = await redis.client.keys(pattern);
       
       for (const key of keys) {
         const data = await redis.get(key);
@@ -252,11 +254,11 @@ export class TokenService {
   static async cleanupExpiredTokens(): Promise<void> {
     try {
       const pattern = `${this.TOKEN_BLACKLIST_PREFIX}*`;
-      const keys = await redis.keys(pattern);
+      const keys = await redis.client.keys(pattern);
       let cleaned = 0;
 
       for (const key of keys) {
-        const ttl = await redis.ttl(key);
+        const ttl = await redis.client.ttl(key);
         if (ttl <= 0) { // Expired or no expiration
           await redis.del(key);
           cleaned++;
@@ -265,7 +267,7 @@ export class TokenService {
 
       // Also cleanup expired refresh tokens
       const refreshPattern = `${this.REFRESH_TOKEN_PREFIX}*`;
-      const refreshKeys = await redis.keys(refreshPattern);
+      const refreshKeys = await redis.client.keys(refreshPattern);
       
       for (const key of refreshKeys) {
         const data = await redis.get(key);
@@ -294,8 +296,8 @@ export class TokenService {
     activeRefreshTokens: number;
   }> {
     try {
-      const blacklistedKeys = await redis.keys(`${this.TOKEN_BLACKLIST_PREFIX}*`);
-      const refreshKeys = await redis.keys(`${this.REFRESH_TOKEN_PREFIX}*`);
+      const blacklistedKeys = await redis.client.keys(`${this.TOKEN_BLACKLIST_PREFIX}*`);
+      const refreshKeys = await redis.client.keys(`${this.REFRESH_TOKEN_PREFIX}*`);
 
       return {
         blacklistedTokens: blacklistedKeys.length,

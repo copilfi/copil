@@ -4,6 +4,7 @@ import { logger } from '@/utils/logger';
 import env from '@/config/env';
 import OracleService from './OracleService';
 import MarketDataService from './MarketDataService';
+import { BlockchainEvent as StreamBlockchainEvent } from './RedisStreamsService';
 
 export interface ClientSubscription {
   userId?: string;
@@ -24,6 +25,7 @@ export interface PriceAlert {
 }
 
 export class WebSocketService {
+  private static instance: WebSocketService | null = null;
   private io: SocketIOServer;
   private oracleService: OracleService;
   private marketDataService: MarketDataService;
@@ -57,6 +59,8 @@ export class WebSocketService {
     this.startMarketUpdates();
 
     logger.info(`🔌 WebSocket Service initialized on path /socket.io`);
+
+    WebSocketService.instance = this;
   }
 
   private setupEventHandlers(): void {
@@ -212,6 +216,27 @@ export class WebSocketService {
     logger.debug(`🔔 Notification sent to user ${userId}: ${message}`);
   }
 
+  public notifyUser(userId: string, payload: { type: string; message?: string; data?: any }): void {
+    const message = payload.message ?? payload.type;
+    this.sendNotification(userId, payload.type, message, payload.data);
+  }
+
+  public broadcastBlockchainEvent(event: StreamBlockchainEvent): void {
+    this.io.emit('blockchainEvent', event);
+  }
+
+  public static notifyUser(userId: string, payload: { type: string; message?: string; data?: any }): void {
+    if (!WebSocketService.instance) {
+      logger.warn('WebSocketService not initialized; unable to deliver notification', {
+        userId,
+        payload
+      });
+      return;
+    }
+
+    WebSocketService.instance.notifyUser(userId, payload);
+  }
+
   /**
    * Get service status
    */
@@ -241,6 +266,10 @@ export class WebSocketService {
 
     this.io.close();
     logger.info('🔌 WebSocket Service cleaned up');
+
+    if (WebSocketService.instance === this) {
+      WebSocketService.instance = null;
+    }
   }
 }
 

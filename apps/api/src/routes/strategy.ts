@@ -1,5 +1,5 @@
 import express from 'express';
-import { PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, StrategyType } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { StrategyExecutionEngine } from '@/services/StrategyExecutionEngine';
 
@@ -12,13 +12,16 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
       const { userId } = req.params;
       const { active, type } = req.query;
 
-      const whereClause: any = { userId };
+      const whereClause: Prisma.StrategyWhereInput = { userId };
       
       if (active !== undefined) {
         whereClause.isActive = active === 'true';
       }
-      if (type) {
-        whereClause.type = type;
+      if (typeof type === 'string') {
+        const normalized = type.toUpperCase();
+        if ((Object.values(StrategyType) as string[]).includes(normalized)) {
+          whereClause.type = normalized as StrategyType;
+        }
       }
 
       const strategies = await prisma.strategy.findMany({
@@ -29,7 +32,7 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
             orderBy: { executedAt: 'desc' }
           }
         },
-        orderBy: { createdAt: 'desc' }
+        orderBy: { createdAt: 'desc' as const }
       });
 
       res.json({
@@ -60,18 +63,20 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
       } = req.body;
 
       if (!userId || !name || !type || !conditions || !parameters) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Missing required fields'
         });
+        return;
       }
 
       // Validate conditions structure
       if (!Array.isArray(conditions)) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Conditions must be an array'
         });
+        return;
       }
 
       const strategy = await prisma.strategy.create({
@@ -80,10 +85,8 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
           name,
           type,
           description,
-          config: JSON.stringify({
-            conditions,
-            parameters
-          }),
+          conditions: conditions as Prisma.InputJsonValue,
+          parameters: parameters as Prisma.InputJsonValue,
           expiresAt: expiresAt ? new Date(expiresAt) : null
         }
       });
@@ -114,20 +117,21 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
           user: {
             select: {
               id: true,
-              address: true
+              walletAddress: true
             }
           },
           transactions: {
-            orderBy: { createdAt: 'desc' }
+            orderBy: { executedAt: 'desc' }
           }
         }
       });
 
       if (!strategy) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'Strategy not found'
         });
+        return;
       }
 
       res.json({
@@ -169,19 +173,20 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
         });
 
         if (!existingStrategy) {
-          return res.status(404).json({
+          res.status(404).json({
             success: false,
             error: 'Strategy not found'
           });
+          return;
         }
 
-        const existingConfig = JSON.parse(existingStrategy.config);
-        const newConfig = {
-          conditions: conditions !== undefined ? conditions : existingConfig.conditions,
-          parameters: parameters !== undefined ? parameters : existingConfig.parameters
-        };
+        if (conditions !== undefined) {
+          updateData.conditions = conditions as Prisma.InputJsonValue;
+        }
 
-        updateData.config = JSON.stringify(newConfig);
+        if (parameters !== undefined) {
+          updateData.parameters = parameters as Prisma.InputJsonValue;
+        }
       }
 
       const strategy = await prisma.strategy.update({
@@ -201,6 +206,7 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
         success: false,
         error: 'Failed to update strategy'
       });
+      return;
     }
   });
 
@@ -225,6 +231,7 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
         success: false,
         error: 'Failed to delete strategy'
       });
+      return;
     }
   });
 
@@ -247,17 +254,19 @@ export function createStrategyRoutes(prisma: PrismaClient, executionEngine: Stra
       });
 
       if (!strategy) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'Strategy not found'
         });
+        return;
       }
 
       if (!strategy.isActive) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Strategy is not active'
         });
+        return;
       }
 
       // This would trigger manual execution - for now just update lastExecutedAt

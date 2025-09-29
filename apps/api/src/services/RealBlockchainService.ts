@@ -6,7 +6,8 @@ import SmartAccountService, { SmartAccountConfig, SessionKeyConfig } from '../..
 import SessionKeyWallet from '../../../../packages/blockchain/src/services/SessionKeyWallet';
 import TestWalletService, { TestWalletConfig } from '../../../../packages/blockchain/src/services/TestWalletService';
 import UserOperationBundler, { BundlerConfig } from '../../../../packages/blockchain/src/services/UserOperationBundler';
-import BalanceService, { WalletBalances } from '../../../../packages/blockchain/src/services/BalanceService';
+import BalanceService, { TokenPriceProvider, WalletBalances } from '../../../../packages/blockchain/src/services/BalanceService';
+import MarketDataService from './MarketDataService';
 
 // Basic ABI for common contract interactions
 const ACCOUNT_FACTORY_ABI = [
@@ -33,6 +34,30 @@ const ENTRY_POINT_ABI = [
   'function getUserOpHash(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, uint256 callGasLimit, uint256 verificationGasLimit, uint256 preVerificationGas, uint256 maxFeePerGas, uint256 maxPriorityFeePerGas, bytes paymasterAndData, bytes signature) calldata userOp) external view returns (bytes32)'
 ];
 
+class MarketDataPriceProvider implements TokenPriceProvider {
+  constructor(private readonly marketDataService: MarketDataService) {}
+
+  async getTokenPrice(address: string, symbol?: string): Promise<number | null> {
+    const normalized = address.toLowerCase();
+    if (normalized === ethers.ZeroAddress.toLowerCase()) {
+      return this.getNativeTokenPrice();
+    }
+
+    const tokenSymbol = symbol?.toUpperCase();
+    if (!tokenSymbol) {
+      return null;
+    }
+
+    const metrics = await this.marketDataService.getTokenMetrics(tokenSymbol);
+    return metrics?.price ?? null;
+  }
+
+  async getNativeTokenPrice(): Promise<number | null> {
+    const metrics = await this.marketDataService.getTokenMetrics('SEI');
+    return metrics?.price ?? null;
+  }
+}
+
 interface SmartAccountClient {
   deployAccount(): Promise<string>;
   getAccountAddress(): Promise<string>;
@@ -57,6 +82,8 @@ class RealBlockchainService {
   private userOperationBundler: UserOperationBundler;
   private balanceService: BalanceService;
   private smartAccountClients: Map<string, SmartAccountClient> = new Map();
+  private marketDataService?: MarketDataService;
+  private tokenSymbolCache: Map<string, string> = new Map();
 
   constructor() {
     // Primary: Alchemy RPC, Fallback: SEI RPC
@@ -122,6 +149,30 @@ class RealBlockchainService {
     
     if (env.ALCHEMY_SEI_WS_URL) {
       logger.info(`🔌 WebSocket: ${env.ALCHEMY_SEI_WS_URL}`);
+    }
+  }
+
+  registerMarketDataService(service: MarketDataService): void {
+    this.marketDataService = service;
+    this.setPriceProvider(new MarketDataPriceProvider(service));
+  }
+
+  getProvider(): ethers.JsonRpcProvider {
+    return this.provider;
+  }
+
+  setPriceProvider(provider: TokenPriceProvider): void {
+    this.balanceService.setPriceProvider(provider);
+  }
+
+  registerTokenMetadata(address: string, symbol?: string): void {
+    if (!address) {
+      return;
+    }
+
+    const normalized = address.toLowerCase();
+    if (symbol) {
+      this.tokenSymbolCache.set(normalized, symbol.toUpperCase());
     }
   }
 
@@ -434,45 +485,52 @@ class RealBlockchainService {
   }
 
   /**
-   * Get token price from DEX
+   * Get token price using market data providers
    */
-  async getTokenPrice(tokenAddress: string): Promise<number> {
-    try {
-      // Mock implementation for now - in production would query DEX pools or price oracles
-      logger.debug(`Getting price for token ${tokenAddress}`);
-      
-      // Return mock price based on token address for testing
-      const mockPrices: { [key: string]: number } = {
-        '0x': 1.0, // Default
-        'sei': 0.5,
-        'usdc': 1.0,
-        'weth': 2000.0
-      };
-      
-      const symbol = tokenAddress.toLowerCase().includes('sei') ? 'sei' 
-                   : tokenAddress.toLowerCase().includes('usdc') ? 'usdc'
-                   : tokenAddress.toLowerCase().includes('weth') ? 'weth'
-                   : '0x';
-      
-      return mockPrices[symbol] || 1.0;
-    } catch (error) {
-      logger.error(`Failed to get token price for ${tokenAddress}:`, error);
-      return 1.0;
+  async getTokenPrice(tokenAddress: string, tokenSymbol?: string): Promise<number> {
+    if (!this.marketDataService) {
+      throw new Error('Market data service not configured');
     }
+
+    const symbol = (tokenSymbol || this.tokenSymbolCache.get(tokenAddress.toLowerCase()))?.toUpperCase();
+
+    if (!symbol) {
+      throw new Error(`Token symbol unknown for address ${tokenAddress}`);
+    }
+
+    const metrics = await this.marketDataService.getTokenMetrics(symbol);
+
+    if (!metrics || metrics.price === undefined || metrics.price === null) {
+      throw new Error(`Market data unavailable for token ${symbol}`);
+    }
+
+    // Cache symbol for subsequent lookups
+    this.tokenSymbolCache.set(tokenAddress.toLowerCase(), symbol);
+    return metrics.price;
   }
 
   /**
-   * Get token 24h volume
+   * Get token 24h volume from market data
    */
-  async getToken24hVolume(tokenAddress: string): Promise<number> {
-    try {
-      // Mock implementation for now - in production would query DEX analytics
-      logger.debug(`Getting 24h volume for token ${tokenAddress}`);
-      return Math.random() * 1000000; // Random volume for testing
-    } catch (error) {
-      logger.error(`Failed to get token volume for ${tokenAddress}:`, error);
-      return 0;
+  async getToken24hVolume(tokenAddress: string, tokenSymbol?: string): Promise<number> {
+    if (!this.marketDataService) {
+      throw new Error('Market data service not configured');
     }
+
+    const symbol = (tokenSymbol || this.tokenSymbolCache.get(tokenAddress.toLowerCase()))?.toUpperCase();
+
+    if (!symbol) {
+      throw new Error(`Token symbol unknown for address ${tokenAddress}`);
+    }
+
+    const metrics = await this.marketDataService.getTokenMetrics(symbol);
+
+    if (!metrics || metrics.volume24h === undefined || metrics.volume24h === null) {
+      throw new Error(`Market data unavailable for token ${symbol}`);
+    }
+
+    this.tokenSymbolCache.set(tokenAddress.toLowerCase(), symbol);
+    return metrics.volume24h;
   }
 
   /**

@@ -52,12 +52,12 @@ export class SessionKeyWallet {
       let wallet: Wallet;
       
       if (this.masterWallet && keyIndex !== undefined) {
-        // Generate deterministic key from master wallet
         const path = `m/44'/60'/0'/0/${keyIndex}`;
-        wallet = this.masterWallet.derivePath(path).connect(this.provider) as ethers.Wallet;
+        const derived = this.masterWallet.derivePath(path);
+        wallet = new Wallet(derived.privateKey, this.provider);
       } else {
-        // Generate random key
-        wallet = ethers.Wallet.createRandom().connect(this.provider) as ethers.Wallet;
+        const randomWallet = ethers.Wallet.createRandom();
+        wallet = new Wallet(randomWallet.privateKey, this.provider);
       }
 
       const sessionKeyInfo: SessionKeyInfo = {

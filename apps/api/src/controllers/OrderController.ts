@@ -1,9 +1,8 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
 import { AutomationManager, ConditionType } from '@copil/blockchain';
-import { BlockchainLogger } from '@copil/blockchain';
 import { z } from 'zod';
-
-const logger = BlockchainLogger.getInstance();
+import { AuthenticatedRequest } from '@/middleware/auth';
+import { logger } from '@/utils/logger';
 
 // Request validation schemas
 const CreateConditionalOrderSchema = z.object({
@@ -41,7 +40,7 @@ export class OrderController {
   /**
    * Create a new conditional order
    */
-  createConditionalOrder = async (req: Request, res: Response) => {
+  createConditionalOrder = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -148,7 +147,7 @@ export class OrderController {
   /**
    * Get user's conditional orders
    */
-  getConditionalOrders = async (req: Request, res: Response) => {
+  getConditionalOrders = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       if (!userId) {
@@ -195,7 +194,7 @@ export class OrderController {
   /**
    * Get specific conditional order
    */
-  getConditionalOrder = async (req: Request, res: Response) => {
+  getConditionalOrder = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const orderId = req.params.id;
@@ -252,7 +251,7 @@ export class OrderController {
   /**
    * Cancel conditional order
    */
-  cancelConditionalOrder = async (req: Request, res: Response) => {
+  cancelConditionalOrder = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const orderId = req.params.id;
@@ -295,7 +294,7 @@ export class OrderController {
   /**
    * Update conditional order
    */
-  updateConditionalOrder = async (req: Request, res: Response) => {
+  updateConditionalOrder = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const orderId = req.params.id;
@@ -337,7 +336,7 @@ export class OrderController {
   /**
    * Get order status and progress
    */
-  getOrderStatus = async (req: Request, res: Response) => {
+  getOrderStatus = async (req: AuthenticatedRequest, res: Response) => {
     try {
       const userId = req.user?.id;
       const orderId = req.params.id;

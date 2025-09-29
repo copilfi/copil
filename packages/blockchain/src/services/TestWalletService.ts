@@ -43,10 +43,11 @@ export class TestWalletService {
       this.primaryWallet = new Wallet(config.privateKey, this.provider);
     } else if (config.mnemonic) {
       const hdWallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(config.mnemonic));
-      this.primaryWallet = hdWallet.connect(this.provider);
+      this.primaryWallet = new Wallet(hdWallet.privateKey, this.provider);
     } else {
       // Generate random wallet for testing
-      this.primaryWallet = Wallet.createRandom().connect(this.provider);
+      const randomWallet = Wallet.createRandom();
+      this.primaryWallet = new Wallet(randomWallet.privateKey, this.provider);
       logger.warn('⚠️  Generated random test wallet. Private key will not persist!');
       logger.info(`Generated wallet address: ${this.primaryWallet.address}`);
       logger.info(`Generated private key: ${this.primaryWallet.privateKey}`);
@@ -77,7 +78,8 @@ export class TestWalletService {
     if (this.config.mnemonic) {
       const hdWallet = HDNodeWallet.fromMnemonic(ethers.Mnemonic.fromPhrase(this.config.mnemonic));
       const path = `m/44'/60'/0'/0/${index}`;
-      derivedWallet = hdWallet.derivePath(path).connect(this.provider) as ethers.Wallet;
+      const derived = hdWallet.derivePath(path);
+      derivedWallet = new Wallet(derived.privateKey, this.provider);
     } else {
       // For non-HD wallets, create deterministic wallets based on primary key
       const derivedKey = ethers.keccak256(
@@ -373,8 +375,8 @@ export class TestWalletService {
         wallets.push(this.getDerivedWallet(i));
       } else {
         // Create random wallets
-        const wallet = Wallet.createRandom().connect(this.provider);
-        wallets.push(wallet);
+        const randomWallet = Wallet.createRandom();
+        wallets.push(new Wallet(randomWallet.privateKey, this.provider));
       }
     }
     

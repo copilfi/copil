@@ -3,16 +3,20 @@ import App from './app';
 import { logger } from '@/utils/logger';
 import { PrismaClient } from '@prisma/client';
 import { StrategyExecutionService } from '@/services/StrategyExecutionService';
-import { RealBlockchainService } from '@/services/RealBlockchainService';
+import blockchainService from '@/services/RealBlockchainService';
 import OracleService from '@/services/OracleService';
 import MarketDataService from '@/services/MarketDataService';
 import WebSocketService from '@/services/WebSocketService';
 import AIAgentService from '@/services/AIAgentService';
 import DEXAggregationService from '@/services/DEXAggregationService';
+import EventIndexingService from '@/services/EventIndexingService';
+import redisStreamsService from '@/services/RedisStreamsService';
 
 const prisma = new PrismaClient();
 import redis from '@/config/redis';
 import env from '@/config/env';
+
+let eventIndexingService: EventIndexingService | null = null;
 
 async function bootstrap() {
   try {
@@ -31,10 +35,10 @@ async function bootstrap() {
     }
 
     // Initialize services
-    const blockchainService = new RealBlockchainService();
     const oracleService = new OracleService();
     const marketDataService = new MarketDataService();
     const dexService = new DEXAggregationService();
+    blockchainService.registerMarketDataService(marketDataService);
     
     // Initialize AI Agent Service
     const aiAgentService = new AIAgentService(prisma, dexService);
@@ -54,6 +58,14 @@ async function bootstrap() {
       marketDataService
     );
 
+    eventIndexingService = new EventIndexingService({
+      prisma,
+      provider: blockchainService.getProvider(),
+      redisService: redisStreamsService,
+      webSocketService
+    });
+    await eventIndexingService.start();
+
     // Store services for access from routes
     app.express.locals.services = {
       oracleService,
@@ -62,7 +74,8 @@ async function bootstrap() {
       strategyExecutionService,
       blockchainService,
       aiAgentService,
-      dexService
+      dexService,
+      eventIndexingService
     };
 
     // Register AI routes after services are initialized
@@ -109,6 +122,10 @@ async function gracefulShutdown(signal: string) {
 
   try {
     // Close database connection
+    if (eventIndexingService) {
+      await eventIndexingService.stop();
+    }
+
     await prisma.$disconnect();
     logger.info('✅ Database connection closed');
 

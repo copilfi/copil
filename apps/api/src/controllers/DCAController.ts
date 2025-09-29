@@ -30,14 +30,15 @@ export class DCAController {
   /**
    * Create a new DCA strategy
    */
-  createDCAStrategy = async (req: Request, res: Response) => {
+  createDCAStrategy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const validatedData = CreateDCAStrategySchema.parse(req.body);
@@ -67,10 +68,11 @@ export class DCAController {
       const maxExecutions = Math.floor((durationInDays * 24 * 3600) / frequencyInSeconds);
 
       if (maxExecutions === 0) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Duration too short for the given frequency'
         });
+        return;
       }
 
       // Convert total budget to wei (assuming 18 decimals for now)
@@ -116,31 +118,34 @@ export class DCAController {
       logger.error('Failed to create DCA strategy', error);
       
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid request data',
           details: error.errors
         });
+        return;
       }
 
       res.status(500).json({
         success: false,
         error: error instanceof Error ? error.message : 'Internal server error'
       });
+      return;
     }
   };
 
   /**
    * Get user's DCA strategies
    */
-  getDCAStrategies = async (req: Request, res: Response) => {
+  getDCAStrategies = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const strategies = this.automationManager.getUserDCAStrategies(userId);
@@ -170,32 +175,35 @@ export class DCAController {
         success: false,
         error: 'Failed to retrieve DCA strategies'
       });
+      return;
     }
   };
 
   /**
    * Get specific DCA strategy
    */
-  getDCAStrategy = async (req: Request, res: Response) => {
+  getDCAStrategy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const strategyId = req.params.id;
 
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const strategy = this.automationManager.getUserDCAStrategies(userId)
         .find(s => s.id === strategyId);
 
       if (!strategy) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'DCA strategy not found'
         });
+        return;
       }
 
       res.json({
@@ -229,16 +237,17 @@ export class DCAController {
   /**
    * Update DCA strategy
    */
-  updateDCAStrategy = async (req: Request, res: Response) => {
+  updateDCAStrategy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const strategyId = req.params.id;
 
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const validatedData = UpdateDCAStrategySchema.parse(req.body);
@@ -249,63 +258,70 @@ export class DCAController {
         const success = await this.automationManager.removeDCAStrategy(strategyId, userId);
         
         if (!success) {
-          return res.status(404).json({
+          res.status(404).json({
             success: false,
             error: 'DCA strategy not found'
           });
+          return;
         }
 
         res.json({
           success: true,
           message: 'DCA strategy paused successfully'
         });
+        return;
       } else {
         res.status(400).json({
           success: false,
           error: 'Only pausing strategies is currently supported'
         });
+        return;
       }
 
     } catch (error) {
       logger.error('Failed to update DCA strategy', error);
       
       if (error instanceof z.ZodError) {
-        return res.status(400).json({
+        res.status(400).json({
           success: false,
           error: 'Invalid request data',
           details: error.errors
         });
+        return;
       }
 
       res.status(500).json({
         success: false,
         error: 'Failed to update DCA strategy'
       });
+      return;
     }
   };
 
   /**
    * Delete/Cancel DCA strategy
    */
-  deleteDCAStrategy = async (req: Request, res: Response) => {
+  deleteDCAStrategy = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const strategyId = req.params.id;
 
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const success = await this.automationManager.removeDCAStrategy(strategyId, userId);
       
       if (!success) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'DCA strategy not found'
         });
+        return;
       }
 
       logger.info('DCA strategy cancelled via API', {
@@ -324,22 +340,24 @@ export class DCAController {
         success: false,
         error: 'Failed to cancel DCA strategy'
       });
+      return;
     }
   };
 
   /**
    * Get DCA execution history
    */
-  getDCAExecutionHistory = async (req: Request, res: Response) => {
+  getDCAExecutionHistory = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       const strategyId = req.params.id;
 
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       // For now, return basic execution info
@@ -348,10 +366,11 @@ export class DCAController {
         .find(s => s.id === strategyId);
 
       if (!strategy) {
-        return res.status(404).json({
+        res.status(404).json({
           success: false,
           error: 'DCA strategy not found'
         });
+        return;
       }
 
       res.json({
@@ -380,20 +399,22 @@ export class DCAController {
         success: false,
         error: 'Failed to retrieve execution history'
       });
+      return;
     }
   };
 
   /**
    * Get DCA performance metrics
    */
-  getDCAPerformance = async (req: Request, res: Response) => {
+  getDCAPerformance = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
       const userId = req.user?.id;
       if (!userId) {
-        return res.status(401).json({
+        res.status(401).json({
           success: false,
           error: 'Authentication required'
         });
+        return;
       }
 
       const strategies = this.automationManager.getUserDCAStrategies(userId);
@@ -420,6 +441,7 @@ export class DCAController {
         success: false,
         error: 'Failed to retrieve performance metrics'
       });
+      return;
     }
   };
 }

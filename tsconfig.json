@@ -31,7 +31,8 @@
       "@copil/database": ["./packages/database/src"],
       "@copil/blockchain": ["./packages/blockchain/src"],
       "@copil/ai-models": ["./packages/ai-models/src"],
-      "@copil/utils": ["./packages/utils/src"]
+      "@copil/utils": ["./packages/utils/src"],
+      "@copil/ai-agent": ["./packages/ai-agent/src"]
     },
     "types": ["node"]
   },
