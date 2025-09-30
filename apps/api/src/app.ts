@@ -5,6 +5,8 @@ import compression from 'compression';
 import morgan from 'morgan';
 import rateLimit from 'express-rate-limit';
 import { createServer } from 'http';
+import fs from 'fs';
+import path from 'path';
 
 import env from '@/config/env';
 import { logger } from '@/utils/logger';
@@ -101,13 +103,34 @@ class App {
 
     // Serve static files in production
     if (env.NODE_ENV === 'production') {
-      this.express.use(express.static('public'));
+      const publicDir = path.resolve(__dirname, '../public');
+      const indexFile = path.join(publicDir, 'index.html');
+
+      if (fs.existsSync(publicDir)) {
+        this.express.use(express.static(publicDir));
+      }
       
       // Catch all handler for SPA
       this.express.get('*', (req, res) => {
         if (!req.path.startsWith('/api')) {
-          res.sendFile('index.html', { root: 'public' });
+          if (fs.existsSync(indexFile)) {
+            res.sendFile(indexFile);
+          } else {
+            res.status(404).json({
+              success: false,
+              error: 'Resource not found',
+              path: req.path,
+              hint: 'API endpoints are available under /api/*'
+            });
+          }
+          return;
         }
+
+        res.status(404).json({
+          success: false,
+          error: 'API endpoint not found',
+          path: req.path
+        });
       });
     }
   }

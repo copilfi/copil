@@ -1,19 +1,12 @@
-import { Prisma, PrismaClient } from '@prisma/client';
+import { Prisma, PrismaClient, SessionKey, UserSession } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { RealBlockchainService } from './RealBlockchainService';
 import { ethers } from 'ethers';
-
-export interface StrategyCondition {
-  type: 'price' | 'time' | 'volume' | 'technical_indicator';
-  operator: 'gt' | 'lt' | 'eq' | 'gte' | 'lte';
-  value: string;
-  tokenAddress?: string;
-  tokenSymbol?: string;
-  indicator?: string;
-  metadata?: Record<string, any>;
-  normalized?: boolean;
-  sourceType?: string;
-}
+import {
+  createConditionCache,
+  normalizeStrategyConditions,
+  StrategyCondition
+} from '@/utils/strategyConditionNormalizer';
 
 export interface StrategyParameters {
   tokenIn: string;
@@ -40,10 +33,7 @@ export class StrategyExecutionEngine {
   private blockchainService: RealBlockchainService;
   private isRunning: boolean = false;
   private executionInterval: NodeJS.Timeout | null = null;
-  private tokenSymbolCache: Map<string, { address: string; symbol?: string; name?: string }>
-    = new Map();
-  private tokenAddressCache: Map<string, { address: string; symbol?: string; name?: string }>
-    = new Map();
+  private conditionCache = createConditionCache();
 
   constructor(prisma: PrismaClient, blockchainService: RealBlockchainService) {
     this.prisma = prisma;
@@ -92,15 +82,9 @@ export class StrategyExecutionEngine {
         },
         include: {
           user: {
-            include: {
-              sessions: {
-                where: { isActive: true },
-                include: {
-                  sessionKeys: {
-                    where: { isActive: true }
-                  }
-                }
-              }
+            select: {
+              id: true,
+              smartAccountAddress: true
             }
           }
         }
@@ -137,14 +121,6 @@ export class StrategyExecutionEngine {
       return;
     }
 
-    const userSession = strategy.user.sessions[0];
-
-    if (!userSession || !userSession.sessionKeys.length) {
-      throw new Error('No active session or session keys found for user');
-    }
-    
-    const sessionKey = userSession.sessionKeys[0];
-
     logger.info(`🔍 Evaluating strategy ${strategy.id} for user ${strategy.userId}`);
 
     const shouldExecute = await this.evaluateConditions(strategy, conditions);
@@ -160,7 +136,7 @@ export class StrategyExecutionEngine {
       strategyId: strategy.id,
       userId: strategy.userId,
       smartAccountAddress: strategy.user.smartAccountAddress || '',
-      sessionKeyAddress: sessionKey.address,
+      sessionKeyAddress: '',
       conditions,
       parameters: this.parseStrategyParameters(strategy.parameters || '{}')
     };
@@ -169,31 +145,25 @@ export class StrategyExecutionEngine {
   }
 
   private async normalizeConditions(strategy: any, rawConditions: any[]): Promise<StrategyCondition[]> {
-    const normalized: StrategyCondition[] = [];
-    let needsPersist = false;
-
-    for (const rawCondition of rawConditions) {
-      const canonical = await this.normalizeCondition(rawCondition);
-
-      if (!canonical) {
-        needsPersist = true;
-        logger.warn(`Skipping unsupported condition in strategy ${strategy.id}: ${JSON.stringify(rawCondition)}`);
-        continue;
+    const { normalized, changed, skipped } = await normalizeStrategyConditions(
+      strategy.id,
+      rawConditions,
+      {
+        prisma: this.prisma,
+        blockchainService: this.blockchainService,
+        cache: this.conditionCache
       }
+    );
 
-      if (!rawCondition?.normalized) {
-        needsPersist = true;
-      }
-
-      normalized.push(canonical);
+    if (skipped > 0) {
+      logger.warn(`Strategy ${strategy.id}: skipped ${skipped} unsupported condition${skipped > 1 ? 's' : ''}.`);
     }
 
-    if (needsPersist) {
+    if (changed) {
       try {
-        const serializableConditions = normalized.map(condition => ({ ...condition }));
         await this.prisma.strategy.update({
           where: { id: strategy.id },
-          data: { conditions: serializableConditions as Prisma.JsonArray }
+          data: { conditions: normalized as unknown as Prisma.JsonArray }
         });
       } catch (error) {
         logger.error(`Failed to persist normalized conditions for strategy ${strategy.id}:`, error);
@@ -201,277 +171,6 @@ export class StrategyExecutionEngine {
     }
 
     return normalized;
-  }
-
-  private async normalizeCondition(condition: any): Promise<StrategyCondition | null> {
-    if (!condition || typeof condition !== 'object') {
-      return null;
-    }
-
-    if (condition.normalized === true) {
-      if (condition.tokenAddress && condition.tokenSymbol) {
-        this.cacheTokenInfo({ address: condition.tokenAddress, symbol: condition.tokenSymbol });
-      }
-      return condition as StrategyCondition;
-    }
-
-    const rawType = typeof condition.type === 'string' ? condition.type.toLowerCase() : '';
-
-    switch (rawType) {
-      case 'price_below':
-      case 'price_above': {
-        const operator = rawType === 'price_below' ? 'lt' : 'gt';
-        const tokenInfo = await this.resolveTokenInfo(condition.tokenAddress, condition.token || condition.tokenSymbol);
-
-        if (!tokenInfo) {
-          logger.error(`Unable to resolve token for price condition: ${JSON.stringify(condition)}`);
-          return null;
-        }
-
-        this.cacheTokenInfo(tokenInfo);
-
-        return {
-          type: 'price',
-          operator,
-          value: String(condition.value ?? '0'),
-          tokenAddress: tokenInfo.address,
-          tokenSymbol: tokenInfo.symbol,
-          metadata: {
-            ...(condition.metadata || {}),
-            sourceType: rawType
-          },
-          normalized: true
-        };
-      }
-      case 'time_after':
-      case 'time_before': {
-        const schedule = this.parseTimeCondition(condition.value, rawType === 'time_before');
-
-        if (!schedule) {
-          logger.error(`Unable to parse time condition: ${JSON.stringify(condition)}`);
-          return null;
-        }
-
-        return {
-          type: 'time',
-          operator: schedule.operator,
-          value: schedule.timeValue,
-          metadata: {
-            ...(condition.metadata || {}),
-            ...schedule.metadata,
-            sourceType: rawType
-          },
-          normalized: true
-        };
-      }
-      case 'price':
-      case 'time':
-      case 'volume':
-      case 'technical_indicator': {
-        const tokenSymbol = condition.tokenSymbol || condition.token;
-        const baseCondition: StrategyCondition = {
-          type: rawType as StrategyCondition['type'],
-          operator: this.normalizeOperator(condition.operator),
-          value: String(condition.value ?? ''),
-          tokenAddress: condition.tokenAddress,
-          tokenSymbol: tokenSymbol ? String(tokenSymbol).toUpperCase() : undefined,
-          indicator: condition.indicator,
-          metadata: {
-            ...(condition.metadata || {}),
-            sourceType: condition.sourceType || rawType
-          },
-          normalized: true
-        };
-
-        if (baseCondition.tokenAddress) {
-          this.cacheTokenInfo({ address: baseCondition.tokenAddress, symbol: baseCondition.tokenSymbol });
-        }
-
-        return baseCondition;
-      }
-      default:
-        return null;
-    }
-  }
-
-  private normalizeOperator(operator: string | undefined): StrategyCondition['operator'] {
-    switch ((operator || '').toLowerCase()) {
-      case 'gt':
-      case '>':
-        return 'gt';
-      case 'lt':
-      case '<':
-        return 'lt';
-      case 'gte':
-      case '>=':
-      case 'after':
-        return 'gte';
-      case 'lte':
-      case '<=':
-      case 'before':
-        return 'lte';
-      case 'eq':
-      case '==':
-        return 'eq';
-      default:
-        return 'eq';
-    }
-  }
-
-  private parseTimeCondition(value: any, isBefore: boolean): { timeValue: string; operator: StrategyCondition['operator']; metadata: Record<string, any> } | null {
-    if (typeof value !== 'string' || !value.trim()) {
-      return null;
-    }
-
-    const raw = value.trim();
-    const lower = raw.toLowerCase();
-    const dailyMatch = /^([0-2]\d:[0-5]\d)$/.exec(lower);
-    const weeklyMatch = /^([a-z]+)_([0-2]\d:[0-5]\d)$/.exec(lower);
-
-    if (weeklyMatch) {
-      const dayName = weeklyMatch[1];
-      const timeOfDay = weeklyMatch[2];
-      const dayIndex = this.dayNameToIndex(dayName);
-
-      if (dayIndex === null) {
-        return null;
-      }
-
-      return {
-        timeValue: timeOfDay,
-        operator: isBefore ? 'lte' : 'gte',
-        metadata: {
-          schedule: 'weekly',
-          dayOfWeek: dayIndex,
-          timeOfDay
-        }
-      };
-    }
-
-    if (dailyMatch) {
-      const timeOfDay = dailyMatch[1];
-      return {
-        timeValue: timeOfDay,
-        operator: isBefore ? 'lte' : 'gte',
-        metadata: {
-          schedule: 'daily',
-          timeOfDay
-        }
-      };
-    }
-
-    const timestamp = Date.parse(raw);
-    if (!Number.isNaN(timestamp)) {
-      return {
-        timeValue: new Date(timestamp).toISOString(),
-        operator: isBefore ? 'lte' : 'gte',
-        metadata: {
-          schedule: 'absolute'
-        }
-      };
-    }
-
-    return null;
-  }
-
-  private dayNameToIndex(dayName: string): number | null {
-    const days = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'];
-    const index = days.indexOf(dayName.toLowerCase());
-    return index === -1 ? null : index;
-  }
-
-  private cacheTokenInfo(info: { address: string; symbol?: string | null; name?: string | null }) {
-    if (!info.address) {
-      return;
-    }
-
-    const normalizedAddress = info.address.toLowerCase();
-    const normalizedSymbol = info.symbol ? info.symbol.toUpperCase() : undefined;
-    this.tokenAddressCache.set(normalizedAddress, {
-      address: info.address,
-      symbol: normalizedSymbol,
-      name: info.name ?? undefined
-    });
-
-    if (normalizedSymbol) {
-      const symbolKey = normalizedSymbol;
-      this.tokenSymbolCache.set(symbolKey, {
-        address: info.address,
-        symbol: normalizedSymbol,
-        name: info.name ?? undefined
-      });
-
-      this.blockchainService.registerTokenMetadata(info.address, normalizedSymbol);
-    }
-  }
-
-  private async resolveTokenInfo(address?: string, symbol?: string): Promise<{ address: string; symbol?: string; name?: string } | null> {
-    if (address && typeof address === 'string' && this.isValidAddress(address)) {
-      const normalized = address.toLowerCase();
-      const cached = this.tokenAddressCache.get(normalized);
-      if (cached) {
-        return cached;
-      }
-
-      const token = await this.prisma.tokenRegistry.findUnique({ where: { address } });
-      const info = token
-        ? { address: token.address, symbol: token.symbol || undefined, name: token.name || undefined }
-        : { address };
-      this.cacheTokenInfo(info);
-      return info;
-    }
-
-    if (symbol && typeof symbol === 'string') {
-      const normalizedSymbol = symbol.toUpperCase();
-      const cached = this.tokenSymbolCache.get(normalizedSymbol);
-      if (cached) {
-        return cached;
-      }
-
-       const aliasAddress = this.resolveSymbolAlias(normalizedSymbol);
-       if (aliasAddress) {
-         const aliasInfo = { address: aliasAddress, symbol: normalizedSymbol };
-         this.cacheTokenInfo(aliasInfo);
-         return aliasInfo;
-       }
-
-      const token = await this.prisma.tokenRegistry.findFirst({
-        where: {
-          symbol: {
-            equals: symbol,
-            mode: 'insensitive'
-          },
-          isActive: true
-        }
-      });
-
-      if (!token) {
-        return null;
-      }
-
-      const info = { address: token.address, symbol: token.symbol || normalizedSymbol, name: token.name || undefined };
-      this.cacheTokenInfo(info);
-      return info;
-    }
-
-    return null;
-  }
-
-  private resolveSymbolAlias(symbol: string): string | null {
-    switch (symbol) {
-      case 'SEI':
-        return ethers.ZeroAddress;
-      default:
-        return null;
-    }
-  }
-
-  private isValidAddress(address: string): boolean {
-    try {
-      return ethers.isAddress(address);
-    } catch {
-      return false;
-    }
   }
 
   private async evaluateConditions(strategy: any, conditions: StrategyCondition[]): Promise<boolean> {
@@ -752,28 +451,71 @@ export class StrategyExecutionEngine {
     }
   }
 
-  private async getActiveSessionKey(userId: string): Promise<any> {
+  private async getActiveSessionKey(userId: string): Promise<SessionKey | null> {
+    const now = new Date();
+
     const userSession = await this.prisma.userSession.findFirst({
       where: {
         userId,
-        isActive: true,
-        expiresAt: {
-          gt: new Date()
-        }
+        isActive: true
       },
       include: {
         sessionKeys: {
-          where: {
-            isActive: true,
-            validUntil: {
-              gt: new Date()
-            }
+          orderBy: {
+            validUntil: 'desc'
           }
         }
+      },
+      orderBy: {
+        createdAt: 'desc'
       }
     });
-    
-    return userSession?.sessionKeys?.[0] || null;
+
+    if (!userSession) {
+      return null;
+    }
+
+    if (userSession.expiresAt <= now && userSession.isActive) {
+      await this.prisma.userSession.update({
+        where: { id: userSession.id },
+        data: { isActive: false }
+      });
+      logger.warn(`User session ${userSession.id} expired and was deactivated.`);
+      return null;
+    }
+
+    await this.deactivateExpiredSessionKeys(userSession);
+
+    const activeKey = userSession.sessionKeys.find(key => key.isActive && key.validUntil > now);
+
+    if (!activeKey) {
+      logger.warn(`No active session keys available for user ${userId}.`);
+      return null;
+    }
+
+    return activeKey;
+  }
+
+  private async deactivateExpiredSessionKeys(session: UserSession & { sessionKeys: SessionKey[] }): Promise<void> {
+    const now = new Date();
+    const expiredKeys = session.sessionKeys.filter(key => key.isActive && key.validUntil <= now);
+
+    if (!expiredKeys.length) {
+      return;
+    }
+
+    await this.prisma.sessionKey.updateMany({
+      where: {
+        id: {
+          in: expiredKeys.map(key => key.id)
+        }
+      },
+      data: {
+        isActive: false
+      }
+    });
+
+    logger.info(`Deactivated ${expiredKeys.length} expired session key(s) for session ${session.id}.`);
   }
 
   private async buildSwapCallData(parameters: StrategyParameters): Promise<string> {

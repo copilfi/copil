@@ -38,7 +38,9 @@ const CONDITIONAL_ORDER_ENGINE_ABI = [
   'event OrderCancelled(uint256 indexed orderId, address indexed user)'
 ];
 
-const BLOCK_RANGE = 250;
+// Free-tier Alchemy endpoints only allow eth_getLogs windows <= 10 blocks.
+// Keep the batch size configurable via env (falls back to 10) so we stay below rate limits.
+const BLOCK_RANGE = Number(process.env.EVENT_INDEX_BLOCK_RANGE ?? 10);
 const POLL_INTERVAL_MS = 15000;
 const BLOCK_CACHE_SIZE = 128;
 

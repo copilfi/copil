@@ -17,6 +17,8 @@
     "format": "prettier --write \"**/*.{ts,tsx,md,json}\"",
     "format:check": "prettier --check \"**/*.{ts,tsx,md,json}\"",
     "typecheck": "turbo run typecheck",
+    "start": "node scripts/start-stack.cjs",
+    "stack": "node scripts/start-stack.cjs",
     "contracts:compile": "npm run compile --workspace=@copil/contracts",
     "contracts:deploy": "npm run deploy --workspace=@copil/contracts",
     "db:generate": "npm run generate --workspace=@copil/database",

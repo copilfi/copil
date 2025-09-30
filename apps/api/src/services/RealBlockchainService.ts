@@ -311,16 +311,23 @@ class RealBlockchainService {
   /**
    * Get Smart Account address (deployed or predicted)
    */
-  async getSmartAccountAddress(userAddress: string): Promise<string> {
+  async getSmartAccountAddress(
+    userAddress: string,
+    options?: { forceRefresh?: boolean }
+  ): Promise<string> {
     try {
-      // Clear cache for fresh calculation during debugging
-      await redis.del(`deployed_account_${userAddress}`);
-      
-      logger.info(`🔍 Getting Smart Account address for ${userAddress} (cache cleared)`);
+      const cacheKey = `deployed_account_${userAddress}`;
+
+      if (options?.forceRefresh) {
+        await redis.del(cacheKey);
+        logger.info(`🔄 Smart Account cache cleared for ${userAddress}`);
+      }
+
+      logger.info(`🔍 Getting Smart Account address for ${userAddress}`);
       
       // Check cache first
-      const cached = await redis.getJSON<{ address: string; deployedAt: string; isDeployed: boolean }>(
-        `deployed_account_${userAddress}`
+      const cached = await redis.getJSON<{ address: string; predictedAt?: string; deployedAt?: string; isDeployed: boolean }>(
+        cacheKey
       );
       
       if (cached) {
@@ -332,7 +339,7 @@ class RealBlockchainService {
       const result = await this.smartAccountService.createSmartAccount(userAddress);
       
       // Cache the predicted address
-      await redis.setJSON(`deployed_account_${userAddress}`, {
+      await redis.setJSON(cacheKey, {
         address: result.address,
         predictedAt: new Date().toISOString(),
         isDeployed: result.isDeployed

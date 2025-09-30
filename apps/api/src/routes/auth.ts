@@ -7,6 +7,7 @@ import { commonSchemas } from '@/middleware/validation';
 import { generateApiKey, securityLevel } from '@/middleware/security';
 import { PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
+import jwt from 'jsonwebtoken';
 import {
   authRateLimit,
   strictRateLimit,
@@ -169,33 +170,34 @@ router.post('/revoke-api-key', strictRateLimit, validateBody(revokeApiKeySchema)
 });
 
 // Refresh Token Endpoint
-router.post('/refresh', refreshTokenRateLimit, authenticateToken, async (req, res) => {
+router.post('/refresh', refreshTokenRateLimit, async (req, res) => {
   try {
     const authHeader = req.headers['authorization'];
     const currentToken = authHeader && authHeader.split(' ')[1];
 
-    if (!currentToken) {
-      return res.status(401).json({
-        success: false,
-        error: 'No token provided'
-      });
-    }
-
     // Get refresh token from cookies or request body
     let refreshToken = req.cookies?.refreshToken || req.body?.refreshToken;
 
+    let fallbackUserId: string | null = null;
+    if (currentToken) {
+      const decoded = jwt.decode(currentToken) as { userId?: string } | null;
+      const candidateUserId = decoded?.userId;
+      if (candidateUserId) {
+        fallbackUserId = candidateUserId;
+      }
+    }
+
     if (!refreshToken) {
       // If no refresh token provided, try to extract from current token's user
-      const decoded = await TokenService.verifyAccessToken(currentToken);
-      if (!decoded) {
+      if (!fallbackUserId) {
         return res.status(401).json({
           success: false,
-          error: 'Invalid current token'
+          error: 'No refresh token provided'
         });
       }
 
-      // Generate a new refresh token for the user (fallback for existing sessions)
-      refreshToken = await TokenService.generateRefreshToken(decoded.userId);
+      // Generate a new refresh token for the user (fallback for legacy sessions)
+      refreshToken = await TokenService.generateRefreshToken(fallbackUserId);
     }
 
     // Verify and rotate the refresh token
@@ -232,6 +234,10 @@ router.post('/refresh', refreshTokenRateLimit, authenticateToken, async (req, re
       address: user.walletAddress,
       email: user.email || undefined
     });
+
+    if (currentToken) {
+      await TokenService.blacklistToken(currentToken, 'refresh_rotation');
+    }
 
     // Set new refresh token in httpOnly cookie (more secure)
     res.cookie('refreshToken', tokenData.newRefreshToken, {

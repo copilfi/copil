@@ -22,6 +22,7 @@ export class TokenService {
   private static readonly TOKEN_BLACKLIST_PREFIX = 'blacklisted_token:';
   private static readonly REFRESH_TOKEN_PREFIX = 'refresh_token:';
   private static readonly TOKEN_FAMILY_PREFIX = 'token_family:';
+  private static readonly MAX_TOKEN_FAMILIES = 5;
 
   /**
    * Generate JWT access token with unique JTI
@@ -67,9 +68,7 @@ export class TokenService {
     const expireSeconds = Math.ceil((expiresAt - Date.now()) / 1000);
     await redis.set(key, JSON.stringify(refreshTokenData), expireSeconds);
 
-    // Store token family for user
-    const familyKey = `${this.TOKEN_FAMILY_PREFIX}${userId}`;
-    await redis.set(familyKey, tokenFamily, expireSeconds);
+    await this.registerTokenFamily(userId, tokenFamily, expiresAt);
 
     logger.info(`Refresh token generated for user ${userId} with family: ${tokenFamily}`);
     return refreshToken;
@@ -110,7 +109,6 @@ export class TokenService {
    * Verify refresh token and rotate if valid
    */
   static async verifyAndRotateRefreshToken(refreshToken: string): Promise<{
-    newAccessToken: string;
     newRefreshToken: string;
     userId: string;
   } | null> {
@@ -125,11 +123,21 @@ export class TokenService {
 
       const refreshData: RefreshTokenData = JSON.parse(stored);
 
-      // Check if token family is still valid (not compromised)
-      const familyKey = `${this.TOKEN_FAMILY_PREFIX}${refreshData.userId}`;
-      const currentFamily = await redis.get(familyKey);
+      if (Date.now() > refreshData.expiresAt) {
+        logger.warn(`Refresh token expired for user ${refreshData.userId}`);
+        await redis.del(key);
+        await this.removeTokenFamily(refreshData.userId, refreshData.tokenFamily);
+        return null;
+      }
 
-      if (currentFamily !== refreshData.tokenFamily) {
+      // Check if token family is still valid (not compromised)
+      const isFamilyAllowed = await this.isTokenFamilyAllowed(
+        refreshData.userId,
+        refreshData.tokenFamily,
+        refreshData.expiresAt
+      );
+
+      if (!isFamilyAllowed) {
         logger.error(`Token family mismatch detected for user ${refreshData.userId} - possible token theft`);
         // Invalidate all tokens for this user
         await this.invalidateAllUserTokens(refreshData.userId);
@@ -137,20 +145,14 @@ export class TokenService {
       }
 
       // Generate new token pair
-      const newAccessToken = this.generateAccessToken({
-        userId: refreshData.userId,
-        address: '', // Will be filled by user lookup
-        email: undefined
-      });
-
       const newRefreshToken = await this.generateRefreshToken(refreshData.userId);
 
       // Invalidate old refresh token
       await redis.del(key);
+      await this.removeTokenFamily(refreshData.userId, refreshData.tokenFamily);
 
       logger.info(`Token rotation completed for user ${refreshData.userId}`);
       return {
-        newAccessToken,
         newRefreshToken,
         userId: refreshData.userId
       };
@@ -280,6 +282,8 @@ export class TokenService {
         }
       }
 
+      cleaned += await this.cleanupExpiredTokenFamilies();
+
       if (cleaned > 0) {
         logger.info(`Cleaned up ${cleaned} expired tokens`);
       }
@@ -307,6 +311,115 @@ export class TokenService {
       logger.error('Failed to get token stats:', error);
       return { blacklistedTokens: 0, activeRefreshTokens: 0 };
     }
+  }
+
+  private static async registerTokenFamily(userId: string, tokenFamily: string, expiresAt: number): Promise<void> {
+    const key = `${this.TOKEN_FAMILY_PREFIX}${userId}`;
+    const score = expiresAt;
+    try {
+      await redis.client.zadd(key, score, tokenFamily);
+      await redis.client.zremrangebyscore(key, '-inf', Date.now());
+
+      const count = await redis.client.zcard(key);
+      const overflow = count - this.MAX_TOKEN_FAMILIES;
+      if (overflow > 0) {
+        await redis.client.zremrangebyrank(key, 0, overflow - 1);
+      }
+
+      const latest = await redis.client.zrange(key, -1, -1, 'WITHSCORES');
+      if (Array.isArray(latest) && latest.length === 2) {
+        const maxExpiry = Number(latest[1]);
+        if (Number.isFinite(maxExpiry)) {
+          await redis.client.expireat(key, Math.ceil(maxExpiry / 1000));
+        }
+      }
+    } catch (error: any) {
+      if (typeof error?.message === 'string' && error.message.includes('WRONGTYPE')) {
+        await redis.del(key);
+        await this.registerTokenFamily(userId, tokenFamily, expiresAt);
+      } else {
+        logger.error(`Failed to register token family for user ${userId}:`, error);
+      }
+    }
+  }
+
+  private static async isTokenFamilyAllowed(userId: string, tokenFamily: string, expiresAt?: number): Promise<boolean> {
+    const key = `${this.TOKEN_FAMILY_PREFIX}${userId}`;
+
+    try {
+      const score = await redis.client.zscore(key, tokenFamily);
+      if (score !== null && score !== undefined) {
+        return Number(score) > Date.now();
+      }
+      return false;
+    } catch (error: any) {
+      if (typeof error?.message === 'string' && error.message.includes('WRONGTYPE')) {
+        const legacyValue = await redis.get(key);
+        if (legacyValue === tokenFamily) {
+          if (expiresAt) {
+            await redis.del(key);
+            await this.registerTokenFamily(userId, tokenFamily, expiresAt);
+          }
+          return true;
+        }
+        return false;
+      }
+
+      logger.error(`Failed to verify token family for user ${userId}:`, error);
+      return false;
+    }
+  }
+
+  private static async removeTokenFamily(userId: string, tokenFamily: string): Promise<void> {
+    const key = `${this.TOKEN_FAMILY_PREFIX}${userId}`;
+    try {
+      await redis.client.zrem(key, tokenFamily);
+      const remaining = await redis.client.zcard(key);
+      if (remaining === 0) {
+        await redis.client.del(key);
+      }
+    } catch (error: any) {
+      if (typeof error?.message === 'string' && error.message.includes('WRONGTYPE')) {
+        await redis.del(key);
+      } else {
+        logger.error(`Failed to remove token family for user ${userId}:`, error);
+      }
+    }
+  }
+
+  private static async cleanupExpiredTokenFamilies(): Promise<number> {
+    const pattern = `${this.TOKEN_FAMILY_PREFIX}*`;
+    let cursor = '0';
+    let cleaned = 0;
+
+    try {
+      do {
+        const [nextCursor, keys] = await redis.client.scan(cursor, 'MATCH', pattern, 'COUNT', 50);
+        cursor = nextCursor;
+
+        for (const key of keys) {
+          try {
+            const removed = await redis.client.zremrangebyscore(key, '-inf', Date.now());
+            cleaned += removed;
+
+            const remaining = await redis.client.zcard(key);
+            if (remaining === 0) {
+              await redis.client.del(key);
+            }
+          } catch (error: any) {
+            if (typeof error?.message === 'string' && error.message.includes('WRONGTYPE')) {
+              await redis.client.del(key);
+            } else {
+              logger.error(`Failed to cleanup token family key ${key}:`, error);
+            }
+          }
+        }
+      } while (cursor !== '0');
+    } catch (error) {
+      logger.error('Failed to iterate token family whitelist keys:', error);
+    }
+
+    return cleaned;
   }
 }
 
