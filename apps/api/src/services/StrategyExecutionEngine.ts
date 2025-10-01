@@ -2,6 +2,8 @@ import { Prisma, PrismaClient, SessionKey, UserSession } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { RealBlockchainService } from './RealBlockchainService';
 import { ethers } from 'ethers';
+import env from '@/config/env';
+import { randomUUID } from 'crypto';
 import {
   createConditionCache,
   normalizeStrategyConditions,
@@ -10,23 +12,47 @@ import {
 
 export interface StrategyParameters {
   tokenIn: string;
+  tokenInDecimals: number;
   tokenOut: string;
+  tokenOutDecimals: number;
   amountIn: string;
   minAmountOut: string;
   slippage: number;
   dexRouter: string;
   gasLimit: string;
   maxGasPrice: string;
+  protocol?: string;
+  frequencySeconds?: number;
+  maxExecutions?: number;
+  startAt?: string;
+  priceTarget?: number;
+  timeDeadline?: string;
 }
 
 export interface ExecutionContext {
   strategyId: string;
   userId: string;
   smartAccountAddress: string;
+  userWalletAddress?: string;
   sessionKeyAddress: string;
   conditions: StrategyCondition[];
   parameters: StrategyParameters;
 }
+
+const DEFAULT_SESSION_VALIDITY_HOURS = Number.isFinite(env.STRATEGY_SESSION_VALIDITY_HOURS)
+  ? env.STRATEGY_SESSION_VALIDITY_HOURS
+  : 24;
+const DEFAULT_SESSION_LIMIT_ETH = env.STRATEGY_SESSION_LIMIT_ETH || '10';
+const DEFAULT_AUTOMATION_FUNCTION_SELECTORS = [
+  '0xa9059cbb', // transfer(address,uint256)
+  '0x095ea7b3', // approve(address,uint256)
+  '0x7ff36ab5', // swapExactETHForTokens
+  '0x38ed1739', // swapExactTokensForTokens
+  '0x8803dbee', // swapTokensForExactTokens
+  '0x02751cec', // removeLiquidity
+  '0xf305d719', // addLiquidityETH
+  '0xe8e33700'  // addLiquidity
+];
 
 export class StrategyExecutionEngine {
   private prisma: PrismaClient;
@@ -84,7 +110,8 @@ export class StrategyExecutionEngine {
           user: {
             select: {
               id: true,
-              smartAccountAddress: true
+              smartAccountAddress: true,
+              walletAddress: true
             }
           }
         }
@@ -112,19 +139,12 @@ export class StrategyExecutionEngine {
       : rawConditions;
 
     const conditions = await this.normalizeConditions(strategy, parsedConditions);
+    const parameters = this.parseStrategyParameters(strategy.parameters || '{}');
 
     strategy.conditions = conditions;
 
-    if (!conditions.length) {
-      logger.warn(`Strategy ${strategy.id} has no valid conditions after normalization; marking as failed.`);
-      await this.updateStrategyStatus(strategy.id, 'FAILED', 'No valid conditions');
-      return;
-    }
+    const shouldExecute = await this.evaluateConditions(strategy, conditions, parameters);
 
-    logger.info(`🔍 Evaluating strategy ${strategy.id} for user ${strategy.userId}`);
-
-    const shouldExecute = await this.evaluateConditions(strategy, conditions);
-    
     if (!shouldExecute) {
       logger.debug(`⏸️ Conditions not met for strategy ${strategy.id}`);
       return;
@@ -136,9 +156,10 @@ export class StrategyExecutionEngine {
       strategyId: strategy.id,
       userId: strategy.userId,
       smartAccountAddress: strategy.user.smartAccountAddress || '',
+      userWalletAddress: strategy.user.walletAddress || undefined,
       sessionKeyAddress: '',
       conditions,
-      parameters: this.parseStrategyParameters(strategy.parameters || '{}')
+      parameters
     };
 
     await this.executeStrategy(executionContext);
@@ -173,7 +194,17 @@ export class StrategyExecutionEngine {
     return normalized;
   }
 
-  private async evaluateConditions(strategy: any, conditions: StrategyCondition[]): Promise<boolean> {
+  private async evaluateConditions(strategy: any, conditions: StrategyCondition[], parameters: StrategyParameters): Promise<boolean> {
+    if (strategy.type === 'DCA') {
+      return this.evaluateDcaSchedule(strategy, parameters);
+    }
+
+    if (!conditions.length) {
+      logger.warn(`Strategy ${strategy.id} has no valid conditions after normalization; marking as failed.`);
+      await this.updateStrategyStatus(strategy.id, 'FAILED', 'No valid conditions');
+      return false;
+    }
+
     for (const condition of conditions) {
       const result = await this.evaluateCondition(strategy, condition);
       if (!result) {
@@ -181,6 +212,29 @@ export class StrategyExecutionEngine {
       }
     }
     return true;
+  }
+
+  private evaluateDcaSchedule(strategy: any, parameters: StrategyParameters): boolean {
+    if (!parameters.frequencySeconds || parameters.frequencySeconds <= 0) {
+      logger.warn(`DCA strategy ${strategy.id} missing frequencySeconds parameter`);
+      return false;
+    }
+
+    if (parameters.maxExecutions && strategy.executedCount >= parameters.maxExecutions) {
+      logger.info(`DCA strategy ${strategy.id} reached max executions (${parameters.maxExecutions})`);
+      return false;
+    }
+
+    const now = Date.now();
+    const startAt = parameters.startAt ? Date.parse(parameters.startAt) : strategy.createdAt ? new Date(strategy.createdAt).getTime() : now;
+    const lastExecutedAt = strategy.lastExecutedAt ? new Date(strategy.lastExecutedAt).getTime() : null;
+    const nextAllowed = lastExecutedAt ? lastExecutedAt + parameters.frequencySeconds * 1000 : startAt;
+
+    if (!Number.isFinite(nextAllowed)) {
+      return false;
+    }
+
+    return now >= nextAllowed;
   }
 
   private async evaluateCondition(strategy: any, condition: StrategyCondition): Promise<boolean> {
@@ -382,17 +436,81 @@ export class StrategyExecutionEngine {
   }
 
   private parseStrategyParameters(config: string | Record<string, unknown>): StrategyParameters {
+    const extractAddress = (value: unknown): string => {
+      if (typeof value === 'string' && /^0x[a-fA-F0-9]{40}$/.test(value)) {
+        return value;
+      }
+      if (value && typeof value === 'object') {
+        const obj = value as Record<string, unknown>;
+        const address = obj.address;
+        if (typeof address === 'string' && /^0x[a-fA-F0-9]{40}$/.test(address)) {
+          return address;
+        }
+      }
+      return ethers.ZeroAddress;
+    };
+
+    const extractNumber = (value: unknown): number => {
+      if (typeof value === 'number' && Number.isFinite(value)) {
+        return value;
+      }
+      if (typeof value === 'string') {
+        const parsed = Number(value);
+        if (Number.isFinite(parsed)) {
+          return parsed;
+        }
+      }
+      return 0;
+    };
+
+    const toStringValue = (value: unknown): string => {
+      if (typeof value === 'string') {
+        return value;
+      }
+      if (typeof value === 'number') {
+        return value.toString();
+      }
+      if (typeof value === 'bigint') {
+        return value.toString();
+      }
+      return '0';
+    };
+
     try {
-      const parsed = typeof config === 'string' ? JSON.parse(config) : config || {};
+      const parsed = typeof config === 'string' ? JSON.parse(config) : (config || {});
+
+      const tokenInTarget = parsed.tokenIn ?? parsed.inputToken;
+      const tokenOutTarget = parsed.tokenOut ?? parsed.outputToken;
+
+      const tokenInAddress = extractAddress(tokenInTarget);
+      const tokenOutAddress = extractAddress(tokenOutTarget);
+
+      const tokenInDecimals = typeof tokenInTarget?.decimals === 'number' ? tokenInTarget.decimals : 18;
+      const tokenOutDecimals = typeof tokenOutTarget?.decimals === 'number' ? tokenOutTarget.decimals : 18;
+
+      const amountInRaw = parsed.amountInWei ?? parsed.amountIn ?? parsed.amountPerExecutionWei ?? parsed.amountPerExecution;
+      const minAmountOutRaw = parsed.minAmountOutWei ?? parsed.minAmountOut ?? parsed.amountOutMinWei ?? parsed.amountOutMin;
+
+      const frequencySeconds = extractNumber(parsed.frequencySeconds ?? parsed.frequency ?? parsed.intervalSeconds);
+      const maxExecutions = extractNumber(parsed.maxExecutions);
+
       return {
-        tokenIn: parsed.tokenIn || ethers.ZeroAddress,
-        tokenOut: parsed.tokenOut || ethers.ZeroAddress,
-        amountIn: parsed.amountIn || '0',
-        minAmountOut: parsed.minAmountOut || '0',
-        slippage: parsed.slippage || 0.5,
-        dexRouter: parsed.dexRouter || '',
-        gasLimit: parsed.gasLimit || '500000',
-        maxGasPrice: parsed.maxGasPrice || '20000000000'
+        tokenIn: tokenInAddress,
+        tokenInDecimals,
+        tokenOut: tokenOutAddress,
+        tokenOutDecimals,
+        amountIn: toStringValue(amountInRaw),
+        minAmountOut: toStringValue(minAmountOutRaw),
+        slippage: typeof parsed.slippage === 'number' ? parsed.slippage : extractNumber(parsed.slippage) || 0.5,
+        dexRouter: typeof parsed.dexRouter === 'string' && parsed.dexRouter ? parsed.dexRouter : env.DEFAULT_DEX_ROUTER_ADDRESS || '',
+        gasLimit: toStringValue(parsed.gasLimit ?? '500000'),
+        maxGasPrice: toStringValue(parsed.maxGasPrice ?? '20000000000'),
+        protocol: typeof parsed.protocol === 'string' ? parsed.protocol : undefined,
+        frequencySeconds: frequencySeconds > 0 ? frequencySeconds : undefined,
+        maxExecutions: maxExecutions > 0 ? maxExecutions : undefined,
+        startAt: typeof parsed.startAt === 'string' ? parsed.startAt : undefined,
+        priceTarget: Number.isFinite(parsed.priceTarget) ? Number(parsed.priceTarget) : undefined,
+        timeDeadline: typeof parsed.timeDeadline === 'string' ? parsed.timeDeadline : undefined
       };
     } catch (error) {
       logger.error('Error parsing strategy parameters:', error);
@@ -404,24 +522,54 @@ export class StrategyExecutionEngine {
     try {
       await this.updateStrategyStatus(context.strategyId, 'EXECUTING');
 
-      // Get active session key for the user
-      const sessionKey = await this.getActiveSessionKey(context.userId);
-      if (!sessionKey) {
-        throw new Error('No active session key found for user');
+      if (!context.smartAccountAddress && context.userWalletAddress) {
+        try {
+          const resolved = await this.blockchainService.getSmartAccountAddress(context.userWalletAddress);
+          if (resolved) {
+            context.smartAccountAddress = resolved;
+          }
+        } catch (error) {
+          logger.warn(`Unable to resolve smart account address on-chain for user ${context.userId}:`, error);
+        }
       }
 
-      context.sessionKeyAddress = sessionKey.address;
+      if (!context.smartAccountAddress || !ethers.isAddress(context.smartAccountAddress)) {
+        throw new Error('Smart account address not available for strategy execution');
+      }
+
+      if (!context.parameters.dexRouter || !ethers.isAddress(context.parameters.dexRouter)) {
+        throw new Error('DEX router address missing or invalid for strategy execution');
+      }
+
+      if (!ethers.isAddress(context.parameters.tokenIn) || !ethers.isAddress(context.parameters.tokenOut)) {
+        throw new Error('Strategy tokens are not configured with valid addresses');
+      }
+
+      // Get active session key for the user
+    let sessionKey = await this.getActiveSessionKey(context.userId, context.parameters.dexRouter);
+    if (!sessionKey) {
+      sessionKey = await this.provisionAutomationSessionKey(context);
+    }
+
+    if (!sessionKey) {
+      throw new Error('No active session key found for user');
+    }
+
+    context.sessionKeyAddress = sessionKey.address;
 
       // Execute the swap through the smart account
       const txHash = await this.blockchainService.executeSmartAccountTransaction({
         smartAccountAddress: context.smartAccountAddress,
         sessionKeyAddress: context.sessionKeyAddress,
         targetContract: context.parameters.dexRouter,
-        callData: await this.buildSwapCallData(context.parameters),
+        callData: await this.buildSwapCallData(context.parameters, context.smartAccountAddress),
         value: '0'
       });
 
       // Record the transaction
+      const amountInFormatted = ethers.formatUnits(context.parameters.amountIn, context.parameters.tokenInDecimals ?? 18);
+      const minAmountOutFormatted = ethers.formatUnits(context.parameters.minAmountOut, context.parameters.tokenOutDecimals ?? 18);
+
       await this.prisma.transaction.create({
         data: {
           txHash: txHash,
@@ -431,11 +579,13 @@ export class StrategyExecutionEngine {
           status: 'PENDING',
           tokensIn: {
             token: context.parameters.tokenIn,
-            amount: context.parameters.amountIn
+            amount: context.parameters.amountIn,
+            amountFormatted: amountInFormatted
           },
           tokensOut: {
             token: context.parameters.tokenOut,
-            amount: context.parameters.minAmountOut
+            amount: context.parameters.minAmountOut,
+            amountFormatted: minAmountOutFormatted
           }
         }
       });
@@ -451,74 +601,206 @@ export class StrategyExecutionEngine {
     }
   }
 
-  private async getActiveSessionKey(userId: string): Promise<SessionKey | null> {
+  private async getActiveSessionKey(userId: string, requiredTarget?: string): Promise<SessionKey | null> {
     const now = new Date();
+    const routerTarget = requiredTarget?.toLowerCase();
 
-    const userSession = await this.prisma.userSession.findFirst({
+    await Promise.all([
+      this.prisma.userSession.updateMany({
+        where: {
+          userId,
+          isActive: true,
+          expiresAt: { lte: now }
+        },
+        data: { isActive: false }
+      }),
+      this.prisma.sessionKey.updateMany({
+        where: {
+          session: {
+            userId
+          },
+          isActive: true,
+          validUntil: { lte: now }
+        },
+        data: { isActive: false }
+      })
+    ]);
+
+    const sessionKey = await this.prisma.sessionKey.findFirst({
       where: {
-        userId,
-        isActive: true
-      },
-      include: {
-        sessionKeys: {
-          orderBy: {
-            validUntil: 'desc'
-          }
-        }
+        isActive: true,
+        validUntil: { gt: now },
+        session: {
+          userId,
+          isActive: true,
+          expiresAt: { gt: now }
+        },
+        ...(routerTarget ? { allowedTargets: { has: routerTarget } } : {})
       },
       orderBy: {
-        createdAt: 'desc'
+        validUntil: 'desc'
       }
     });
 
-    if (!userSession) {
-      return null;
-    }
-
-    if (userSession.expiresAt <= now && userSession.isActive) {
-      await this.prisma.userSession.update({
-        where: { id: userSession.id },
-        data: { isActive: false }
+    if (!sessionKey && routerTarget) {
+      const alternative = await this.prisma.sessionKey.findFirst({
+        where: {
+          isActive: true,
+          validUntil: { gt: now },
+          session: {
+            userId,
+            isActive: true,
+            expiresAt: { gt: now }
+          }
+        },
+        orderBy: {
+          validUntil: 'desc'
+        }
       });
-      logger.warn(`User session ${userSession.id} expired and was deactivated.`);
-      return null;
+
+      if (!alternative) {
+        logger.warn(`No active session keys available for user ${userId}.`);
+        return null;
+      }
+
+      return alternative;
     }
 
-    await this.deactivateExpiredSessionKeys(userSession);
-
-    const activeKey = userSession.sessionKeys.find(key => key.isActive && key.validUntil > now);
-
-    if (!activeKey) {
+    if (!sessionKey) {
       logger.warn(`No active session keys available for user ${userId}.`);
       return null;
     }
 
-    return activeKey;
-  }
-
-  private async deactivateExpiredSessionKeys(session: UserSession & { sessionKeys: SessionKey[] }): Promise<void> {
-    const now = new Date();
-    const expiredKeys = session.sessionKeys.filter(key => key.isActive && key.validUntil <= now);
-
-    if (!expiredKeys.length) {
-      return;
-    }
-
-    await this.prisma.sessionKey.updateMany({
-      where: {
-        id: {
-          in: expiredKeys.map(key => key.id)
-        }
-      },
+    await this.prisma.sessionKey.update({
+      where: { id: sessionKey.id },
       data: {
-        isActive: false
+        lastUsed: now,
+        usageCount: { increment: 1 }
       }
     });
 
-    logger.info(`Deactivated ${expiredKeys.length} expired session key(s) for session ${session.id}.`);
+    return sessionKey;
   }
 
-  private async buildSwapCallData(parameters: StrategyParameters): Promise<string> {
+  private async provisionAutomationSessionKey(context: ExecutionContext): Promise<SessionKey | null> {
+    if (!context.smartAccountAddress || !ethers.isAddress(context.smartAccountAddress)) {
+      throw new Error('Smart account address required to provision session key');
+    }
+
+    const router = context.parameters.dexRouter?.toLowerCase();
+    if (!router || !ethers.isAddress(router)) {
+      throw new Error('DEX router address required to provision session key');
+    }
+
+    if (!context.userWalletAddress) {
+      throw new Error('User wallet address required to provision session key');
+    }
+
+    const automationPrivateKeyRaw = env.AUTOMATION_PRIVATE_KEY?.trim();
+    if (!automationPrivateKeyRaw) {
+      logger.error('AUTOMATION_PRIVATE_KEY is not configured; cannot provision automation session keys.');
+      throw new Error('Automation signer not configured for session key provisioning');
+    }
+
+    const automationPrivateKey = automationPrivateKeyRaw.startsWith('0x')
+      ? automationPrivateKeyRaw
+      : `0x${automationPrivateKeyRaw}`;
+
+    if (!ethers.isHexString(automationPrivateKey, 32)) {
+      logger.error('AUTOMATION_PRIVATE_KEY is invalid; expected a 32-byte hex string.');
+      throw new Error('Automation signer misconfigured (invalid private key)');
+    }
+
+    const userSession = await this.getOrCreateAutomationSession(context.userId);
+
+    const validityHours = DEFAULT_SESSION_VALIDITY_HOURS;
+    const limitAmount = DEFAULT_SESSION_LIMIT_ETH;
+    const validUntilSeconds = Math.floor(Date.now() / 1000) + validityHours * 3600;
+
+    const keyInfo = await this.blockchainService.generateAutomationSessionKey(
+      context.smartAccountAddress,
+      validityHours,
+      limitAmount,
+      [router]
+    );
+
+    await this.blockchainService.createSessionKey(
+      context.userWalletAddress,
+      {
+        sessionKey: keyInfo.address,
+        validUntil: validUntilSeconds,
+        limitAmount,
+        allowedTargets: [router],
+        allowedFunctions: DEFAULT_AUTOMATION_FUNCTION_SELECTORS
+      },
+      automationPrivateKey
+    );
+
+    const sessionKeyRecord = await this.prisma.sessionKey.create({
+      data: {
+        sessionId: userSession.id,
+        address: keyInfo.address.toLowerCase(),
+        validUntil: new Date(validUntilSeconds * 1000),
+        validAfter: new Date(),
+        limitAmount,
+        allowedTargets: [router],
+        allowedFunctions: DEFAULT_AUTOMATION_FUNCTION_SELECTORS,
+        isActive: true
+      }
+    });
+
+    logger.info(`🔐 Provisioned automation session key ${sessionKeyRecord.address} for user ${context.userId}`);
+
+    return sessionKeyRecord;
+  }
+
+  private async getOrCreateAutomationSession(userId: string): Promise<UserSession> {
+    const now = new Date();
+
+    const existing = await this.prisma.userSession.findFirst({
+      where: {
+        userId,
+        isActive: true,
+        expiresAt: { gt: now }
+      },
+      orderBy: {
+        lastActiveAt: 'desc'
+      }
+    });
+
+    if (existing) {
+      return existing;
+    }
+
+    const token = randomUUID();
+    const expiresAt = new Date(now.getTime() + DEFAULT_SESSION_VALIDITY_HOURS * 3600 * 1000);
+
+    return await this.prisma.userSession.create({
+      data: {
+        userId,
+        token,
+        refreshToken: null,
+        expiresAt,
+        ipAddress: 'automation',
+        userAgent: 'strategy-engine',
+        isActive: true
+      }
+    });
+  }
+
+  private parseAmountToBigInt(value: string): bigint {
+    try {
+      return BigInt(value);
+    } catch {
+      const numeric = Number(value);
+      if (Number.isFinite(numeric)) {
+        return BigInt(Math.floor(numeric));
+      }
+      return 0n;
+    }
+  }
+
+  private async buildSwapCallData(parameters: StrategyParameters, recipient: string): Promise<string> {
     // Build the swap call data based on DEX router interface
     const iface = new ethers.Interface([
       'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)'
@@ -526,12 +808,14 @@ export class StrategyExecutionEngine {
 
     const path = [parameters.tokenIn, parameters.tokenOut];
     const deadline = Math.floor(Date.now() / 1000) + 3600; // 1 hour from now
+    const amountIn = this.parseAmountToBigInt(parameters.amountIn);
+    const minAmountOut = this.parseAmountToBigInt(parameters.minAmountOut);
 
     return iface.encodeFunctionData('swapExactTokensForTokens', [
-      parameters.amountIn,
-      parameters.minAmountOut,
+      amountIn,
+      minAmountOut,
       path,
-      parameters.tokenIn, // Smart account address will be filled by blockchain service
+      recipient,
       deadline
     ]);
   }

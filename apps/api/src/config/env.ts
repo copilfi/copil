@@ -49,6 +49,11 @@ const envSchema = z.object({
   // Chain IDs
   SEI_CHAIN_ID: z.coerce.number().default(1329),
   SEI_TESTNET_CHAIN_ID: z.coerce.number().default(713715),
+
+  // DEX configuration
+  DEFAULT_DEX_ROUTER_ADDRESS: z.string().default(''),
+  STRATEGY_SESSION_LIMIT_ETH: z.string().default('10'),
+  STRATEGY_SESSION_VALIDITY_HOURS: z.coerce.number().default(24),
   
   // External APIs
   COINMARKETCAP_API_KEY: z.string().optional(),

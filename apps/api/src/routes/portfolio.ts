@@ -6,9 +6,26 @@ import { validateBody } from '@/middleware/validation';
 import { authenticateToken } from '@/middleware/auth';
 import rateLimit from 'express-rate-limit';
 import blockchainService from '@/services/RealBlockchainService';
+import { CacheService } from '@/services/CacheService';
 
 const router = Router();
 const prisma = new PrismaClient();
+const cacheService = new CacheService();
+
+const SUMMARY_CACHE_TTL = 30; // seconds
+const HISTORY_CACHE_TTL = 60 * 60 * 24; // 24 hours
+const HISTORY_MAX_POINTS = 288; // roughly 24h with 5 min granularity
+const HISTORY_MIN_INTERVAL_MS = 60 * 1000;
+
+type PortfolioHistoryPoint = {
+  timestamp: string;
+  value: number;
+  mainWalletValue: number;
+  smartAccountValue: number;
+};
+
+const summaryCacheKey = (userId: string) => `portfolio:summary:${userId}`;
+const historyCacheKey = (userId: string) => `portfolio:history:${userId}`;
 
 // Rate limiting for portfolio operations
 const portfolioRateLimit = rateLimit({
@@ -111,6 +128,19 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     logger.info(`Portfolio summary requested for user ${userId}, wallet: ${user.walletAddress}`);
 
+    const forceRefresh = String((req.query?.force as string) || '').toLowerCase() === 'true';
+    const cacheKey = summaryCacheKey(userId);
+
+    if (!forceRefresh) {
+      const cachedSummary = await cacheService.get<any>(cacheKey, { prefix: 'portfolio' });
+      if (cachedSummary) {
+        return res.json({
+          success: true,
+          data: cachedSummary
+        });
+      }
+    }
+
     // Get user's smart account for portfolio calculations
     const smartAccountRecord = await prisma.smartAccount.findFirst({
       where: {
@@ -155,6 +185,9 @@ router.get('/summary', authenticateToken, async (req, res) => {
 
     dbTokens.forEach(token => {
       addTokenMetadata(token.address, token.symbol, token.name);
+      if (token.address) {
+        blockchainService.registerTokenMetadata(token.address, token.symbol || undefined);
+      }
     });
 
     const trackedTokenAddresses = Array.from(new Set(
@@ -165,11 +198,11 @@ router.get('/summary', authenticateToken, async (req, res) => {
     const mainWalletBalances = await blockchainService.getWalletTokenBalances(
       user.walletAddress,
       trackedTokenAddresses,
-      true
+      forceRefresh
     );
 
     const smartAccountBalances = smartAccountAddress
-      ? await blockchainService.getWalletTokenBalances(smartAccountAddress, trackedTokenAddresses, true)
+      ? await blockchainService.getWalletTokenBalances(smartAccountAddress, trackedTokenAddresses, forceRefresh)
       : null;
 
     const mainWalletBalance = mainWalletBalances?.nativeBalance ?? '0.0';
@@ -331,10 +364,21 @@ router.get('/summary', authenticateToken, async (req, res) => {
       }))
       .sort((a, b) => b.amount - a.amount);
 
+    const nowIso = new Date().toISOString();
+    let historySeries = (await cacheService.get<PortfolioHistoryPoint[]>(historyCacheKey(userId), { prefix: 'portfolio' })) || [];
+
+    const twentyFourHoursAgo = Date.now() - 24 * 60 * 60 * 1000;
+    const baselinePoint = historySeries.find(point => new Date(point.timestamp).getTime() >= twentyFourHoursAgo) || historySeries[0];
+    const dailyChange = baselinePoint ? totalValue - baselinePoint.value : 0;
+    const dailyChangePercentage = baselinePoint && baselinePoint.value !== 0
+      ? (dailyChange / baselinePoint.value) * 100
+      : 0;
+
     const summary = {
-      totalValue: totalValue,
-      dailyChange: 0, // TODO: Calculate from historical data
-      tokens: tokens,
+      totalValue,
+      dailyChange,
+      dailyChangePercentage,
+      tokens,
       wallets: {
         main: {
           address: user.walletAddress,
@@ -354,8 +398,41 @@ router.get('/summary', authenticateToken, async (req, res) => {
         }
       },
       assetAllocation,
-      lastUpdated: new Date().toISOString()
+      lastUpdated: nowIso
     };
+
+    const newPoint: PortfolioHistoryPoint = {
+      timestamp: nowIso,
+      value: totalValue,
+      mainWalletValue: mainValue,
+      smartAccountValue: smartValue
+    };
+
+    if (historySeries.length === 0) {
+      historySeries.push(newPoint);
+    } else {
+      const lastPoint = historySeries[historySeries.length - 1];
+      const elapsed = new Date(newPoint.timestamp).getTime() - new Date(lastPoint.timestamp).getTime();
+      if (elapsed < HISTORY_MIN_INTERVAL_MS) {
+        historySeries[historySeries.length - 1] = newPoint;
+      } else {
+        historySeries.push(newPoint);
+      }
+    }
+
+    if (historySeries.length > HISTORY_MAX_POINTS) {
+      historySeries = historySeries.slice(historySeries.length - HISTORY_MAX_POINTS);
+    }
+
+    await cacheService.set(historyCacheKey(userId), historySeries, {
+      prefix: 'portfolio',
+      ttl: HISTORY_CACHE_TTL
+    });
+
+    await cacheService.set(cacheKey, summary, {
+      prefix: 'portfolio',
+      ttl: SUMMARY_CACHE_TTL
+    });
 
     logger.info(`Portfolio summary: ${JSON.stringify(summary, null, 2)}`);
 
@@ -393,6 +470,7 @@ router.get('/history', authenticateToken, async (req, res) => {
     }
 
     const period = req.query.period as string || '24h';
+    const forceRefresh = String((req.query?.force as string) || '').toLowerCase() === 'true';
     logger.info(`Portfolio history requested for user ${userId}, period: ${period}`);
 
     const smartAccountRecord = await prisma.smartAccount.findFirst({
@@ -413,103 +491,85 @@ router.get('/history', authenticateToken, async (req, res) => {
       logger.warn('History address resolution failed:', addressError);
     }
 
-    // Calculate time range based on period
     const now = new Date();
-    let startTime = new Date();
 
-    switch (period) {
-      case '1h':
-        startTime.setHours(now.getHours() - 1);
-        break;
-      case '24h':
-        startTime.setDate(now.getDate() - 1);
-        break;
-      case '7d':
-        startTime.setDate(now.getDate() - 7);
-        break;
-      case '30d':
-        startTime.setDate(now.getDate() - 30);
-        break;
-      default:
-        startTime.setDate(now.getDate() - 1);
-    }
+    const historyKey = historyCacheKey(userId);
+    const summaryKey = summaryCacheKey(userId);
 
-    const historyDbTokens = await prisma.tokenRegistry.findMany({
-      where: { isActive: true }
-    });
+    let historySeries = await cacheService.get<PortfolioHistoryPoint[]>(historyKey, { prefix: 'portfolio' });
 
-    const historyTokenMetadata = new Map<string, AssetMapEntry>();
-    const addHistoryToken = (address?: string | null, symbol?: string | null, name?: string | null) => {
-      if (!address || typeof address !== 'string' || !address.toLowerCase().startsWith('0x')) {
-        return;
-      }
+    if (!historySeries || historySeries.length === 0 || forceRefresh) {
+      const historyDbTokens = await prisma.tokenRegistry.findMany({
+        where: { isActive: true }
+      });
 
-      const normalized = address.toLowerCase();
-      if (!historyTokenMetadata.has(normalized)) {
-        historyTokenMetadata.set(normalized, {
-          address,
-          symbol: symbol || address,
-          name: name || symbol || address
-        });
-      }
-    };
+      const historyTrackedTokenAddresses: string[] = [];
+      historyDbTokens.forEach(token => {
+        if (token.address) {
+          historyTrackedTokenAddresses.push(token.address);
+          blockchainService.registerTokenMetadata(token.address, token.symbol || undefined);
+        }
+      });
 
-    historyDbTokens.forEach(token => {
-      addHistoryToken(token.address, token.symbol, token.name);
-    });
+      const mainWalletBalances = await blockchainService.getWalletTokenBalances(
+        user.walletAddress,
+        historyTrackedTokenAddresses,
+        true
+      );
 
-    const historyTrackedTokenAddresses = Array.from(new Set(
-      Array.from(historyTokenMetadata.values())
-        .map(entry => entry.address)
-    ));
+      const smartAccountBalances = smartAccountAddress
+        ? await blockchainService.getWalletTokenBalances(smartAccountAddress, historyTrackedTokenAddresses, true)
+        : null;
 
-    const mainWalletBalances = await blockchainService.getWalletTokenBalances(
-      user.walletAddress,
-      historyTrackedTokenAddresses,
-      true
-    );
+      const mainWalletBalance = mainWalletBalances?.nativeBalance ?? '0.0';
+      const smartAccountBalance = smartAccountBalances?.nativeBalance ?? '0.0';
 
-    const smartAccountBalances = smartAccountAddress
-      ? await blockchainService.getWalletTokenBalances(smartAccountAddress, historyTrackedTokenAddresses, true)
-      : null;
+      const mainValue = parseFloat(mainWalletBalance);
+      const smartValue = parseFloat(smartAccountBalance);
+      const currentValue = mainValue + smartValue;
 
-    const mainWalletBalance = mainWalletBalances?.nativeBalance ?? '0.0';
-    const smartAccountBalance = smartAccountBalances?.nativeBalance ?? '0.0';
-
-    const mainValue = parseFloat(mainWalletBalance);
-    const smartValue = parseFloat(smartAccountBalance);
-    const currentValue = mainValue + smartValue;
-
-    const dataPoints = 24; // 24 data points for the period
-    const timeInterval = (now.getTime() - startTime.getTime()) / dataPoints;
-
-    const history = Array.from({ length: dataPoints }, (_, i) => {
-      const timestamp = new Date(startTime.getTime() + (i * timeInterval));
-
-      return {
-        timestamp: timestamp.toISOString(),
-        value: currentValue,
-        mainWalletValue: mainValue,
-        smartAccountValue: smartValue
-      };
-    });
-
-    if (history.length > 0) {
-      history[history.length - 1] = {
+      const seedPoint: PortfolioHistoryPoint = {
         timestamp: now.toISOString(),
         value: currentValue,
         mainWalletValue: mainValue,
         smartAccountValue: smartValue
       };
+
+      historySeries = [seedPoint];
+
+      await cacheService.set(historyKey, historySeries, {
+        prefix: 'portfolio',
+        ttl: HISTORY_CACHE_TTL
+      });
+
+      await cacheService.delete(summaryKey, { prefix: 'portfolio' });
     }
 
-    logger.info(`Portfolio history: ${history.length} data points for period ${period}`);
+    if (!historySeries) {
+      historySeries = [];
+    }
+
+    const periodToMs: Record<string, number> = {
+      '1h': 60 * 60 * 1000,
+      '24h': 24 * 60 * 60 * 1000,
+      '7d': 7 * 24 * 60 * 60 * 1000,
+      '30d': 30 * 24 * 60 * 60 * 1000
+    };
+
+    const periodMs = periodToMs[period] || periodToMs['24h'];
+    const cutoffTime = now.getTime() - periodMs;
+
+    const filteredHistory = historySeries
+      .filter(point => new Date(point.timestamp).getTime() >= cutoffTime)
+      .sort((a, b) => new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime());
+
+    logger.info(`Portfolio history: ${filteredHistory.length} data points for period ${period}`);
 
     res.json({
       success: true,
-      data: history,
-      period: period,
-      startTime: startTime.toISOString(),
+      data: filteredHistory,
+      period,
+      startTime: new Date(cutoffTime).toISOString(),
       endTime: now.toISOString()
     });
   } catch (error) {

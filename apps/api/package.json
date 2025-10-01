@@ -10,7 +10,8 @@
     "test": "jest",
     "lint": "eslint src/**/*.ts",
     "typecheck": "tsc --noEmit",
-    "db:seed": "prisma db seed --schema=prisma/schema.prisma"
+    "db:seed": "prisma db seed --schema=prisma/schema.prisma",
+    "strategy:normalize": "tsx scripts/backfill-strategy-conditions.ts"
   },
   "dependencies": {
     "@copil/blockchain": "*",

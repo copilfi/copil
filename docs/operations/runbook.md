@@ -5,6 +5,7 @@
 - Docker Desktop (for Postgres, Redis, and supporting services)
 - Alchemy Sei RPC credentials configured in `.env`
 - `.env` populated for API (see `apps/api/.env.example` if present)
+- `AUTOMATION_PRIVATE_KEY` set to the production smart-account owner (32-byte hex string with `0x` prefix); session keys cannot be provisioned without it
 
 ## 2. One-Command Developer Stack
 The root-level `npm start` (alias `npm run stack`) performs:
@@ -56,6 +57,7 @@ node scripts/list-indexed-contracts.cjs            # verify current registry sta
 - Refresh tokens are stored in Redis as whitelisted families. Clearing Redis invalidates sessions.
 - Use `POST /api/auth/logout` to blacklist access tokens and rotate refresh tokens.
 - Frontend automatically retries once for 401 responses; persistent failures trigger a UI toast and logout.
+- Automation session keys: the strategy engine requires `AUTOMATION_PRIVATE_KEY`. Missing or malformed values will cause strategy execution to fail with `Automation signer not configured` errors.
 
 ## 7. Deployment Outline
 Production deployment should perform:
