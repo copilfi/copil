@@ -1,5 +1,11 @@
 import { logger } from '@/utils/logger';
+import env from '@/config/env';
 import { ethers } from 'ethers';
+import { DexExecutor, DexProtocol } from '@copil/blockchain';
+import { DRAGONSWAP_CONFIG, SYMPHONY_CONFIG } from '@copil/blockchain/dex/common/constants';
+import { TokenResolver } from '@copil/ai-agent';
+
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 export interface TokenInfo {
   address: string;
@@ -8,6 +14,7 @@ export interface TokenInfo {
   decimals: number;
   logoURI?: string;
   chainId: number;
+  aliases?: string[];
 }
 
 export interface SwapQuote {
@@ -45,320 +52,301 @@ export interface SwapParams {
   deadline?: number;
 }
 
-export class DEXAggregationService {
-  private supportedDEXs: Map<string, DEXConfig> = new Map();
-  private tokenList: Map<string, TokenInfo> = new Map();
+interface SupportedDexInfo {
+  protocol: DexProtocol;
+  name: string;
+  type: string;
+  feeBps: number;
+  routerAddress: string;
+}
 
-  constructor() {
-    this.initializeSupportedDEXs();
-    this.initializeTokenList();
-    logger.info('🔄 DEX Aggregation Service initialized');
-  }
+export interface DEXAggregationServiceLike {
+  getBestQuote(params: SwapParams): Promise<AggregatedQuote>;
+  getSupportedTokens(): TokenInfo[];
+  getTokenInfo(identifier: string): TokenInfo | null;
+  searchTokens(query: string): TokenInfo[];
+  getSupportedDEXs(): { id: string; name: string; type: string; fees: string[]; isActive: boolean; config: { routerAddress: string } }[];
+  isPairSupported(tokenA: string, tokenB: string): Promise<boolean>;
+  getRoutePreview(params: SwapParams): Promise<{ dex: string; router: string; estimatedGas: string }>;
+  getStatus(): { ready: boolean; reason?: string };
+}
 
-  private initializeSupportedDEXs(): void {
-    // Sei Network DEXs
-    this.supportedDEXs.set('dragonswap', {
-      name: 'DragonSwap',
-      routerAddress: '0x0000000000000000000000000000000000000001', // Mock address
-      factoryAddress: '0x0000000000000000000000000000000000000002',
-      fee: 0.003, // 0.3%
-      isActive: true,
-      type: 'uniswap-v2'
-    });
+export default class DEXAggregationService implements DEXAggregationServiceLike {
+  private readonly chainId: number;
+  private readonly supportedDexes: SupportedDexInfo[];
+  private readonly tokenResolver: TokenResolver;
 
-    this.supportedDEXs.set('astroport', {
-      name: 'Astroport',
-      routerAddress: '0x0000000000000000000000000000000000000003', // Mock address
-      factoryAddress: '0x0000000000000000000000000000000000000004',
-      fee: 0.003, // 0.3%
-      isActive: true,
-      type: 'astroport'
-    });
-
-    this.supportedDEXs.set('whitewhale', {
-      name: 'White Whale',
-      routerAddress: '0x0000000000000000000000000000000000000005', // Mock address
-      factoryAddress: '0x0000000000000000000000000000000000000006',
-      fee: 0.002, // 0.2%
-      isActive: true,
-      type: 'whitewhale'
-    });
-  }
-
-  private initializeTokenList(): void {
-    // Mock token list for Sei Network
-    const tokens: TokenInfo[] = [
+  constructor(private readonly dexExecutor: DexExecutor, tokenResolver?: TokenResolver) {
+    this.chainId = env.NODE_ENV === 'production' ? env.SEI_CHAIN_ID : env.SEI_TESTNET_CHAIN_ID;
+    this.tokenResolver = tokenResolver ?? new TokenResolver();
+    this.supportedDexes = [
       {
-        address: '0x0000000000000000000000000000000000000000',
-        symbol: 'SEI',
-        name: 'Sei',
-        decimals: 18,
-        chainId: 1329 // Sei testnet
+        protocol: DexProtocol.DRAGONSWAP,
+        name: 'DragonSwap',
+        type: 'Uniswap V3',
+        feeBps: 30,
+        routerAddress: DRAGONSWAP_CONFIG.routerAddress
       },
       {
-        address: '0x0000000000000000000000000000000000001001',
-        symbol: 'USDC',
-        name: 'USD Coin',
-        decimals: 6,
-        chainId: 1329
-      },
-      {
-        address: '0x0000000000000000000000000000000000001002',
-        symbol: 'WSEI',
-        name: 'Wrapped SEI',
-        decimals: 18,
-        chainId: 1329
-      },
-      {
-        address: '0x0000000000000000000000000000000000001003',
-        symbol: 'WETH',
-        name: 'Wrapped Ethereum',
-        decimals: 18,
-        chainId: 1329
+        protocol: DexProtocol.SYMPHONY,
+        name: 'Symphony',
+        type: 'Aggregator',
+        feeBps: 20,
+        routerAddress: SYMPHONY_CONFIG.routerAddress
       }
     ];
-
-    tokens.forEach(token => {
-      this.tokenList.set(token.address.toLowerCase(), token);
-      this.tokenList.set(token.symbol.toUpperCase(), token);
-    });
+    logger.info('🔄 DEX Aggregation Service initialized with live DEX integrations');
   }
 
-  /**
-   * Get best swap quote across all supported DEXs
-   */
   async getBestQuote(params: SwapParams): Promise<AggregatedQuote> {
-    try {
-      logger.info(`🔍 Getting quotes for ${params.tokenIn} -> ${params.tokenOut}, amount: ${params.amountIn}`);
+    const slippage = Number(params.slippage ?? 0.5);
+    const amountIn = Number(params.amountIn);
 
-      const quotes = await this.getAllQuotes(params);
-      
-      if (quotes.length === 0) {
-        throw new Error('No quotes available for this swap');
-      }
-
-      // Sort by amount out (best first)
-      quotes.sort((a, b) => parseFloat(b.amountOut) - parseFloat(a.amountOut));
-      
-      const bestQuote = quotes[0];
-      const worstQuote = quotes[quotes.length - 1];
-      
-      // Calculate savings compared to worst quote
-      const savingsAmount = (parseFloat(bestQuote.amountOut) - parseFloat(worstQuote.amountOut)).toString();
-      const savingsPercentage = quotes.length > 1 
-        ? ((parseFloat(bestQuote.amountOut) - parseFloat(worstQuote.amountOut)) / parseFloat(worstQuote.amountOut)) * 100
-        : 0;
-
-      const executionRoute = await this.buildExecutionRoute(bestQuote, params);
-
-      return {
-        bestQuote,
-        allQuotes: quotes,
-        savings: {
-          amount: savingsAmount,
-          percentage: savingsPercentage
-        },
-        executionRoute
-      };
-    } catch (error) {
-      logger.error('Failed to get best quote:', error);
-      throw error;
+    if (!Number.isFinite(amountIn) || amountIn <= 0) {
+      throw new Error('Amount must be greater than zero');
     }
+
+    const { tokenIn, tokenOut } = await this.resolveTokens(params.tokenIn, params.tokenOut);
+    const amountInWei = ethers.parseUnits(params.amountIn, tokenIn.decimals);
+
+    const quotes = await this.getAllQuotes(tokenIn, tokenOut, amountInWei, slippage);
+
+    if (!quotes.length) {
+      throw new Error('No quotes available for the requested pair');
+    }
+
+    const bestQuote = quotes[0];
+    const worstQuote = quotes[quotes.length - 1];
+
+    const savingsAmount = (parseFloat(bestQuote.amountOut) - parseFloat(worstQuote.amountOut)).toString();
+    const savingsPercentage = quotes.length > 1
+      ? ((parseFloat(bestQuote.amountOut) - parseFloat(worstQuote.amountOut)) / parseFloat(worstQuote.amountOut)) * 100
+      : 0;
+
+    const executionRoute = await this.buildExecutionRoute({
+      bestQuote,
+      tokenIn,
+      tokenOut,
+      amountInWei,
+      slippage,
+      recipient: params.recipient
+    });
+
+    return {
+      bestQuote,
+      allQuotes: quotes,
+      savings: {
+        amount: savingsAmount,
+        percentage: savingsPercentage
+      },
+      executionRoute
+    };
   }
 
-  /**
-   * Get quotes from all supported DEXs
-   */
-  private async getAllQuotes(params: SwapParams): Promise<SwapQuote[]> {
+  getSupportedTokens(): TokenInfo[] {
+    return this.mapAllTokens();
+  }
+
+  getTokenInfo(identifier: string): TokenInfo | null {
+    return this.findCachedToken(identifier);
+  }
+
+  searchTokens(query: string): TokenInfo[] {
+    return this.tokenResolver.searchTokens(query).map((match) => ({
+      symbol: match.symbol,
+      address: match.address,
+      name: match.name,
+      decimals: match.decimals,
+      chainId: this.chainId
+    }));
+  }
+
+  getSupportedDEXs(): { id: string; name: string; type: string; fees: string[]; isActive: boolean; config: { routerAddress: string } }[] {
+    return this.supportedDexes.map((dex) => ({
+      id: dex.protocol,
+      name: dex.name,
+      type: dex.type,
+      fees: [`${(dex.feeBps / 100).toFixed(2)}%`],
+      isActive: true,
+      config: {
+        routerAddress: dex.routerAddress
+      }
+    }));
+  }
+
+  async isPairSupported(tokenA: string, tokenB: string): Promise<boolean> {
+    const [resolvedA, resolvedB] = await Promise.all([
+      this.resolveTokenInfo(tokenA),
+      this.resolveTokenInfo(tokenB)
+    ]);
+
+    return Boolean(resolvedA && resolvedB);
+  }
+
+  async getRoutePreview(params: SwapParams): Promise<{
+    dex: string;
+    router: string;
+    estimatedGas: string;
+  }> {
+    const quote = await this.getBestQuote(params);
+    return {
+      dex: quote.executionRoute.dex,
+      router: quote.executionRoute.router,
+      estimatedGas: quote.bestQuote.gasEstimate
+    };
+  }
+
+  getStatus(): { ready: boolean; reason?: string } {
+    return { ready: true };
+  }
+
+  private async getAllQuotes(
+    tokenIn: TokenInfo,
+    tokenOut: TokenInfo,
+    amountInWei: bigint,
+    slippage: number
+  ): Promise<SwapQuote[]> {
     const quotes: SwapQuote[] = [];
-    
-    for (const [dexId, dexConfig] of this.supportedDEXs) {
-      if (!dexConfig.isActive) continue;
-      
+
+    for (const dex of this.supportedDexes) {
       try {
-        const quote = await this.getQuoteFromDEX(dexId, dexConfig, params);
-        if (quote) {
-          quotes.push(quote);
-        }
+        const result = await this.dexExecutor.getQuote({
+          protocol: dex.protocol,
+          tokenIn: tokenIn.address as `0x${string}`,
+          tokenOut: tokenOut.address as `0x${string}`,
+          amountIn: amountInWei
+        });
+
+        const amountOutFormatted = ethers.formatUnits(result.amountOut, tokenOut.decimals);
+
+        quotes.push({
+          dexName: dex.protocol,
+          amountOut: amountOutFormatted,
+          amountOutFormatted,
+          priceImpact: result.priceImpact,
+          gasEstimate: result.gasEstimate.toString(),
+          routerAddress: dex.routerAddress,
+          route: [tokenIn.address, tokenOut.address],
+          slippage
+        });
       } catch (error) {
-        logger.warn(`Failed to get quote from ${dexConfig.name}:`, error);
-        // Continue with other DEXs
+        logger.warn(`Failed to fetch quote from ${dex.name}:`, error instanceof Error ? error.message : error);
       }
     }
 
+    quotes.sort((a, b) => parseFloat(b.amountOut) - parseFloat(a.amountOut));
     return quotes;
   }
 
-  /**
-   * Get quote from specific DEX
-   */
-  private async getQuoteFromDEX(
-    dexId: string,
-    dexConfig: DEXConfig,
-    params: SwapParams
-  ): Promise<SwapQuote | null> {
-    try {
-      // Mock implementation - in production would call actual DEX APIs/contracts
-      const mockAmountOut = this.calculateMockAmountOut(params.amountIn, dexConfig.fee);
-      const mockPriceImpact = this.calculateMockPriceImpact(parseFloat(params.amountIn));
-      
-      const tokenInInfo = this.getTokenInfo(params.tokenIn);
-      const tokenOutInfo = this.getTokenInfo(params.tokenOut);
-      
-      if (!tokenInInfo || !tokenOutInfo) {
-        logger.warn(`Token info not found for ${params.tokenIn} or ${params.tokenOut}`);
-        return null;
-      }
+  private async buildExecutionRoute(params: {
+    bestQuote: SwapQuote;
+    tokenIn: TokenInfo;
+    tokenOut: TokenInfo;
+    amountInWei: bigint;
+    slippage: number;
+    recipient?: string;
+  }) {
+    const protocol = params.bestQuote.dexName as DexProtocol;
+    const amountOutWei = ethers.parseUnits(params.bestQuote.amountOut, params.tokenOut.decimals);
+    const amountOutMin = this.applySlippage(amountOutWei, params.slippage);
 
-      const quote: SwapQuote = {
-        dexName: dexConfig.name,
-        amountOut: mockAmountOut,
-        amountOutFormatted: ethers.formatUnits(mockAmountOut, tokenOutInfo.decimals),
-        priceImpact: mockPriceImpact,
-        gasEstimate: this.estimateGas(dexConfig.type),
-        routerAddress: dexConfig.routerAddress,
-        route: [params.tokenIn, params.tokenOut],
-        slippage: params.slippage
-      };
+    const recipient = params.recipient && ethers.isAddress(params.recipient)
+      ? (params.recipient as `0x${string}`)
+      : (ZERO_ADDRESS as `0x${string}`);
 
-      logger.debug(`Quote from ${dexConfig.name}: ${quote.amountOutFormatted} ${tokenOutInfo.symbol}`);
-      return quote;
-    } catch (error) {
-      logger.error(`Error getting quote from ${dexConfig.name}:`, error);
-      return null;
-    }
+    const transaction = await this.dexExecutor.buildSwapTransaction({
+      protocol,
+      tokenIn: params.tokenIn.address as `0x${string}`,
+      tokenOut: params.tokenOut.address as `0x${string}`,
+      amountIn: params.amountInWei,
+      amountOutMin,
+      recipient
+    });
+
+    return {
+      dex: protocol,
+      router: transaction.target,
+      calldata: transaction.calldata,
+      value: transaction.value
+    };
   }
 
-  /**
-   * Build execution route for the best quote
-   */
-  private async buildExecutionRoute(
-    quote: SwapQuote,
-    params: SwapParams
-  ): Promise<AggregatedQuote['executionRoute']> {
-    const iface = new ethers.Interface([
-      'function swapExactTokensForTokens(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)',
-      'function swapExactETHForTokens(uint amountOutMin, address[] calldata path, address to, uint deadline) external payable returns (uint[] memory amounts)',
-      'function swapExactTokensForETH(uint amountIn, uint amountOutMin, address[] calldata path, address to, uint deadline) external returns (uint[] memory amounts)'
+  private applySlippage(amount: bigint, slippagePercent: number): bigint {
+    const basisPoints = Math.floor(slippagePercent * 100);
+    const numerator = BigInt(10000 - basisPoints);
+    return (amount * numerator) / 10000n;
+  }
+
+  private async resolveTokens(tokenIn: string, tokenOut: string) {
+    const [resolvedIn, resolvedOut] = await Promise.all([
+      this.resolveTokenInfo(tokenIn),
+      this.resolveTokenInfo(tokenOut)
     ]);
 
-    const deadline = params.deadline || (Math.floor(Date.now() / 1000) + 3600);
-    const amountOutMin = ethers.parseUnits(
-      (parseFloat(quote.amountOutFormatted) * (1 - params.slippage / 100)).toString(),
-      this.getTokenInfo(params.tokenOut)?.decimals || 18
-    ).toString();
-
-    let calldata: string;
-    let value = '0';
-
-    // Check if input token is native ETH/SEI
-    if (params.tokenIn === ethers.ZeroAddress || params.tokenIn.toLowerCase() === 'sei') {
-      calldata = iface.encodeFunctionData('swapExactETHForTokens', [
-        amountOutMin,
-        [params.tokenIn, params.tokenOut],
-        params.recipient,
-        deadline
-      ]);
-      value = params.amountIn;
-    } else if (params.tokenOut === ethers.ZeroAddress || params.tokenOut.toLowerCase() === 'sei') {
-      calldata = iface.encodeFunctionData('swapExactTokensForETH', [
-        params.amountIn,
-        amountOutMin,
-        [params.tokenIn, params.tokenOut],
-        params.recipient,
-        deadline
-      ]);
-    } else {
-      calldata = iface.encodeFunctionData('swapExactTokensForTokens', [
-        params.amountIn,
-        amountOutMin,
-        [params.tokenIn, params.tokenOut],
-        params.recipient,
-        deadline
-      ]);
+    if (!resolvedIn || !resolvedOut) {
+      throw new Error('One or both tokens are not supported');
     }
 
     return {
-      dex: quote.dexName,
-      router: quote.routerAddress,
-      calldata,
-      value
+      tokenIn: resolvedIn,
+      tokenOut: resolvedOut
     };
   }
 
-  /**
-   * Get supported tokens
-   */
-  getSupportedTokens(): TokenInfo[] {
-    const uniqueTokens = new Map<string, TokenInfo>();
-    
-    for (const [key, token] of this.tokenList) {
-      if (key.startsWith('0x')) { // Only get address-based entries
-        uniqueTokens.set(token.address, token);
+  private mapAllTokens(): TokenInfo[] {
+    const tokens = this.tokenResolver.getAllTokens();
+    return Object.entries(tokens).map(([symbol, info]) => ({
+      symbol,
+      address: info.address,
+      name: info.name,
+      decimals: info.decimals,
+      aliases: info.aliases,
+      chainId: this.chainId
+    }));
+  }
+
+  private findCachedToken(identifier: string): TokenInfo | null {
+    const normalized = identifier.toLowerCase();
+    const tokens = this.tokenResolver.getAllTokens();
+
+    for (const [symbol, info] of Object.entries(tokens)) {
+      if (
+        symbol.toLowerCase() === normalized ||
+        info.address.toLowerCase() === normalized ||
+        (info.aliases?.some(alias => alias.toLowerCase() === normalized) ?? false)
+      ) {
+        return {
+          symbol,
+          address: info.address,
+          name: info.name,
+          decimals: info.decimals,
+          aliases: info.aliases,
+          chainId: this.chainId
+        };
       }
     }
 
-    return Array.from(uniqueTokens.values());
+    return null;
   }
 
-  /**
-   * Get token info by address or symbol
-   */
-  getTokenInfo(tokenIdentifier: string): TokenInfo | undefined {
-    return this.tokenList.get(tokenIdentifier.toLowerCase()) || 
-           this.tokenList.get(tokenIdentifier.toUpperCase());
-  }
+  private async resolveTokenInfo(identifier: string): Promise<TokenInfo | null> {
+    const cached = this.findCachedToken(identifier);
+    if (cached) {
+      return cached;
+    }
 
-  /**
-   * Get supported DEXs
-   */
-  getSupportedDEXs(): Array<{ id: string; config: DEXConfig }> {
-    return Array.from(this.supportedDEXs.entries()).map(([id, config]) => ({ id, config }));
-  }
+    const match = await this.tokenResolver.resolveToken(identifier);
 
-  /**
-   * Check if trading pair is supported
-   */
-  async isPairSupported(tokenA: string, tokenB: string): Promise<boolean> {
-    const tokenAInfo = this.getTokenInfo(tokenA);
-    const tokenBInfo = this.getTokenInfo(tokenB);
-    
-    return !!(tokenAInfo && tokenBInfo);
-  }
+    if (!match) {
+      return null;
+    }
 
-  // Private helper methods
-  private calculateMockAmountOut(amountIn: string, fee: number): string {
-    const amountInNum = parseFloat(amountIn);
-    const amountOut = amountInNum * (1 - fee) * (0.95 + Math.random() * 0.1); // Mock price variation
-    return Math.floor(amountOut).toString();
-  }
-
-  private calculateMockPriceImpact(amountIn: number): number {
-    // Simulate price impact based on trade size
-    if (amountIn < 1000) return 0.1;
-    if (amountIn < 10000) return 0.3;
-    if (amountIn < 100000) return 0.8;
-    return 2.5;
-  }
-
-  private estimateGas(dexType: string): string {
-    const gasEstimates: { [key: string]: string } = {
-      'uniswap-v2': '120000',
-      'astroport': '150000',
-      'whitewhale': '140000'
+    return {
+      symbol: match.symbol,
+      address: match.address,
+      name: match.name,
+      decimals: match.decimals,
+      chainId: this.chainId
     };
-    
-    return gasEstimates[dexType] || '130000';
   }
 }
-
-interface DEXConfig {
-  name: string;
-  routerAddress: string;
-  factoryAddress: string;
-  fee: number;
-  isActive: boolean;
-  type: string;
-}
-
-export default DEXAggregationService;

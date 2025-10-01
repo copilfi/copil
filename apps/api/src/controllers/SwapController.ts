@@ -1,9 +1,13 @@
 import { Request, Response } from 'express';
-import { DexExecutor } from '@copil/blockchain';
+import { DexExecutor, DexProtocol } from '@copil/blockchain';
 import { TokenResolver } from '@copil/ai-agent';
 import { z } from 'zod';
 import { AuthenticatedRequest } from '@/middleware/auth';
 import { logger } from '@/utils/logger';
+import { AutomationSessionService } from '@/services/AutomationSessionService';
+import { RealBlockchainService } from '@/services/RealBlockchainService';
+import { ethers } from 'ethers';
+import { Address } from 'viem';
 
 // Request validation schemas
 const SwapQuoteSchema = z.object({
@@ -25,11 +29,19 @@ const ExecuteSwapSchema = z.object({
 });
 
 export class SwapController {
-  private dexExecutor: DexExecutor;
+  private dexExecutor: DexExecutor | null;
   private tokenResolver: TokenResolver;
+  private blockchainService: RealBlockchainService;
+  private automationSessionService: AutomationSessionService;
 
-  constructor(dexExecutor: DexExecutor) {
+  constructor(
+    dexExecutor: DexExecutor | null,
+    blockchainService: RealBlockchainService,
+    automationSessionService: AutomationSessionService
+  ) {
     this.dexExecutor = dexExecutor;
+    this.blockchainService = blockchainService;
+    this.automationSessionService = automationSessionService;
     this.tokenResolver = new TokenResolver();
   }
 
@@ -38,6 +50,17 @@ export class SwapController {
    */
   getSwapQuote = async (req: Request, res: Response): Promise<void> => {
     try {
+      const dexExecutor = this.dexExecutor;
+
+      if (!dexExecutor) {
+        res.status(503).json({
+          success: false,
+          error: 'DEX executor unavailable',
+          message: 'Swap quoting is temporarily disabled while on-chain infrastructure initializes.'
+        });
+        return;
+      }
+
       const validatedData = SwapQuoteSchema.parse(req.body);
 
       // Resolve token addresses
@@ -54,23 +77,27 @@ export class SwapController {
       }
 
       // Convert amount to wei
-      const amountInWei = BigInt(Math.floor(validatedData.amountIn * Math.pow(10, tokenInMatch.decimals)));
+      const amountInWei = ethers.parseUnits(validatedData.amountIn.toString(), tokenInMatch.decimals);
 
-      let protocolUsed: string;
+      const requestedProtocol = validatedData.protocol
+        ? (validatedData.protocol.toLowerCase() as DexProtocol)
+        : undefined;
+
+      let protocolUsed: DexProtocol;
       let quoteResult:
-        | (Awaited<ReturnType<typeof this.dexExecutor.getQuote>> & { protocol?: string })
-        | Awaited<ReturnType<typeof this.dexExecutor.getBestQuote>>;
+        | Awaited<ReturnType<typeof dexExecutor.getQuote>>
+        | Awaited<ReturnType<typeof dexExecutor.getBestQuote>>;
 
-      if (validatedData.protocol) {
-        quoteResult = await this.dexExecutor.getQuote({
-          protocol: validatedData.protocol as any,
+      if (requestedProtocol) {
+        quoteResult = await dexExecutor.getQuote({
+          protocol: requestedProtocol,
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
         });
-        protocolUsed = validatedData.protocol;
+        protocolUsed = requestedProtocol;
       } else {
-        const bestQuote = await this.dexExecutor.getBestQuote({
+        const bestQuote = await dexExecutor.getBestQuote({
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
@@ -80,7 +107,7 @@ export class SwapController {
       }
 
       // Convert output amount to human readable
-      const amountOutFormatted = Number(quoteResult.amountOut) / Math.pow(10, tokenOutMatch.decimals);
+      const amountOutFormatted = Number(ethers.formatUnits(quoteResult.amountOut, tokenOutMatch.decimals));
 
       res.json({
         success: true,
@@ -134,6 +161,17 @@ export class SwapController {
    */
   executeSwap = async (req: AuthenticatedRequest, res: Response): Promise<void> => {
     try {
+      const dexExecutor = this.dexExecutor;
+
+      if (!dexExecutor) {
+        res.status(503).json({
+          success: false,
+          error: 'DEX executor unavailable',
+          message: 'Swap execution is temporarily disabled while on-chain infrastructure initializes.'
+        });
+        return;
+      }
+
       const userId = req.user?.id;
       if (!userId) {
         res.status(401).json({
@@ -159,74 +197,130 @@ export class SwapController {
       }
 
       // Convert amounts to wei
-      const amountInWei = BigInt(Math.floor(validatedData.amountIn * Math.pow(10, tokenInMatch.decimals)));
-      const amountOutMinWei = validatedData.amountOutMin 
-        ? BigInt(Math.floor(validatedData.amountOutMin * Math.pow(10, tokenOutMatch.decimals)))
+      const amountInWei = ethers.parseUnits(validatedData.amountIn.toString(), tokenInMatch.decimals);
+      const requestedProtocol = validatedData.protocol
+        ? (validatedData.protocol.toLowerCase() as DexProtocol)
         : undefined;
 
-      // Get best protocol if not specified
-      let protocol = validatedData.protocol;
-      if (!protocol) {
-        const bestQuote = await this.dexExecutor.getBestQuote({
+      // Determine protocol and quote
+      let protocolUsed: DexProtocol;
+      let quoteResult:
+        | Awaited<ReturnType<typeof dexExecutor.getQuote>>
+        | Awaited<ReturnType<typeof dexExecutor.getBestQuote>>;
+
+      if (requestedProtocol) {
+        quoteResult = await dexExecutor.getQuote({
+          protocol: requestedProtocol,
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
         });
-        protocol = bestQuote.protocol;
-      }
-
-      // Calculate slippage protection
-      let finalAmountOutMin = amountOutMinWei;
-      if (!finalAmountOutMin && validatedData.slippage) {
-        const quote = await this.dexExecutor.getQuote({
-          protocol: protocol as any,
+        protocolUsed = requestedProtocol;
+      } else {
+        const bestQuote = await dexExecutor.getBestQuote({
           tokenIn: tokenInMatch.address,
           tokenOut: tokenOutMatch.address,
           amountIn: amountInWei
         });
-        
-        const slippageMultiplier = (100 - validatedData.slippage) / 100;
-        finalAmountOutMin = BigInt(Math.floor(Number(quote.amountOut) * slippageMultiplier));
+        quoteResult = bestQuote;
+        protocolUsed = bestQuote.protocol;
       }
 
-      const recipientAddress = validatedData.recipient && validatedData.recipient.startsWith('0x')
-        ? (validatedData.recipient as `0x${string}`)
-        : undefined;
+      const amountOutWei = quoteResult.amountOut;
 
-      // Execute the swap
-      const swapResult = await this.dexExecutor.executeSwap({
-        protocol: protocol as any,
-        tokenIn: tokenInMatch.address,
-        tokenOut: tokenOutMatch.address,
+      const amountOutMinWei = validatedData.amountOutMin
+        ? ethers.parseUnits(validatedData.amountOutMin.toString(), tokenOutMatch.decimals)
+        : this.applySlippage(amountOutWei, validatedData.slippage ?? 0.5);
+
+      const userWalletAddress = req.user?.walletAddress;
+      if (!userWalletAddress) {
+        res.status(400).json({
+          success: false,
+          error: 'User wallet address not available'
+        });
+        return;
+      }
+
+      const smartAccountAddress = await this.blockchainService.getSmartAccountAddress(userWalletAddress);
+
+      const swapTransaction = await dexExecutor.buildSwapTransaction({
+        protocol: protocolUsed,
+        tokenIn: tokenInMatch.address as Address,
+        tokenOut: tokenOutMatch.address as Address,
         amountIn: amountInWei,
-        amountOutMin: finalAmountOutMin,
-        recipient: recipientAddress,
-        slippageTolerance: validatedData.slippage ? validatedData.slippage / 100 : undefined
+        amountOutMin: amountOutMinWei,
+        recipient: smartAccountAddress as Address
       });
 
-      logger.info('Swap executed via API', {
+      const routerAddress = swapTransaction.target;
+
+      const sessionKey = await this.automationSessionService.ensureSessionKey({
         userId,
+        userWalletAddress,
+        smartAccountAddress,
+        targetContracts: [routerAddress, tokenInMatch.address]
+      });
+
+      // Ensure allowance for ERC-20 tokens
+      const tokenInIsNative = tokenInMatch.address.toLowerCase() === ethers.ZeroAddress.toLowerCase();
+      if (!tokenInIsNative) {
+        const currentAllowance = await this.blockchainService.getTokenAllowance(
+          tokenInMatch.address,
+          smartAccountAddress,
+          routerAddress
+        );
+
+        if (currentAllowance < amountInWei) {
+          const erc20Interface = new ethers.Interface([
+            'function approve(address spender, uint256 amount)'
+          ]);
+          const approveCalldata = erc20Interface.encodeFunctionData('approve', [
+            routerAddress,
+            ethers.MaxUint256
+          ]);
+
+          await this.blockchainService.executeSmartAccountTransaction({
+            smartAccountAddress,
+            sessionKeyAddress: sessionKey.address,
+            targetContract: tokenInMatch.address,
+            callData: approveCalldata,
+            value: '0'
+          });
+        }
+      }
+
+      const swapTxHash = await this.blockchainService.executeSmartAccountTransaction({
+        smartAccountAddress,
+        sessionKeyAddress: sessionKey.address,
+        targetContract: routerAddress,
+        callData: swapTransaction.calldata,
+        value: swapTransaction.value
+      });
+
+      const quotedAmount = ethers.formatUnits(amountOutWei, tokenOutMatch.decimals);
+      const minAmountFormatted = ethers.formatUnits(amountOutMinWei, tokenOutMatch.decimals);
+
+      logger.info('Swap executed via smart account', {
+        userId,
+        smartAccountAddress,
         tokenIn: tokenInMatch.symbol,
         tokenOut: tokenOutMatch.symbol,
         amountIn: validatedData.amountIn,
-        protocol,
-        transactionHash: swapResult.hash
+        protocol: protocolUsed,
+        transactionHash: swapTxHash
       });
-
-      // Convert output amount to human readable
-      const amountOutFormatted = Number(swapResult.amountOut) / Math.pow(10, tokenOutMatch.decimals);
 
       res.json({
         success: true,
-        message: `Successfully swapped ${validatedData.amountIn} ${tokenInMatch.symbol} for ${amountOutFormatted.toFixed(6)} ${tokenOutMatch.symbol}`,
+        message: `Successfully submitted swap for ${validatedData.amountIn} ${tokenInMatch.symbol}`,
         data: {
-          transactionHash: swapResult.hash,
+          transactionHash: swapTxHash,
+          protocol: protocolUsed,
           inputToken: tokenInMatch.symbol,
           outputToken: tokenOutMatch.symbol,
-          inputAmount: validatedData.amountIn,
-          outputAmount: amountOutFormatted,
-          gasUsed: swapResult.gasUsed.toString(),
-          protocol,
+          quotedOutputAmount: quotedAmount,
+          minimumOutputAmount: minAmountFormatted,
+          gasEstimate: quoteResult.gasEstimate.toString(),
           timestamp: new Date().toISOString()
         }
       });
@@ -251,6 +345,12 @@ export class SwapController {
       return;
     }
   };
+
+  private applySlippage(amount: bigint, slippagePercent: number): bigint {
+    const basisPoints = Math.floor(slippagePercent * 100);
+    const numerator = BigInt(10000 - basisPoints);
+    return (amount * numerator) / 10000n;
+  }
 
   /**
    * Get all supported tokens
@@ -364,14 +464,14 @@ export class SwapController {
           name: 'DragonSwap',
           type: 'Uniswap V3 Fork',
           fees: ['0.01%', '0.05%', '0.3%', '1%'],
-          isActive: true
+          isActive: Boolean(this.dexExecutor)
         },
         {
           id: 'symphony',
           name: 'Symphony',
           type: 'DEX Aggregator',
           fees: ['Variable'],
-          isActive: true
+          isActive: Boolean(this.dexExecutor)
         }
       ];
 

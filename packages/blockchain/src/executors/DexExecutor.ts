@@ -1,9 +1,10 @@
 import { Address } from 'viem';
+import { ethers } from 'ethers';
 import { DragonswapProvider } from '../dex/dragonswap';
 import { SymphonyProvider } from '../dex/symphony';
 import { ConditionalOrderEngineContract, OrderType, CreateOrderParams } from '../contracts/ConditionalOrderEngine';
 import { SwapParams, SwapResult, ExactInputSingleParams } from '../dex/common/types';
-import { DRAGONSWAP_CONFIG, SYMPHONY_CONFIG, WSEI_ADDRESS, DEFAULT_SLIPPAGE_TOLERANCE } from '../dex/common/constants';
+import { DRAGONSWAP_CONFIG, SYMPHONY_CONFIG, WSEI_ADDRESS, DEFAULT_SLIPPAGE_TOLERANCE, NATIVE_SEI_ADDRESS } from '../dex/common/constants';
 import { BlockchainLogger } from '../utils/Logger';
 import { Validator } from '../utils/Validator';
 import { SeiProvider } from '../providers/SeiProvider';
@@ -519,6 +520,26 @@ export class DexExecutor {
     }
   }
 
+  async buildSwapTransaction(params: DexSwapOrderParams): Promise<{
+    target: Address;
+    calldata: `0x${string}`;
+    value: string;
+  }> {
+    const targetContract = this.getProtocolRouter(params.protocol);
+    const callData = await this.generateSwapCallData(params) as `0x${string}`;
+    const isNativeInput = params.tokenIn.toLowerCase() === NATIVE_SEI_ADDRESS.toLowerCase();
+
+    const value = isNativeInput
+      ? ethers.formatEther(params.amountIn)
+      : '0';
+
+    return {
+      target: targetContract,
+      calldata: callData,
+      value
+    };
+  }
+
   private async executeWithDragonswap(params: DexSwapOrderParams): Promise<SwapResult> {
     if (!this.dragonswapProvider) {
       throw new Error('DragonSwap provider not initialized');
@@ -712,7 +733,7 @@ export class DexExecutor {
     return conditions;
   }
 
-  private getProtocolRouter(protocol: DexProtocol): string {
+  private getProtocolRouter(protocol: DexProtocol): Address {
     switch (protocol) {
       case DexProtocol.DRAGONSWAP:
         return DRAGONSWAP_CONFIG.routerAddress;

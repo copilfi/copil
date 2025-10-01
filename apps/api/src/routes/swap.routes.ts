@@ -2,10 +2,20 @@ import { Router } from 'express';
 import { SwapController } from '../controllers/SwapController';
 import { authenticateToken } from '../middleware/auth';
 import { DexExecutor } from '@copil/blockchain';
+import { RealBlockchainService } from '@/services/RealBlockchainService';
+import { AutomationSessionService } from '@/services/AutomationSessionService';
 
-export const createSwapRoutes = (dexExecutor: DexExecutor): Router => {
+export const createSwapRoutes = (
+  dexExecutor: DexExecutor | null,
+  blockchainService: RealBlockchainService,
+  automationSessionService: AutomationSessionService
+): Router => {
   const router = Router();
-  const swapController = new SwapController(dexExecutor);
+  const swapController = new SwapController(
+    dexExecutor,
+    blockchainService,
+    automationSessionService
+  );
 
   /**
    * @route POST /api/swap/quote

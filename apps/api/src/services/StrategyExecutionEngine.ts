@@ -1,14 +1,17 @@
-import { Prisma, PrismaClient, SessionKey, UserSession } from '@prisma/client';
+import { Prisma, PrismaClient } from '@prisma/client';
 import { logger } from '@/utils/logger';
 import { RealBlockchainService } from './RealBlockchainService';
 import { ethers } from 'ethers';
 import env from '@/config/env';
-import { randomUUID } from 'crypto';
 import {
   createConditionCache,
   normalizeStrategyConditions,
   StrategyCondition
 } from '@/utils/strategyConditionNormalizer';
+import {
+  AutomationSessionService,
+  DEFAULT_AUTOMATION_FUNCTION_SELECTORS
+} from './AutomationSessionService';
 
 export interface StrategyParameters {
   tokenIn: string;
@@ -39,31 +42,24 @@ export interface ExecutionContext {
   parameters: StrategyParameters;
 }
 
-const DEFAULT_SESSION_VALIDITY_HOURS = Number.isFinite(env.STRATEGY_SESSION_VALIDITY_HOURS)
-  ? env.STRATEGY_SESSION_VALIDITY_HOURS
-  : 24;
-const DEFAULT_SESSION_LIMIT_ETH = env.STRATEGY_SESSION_LIMIT_ETH || '10';
-const DEFAULT_AUTOMATION_FUNCTION_SELECTORS = [
-  '0xa9059cbb', // transfer(address,uint256)
-  '0x095ea7b3', // approve(address,uint256)
-  '0x7ff36ab5', // swapExactETHForTokens
-  '0x38ed1739', // swapExactTokensForTokens
-  '0x8803dbee', // swapTokensForExactTokens
-  '0x02751cec', // removeLiquidity
-  '0xf305d719', // addLiquidityETH
-  '0xe8e33700'  // addLiquidity
-];
-
 export class StrategyExecutionEngine {
   private prisma: PrismaClient;
   private blockchainService: RealBlockchainService;
   private isRunning: boolean = false;
   private executionInterval: NodeJS.Timeout | null = null;
   private conditionCache = createConditionCache();
+  private automationSessionService: AutomationSessionService;
 
-  constructor(prisma: PrismaClient, blockchainService: RealBlockchainService) {
+  constructor(
+    prisma: PrismaClient,
+    blockchainService: RealBlockchainService,
+    automationSessionService?: AutomationSessionService
+  ) {
     this.prisma = prisma;
     this.blockchainService = blockchainService;
+    this.automationSessionService = automationSessionService
+      ? automationSessionService
+      : new AutomationSessionService(prisma, blockchainService);
   }
 
   async start(): Promise<void> {
@@ -546,14 +542,16 @@ export class StrategyExecutionEngine {
       }
 
       // Get active session key for the user
-    let sessionKey = await this.getActiveSessionKey(context.userId, context.parameters.dexRouter);
-    if (!sessionKey) {
-      sessionKey = await this.provisionAutomationSessionKey(context);
+    if (!context.userWalletAddress) {
+      throw new Error('User wallet address not available for strategy execution');
     }
 
-    if (!sessionKey) {
-      throw new Error('No active session key found for user');
-    }
+    const sessionKey = await this.automationSessionService.ensureSessionKey({
+      userId: context.userId,
+      userWalletAddress: context.userWalletAddress,
+      smartAccountAddress: context.smartAccountAddress,
+      targetContracts: [context.parameters.dexRouter]
+    });
 
     context.sessionKeyAddress = sessionKey.address;
 
@@ -599,193 +597,6 @@ export class StrategyExecutionEngine {
       await this.updateStrategyStatus(context.strategyId, 'FAILED', error instanceof Error ? error.message : 'Execution failed');
       throw error;
     }
-  }
-
-  private async getActiveSessionKey(userId: string, requiredTarget?: string): Promise<SessionKey | null> {
-    const now = new Date();
-    const routerTarget = requiredTarget?.toLowerCase();
-
-    await Promise.all([
-      this.prisma.userSession.updateMany({
-        where: {
-          userId,
-          isActive: true,
-          expiresAt: { lte: now }
-        },
-        data: { isActive: false }
-      }),
-      this.prisma.sessionKey.updateMany({
-        where: {
-          session: {
-            userId
-          },
-          isActive: true,
-          validUntil: { lte: now }
-        },
-        data: { isActive: false }
-      })
-    ]);
-
-    const sessionKey = await this.prisma.sessionKey.findFirst({
-      where: {
-        isActive: true,
-        validUntil: { gt: now },
-        session: {
-          userId,
-          isActive: true,
-          expiresAt: { gt: now }
-        },
-        ...(routerTarget ? { allowedTargets: { has: routerTarget } } : {})
-      },
-      orderBy: {
-        validUntil: 'desc'
-      }
-    });
-
-    if (!sessionKey && routerTarget) {
-      const alternative = await this.prisma.sessionKey.findFirst({
-        where: {
-          isActive: true,
-          validUntil: { gt: now },
-          session: {
-            userId,
-            isActive: true,
-            expiresAt: { gt: now }
-          }
-        },
-        orderBy: {
-          validUntil: 'desc'
-        }
-      });
-
-      if (!alternative) {
-        logger.warn(`No active session keys available for user ${userId}.`);
-        return null;
-      }
-
-      return alternative;
-    }
-
-    if (!sessionKey) {
-      logger.warn(`No active session keys available for user ${userId}.`);
-      return null;
-    }
-
-    await this.prisma.sessionKey.update({
-      where: { id: sessionKey.id },
-      data: {
-        lastUsed: now,
-        usageCount: { increment: 1 }
-      }
-    });
-
-    return sessionKey;
-  }
-
-  private async provisionAutomationSessionKey(context: ExecutionContext): Promise<SessionKey | null> {
-    if (!context.smartAccountAddress || !ethers.isAddress(context.smartAccountAddress)) {
-      throw new Error('Smart account address required to provision session key');
-    }
-
-    const router = context.parameters.dexRouter?.toLowerCase();
-    if (!router || !ethers.isAddress(router)) {
-      throw new Error('DEX router address required to provision session key');
-    }
-
-    if (!context.userWalletAddress) {
-      throw new Error('User wallet address required to provision session key');
-    }
-
-    const automationPrivateKeyRaw = env.AUTOMATION_PRIVATE_KEY?.trim();
-    if (!automationPrivateKeyRaw) {
-      logger.error('AUTOMATION_PRIVATE_KEY is not configured; cannot provision automation session keys.');
-      throw new Error('Automation signer not configured for session key provisioning');
-    }
-
-    const automationPrivateKey = automationPrivateKeyRaw.startsWith('0x')
-      ? automationPrivateKeyRaw
-      : `0x${automationPrivateKeyRaw}`;
-
-    if (!ethers.isHexString(automationPrivateKey, 32)) {
-      logger.error('AUTOMATION_PRIVATE_KEY is invalid; expected a 32-byte hex string.');
-      throw new Error('Automation signer misconfigured (invalid private key)');
-    }
-
-    const userSession = await this.getOrCreateAutomationSession(context.userId);
-
-    const validityHours = DEFAULT_SESSION_VALIDITY_HOURS;
-    const limitAmount = DEFAULT_SESSION_LIMIT_ETH;
-    const validUntilSeconds = Math.floor(Date.now() / 1000) + validityHours * 3600;
-
-    const keyInfo = await this.blockchainService.generateAutomationSessionKey(
-      context.smartAccountAddress,
-      validityHours,
-      limitAmount,
-      [router]
-    );
-
-    await this.blockchainService.createSessionKey(
-      context.userWalletAddress,
-      {
-        sessionKey: keyInfo.address,
-        validUntil: validUntilSeconds,
-        limitAmount,
-        allowedTargets: [router],
-        allowedFunctions: DEFAULT_AUTOMATION_FUNCTION_SELECTORS
-      },
-      automationPrivateKey
-    );
-
-    const sessionKeyRecord = await this.prisma.sessionKey.create({
-      data: {
-        sessionId: userSession.id,
-        address: keyInfo.address.toLowerCase(),
-        validUntil: new Date(validUntilSeconds * 1000),
-        validAfter: new Date(),
-        limitAmount,
-        allowedTargets: [router],
-        allowedFunctions: DEFAULT_AUTOMATION_FUNCTION_SELECTORS,
-        isActive: true
-      }
-    });
-
-    logger.info(`🔐 Provisioned automation session key ${sessionKeyRecord.address} for user ${context.userId}`);
-
-    return sessionKeyRecord;
-  }
-
-  private async getOrCreateAutomationSession(userId: string): Promise<UserSession> {
-    const now = new Date();
-
-    const existing = await this.prisma.userSession.findFirst({
-      where: {
-        userId,
-        isActive: true,
-        expiresAt: { gt: now }
-      },
-      orderBy: {
-        lastActiveAt: 'desc'
-      }
-    });
-
-    if (existing) {
-      return existing;
-    }
-
-    const token = randomUUID();
-    const expiresAt = new Date(now.getTime() + DEFAULT_SESSION_VALIDITY_HOURS * 3600 * 1000);
-
-    return await this.prisma.userSession.create({
-      data: {
-        userId,
-        token,
-        refreshToken: null,
-        expiresAt,
-        ipAddress: 'automation',
-        userAgent: 'strategy-engine',
-        isActive: true
-      }
-    });
   }
 
   private parseAmountToBigInt(value: string): bigint {

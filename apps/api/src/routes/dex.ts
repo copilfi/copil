@@ -1,13 +1,21 @@
 import express from 'express';
 import { logger } from '@/utils/logger';
-import DEXAggregationService from '@/services/DEXAggregationService';
+import { DEXAggregationServiceLike } from '@/services/DEXAggregationService';
 
 const router = express.Router();
 
-export function createDEXRoutes(dexService: DEXAggregationService) {
+export function createDEXRoutes(dexService: DEXAggregationServiceLike) {
   // Get best swap quote
   router.post('/quote', async (req, res) => {
     try {
+      const status = dexService.getStatus();
+      if (!status.ready) {
+        return res.status(503).json({
+          success: false,
+          error: status.reason ?? 'DEX aggregation unavailable'
+        });
+      }
+
       const {
         tokenIn,
         tokenOut,
@@ -68,7 +76,7 @@ export function createDEXRoutes(dexService: DEXAggregationService) {
   router.get('/tokens/:identifier', async (req, res) => {
     try {
       const { identifier } = req.params;
-      const token = dexService.getTokenInfo(identifier);
+      const token = await dexService.getTokenInfo(identifier);
 
       if (!token) {
         return res.status(404).json({
@@ -135,6 +143,14 @@ export function createDEXRoutes(dexService: DEXAggregationService) {
   // Get swap route preview (without executing)
   router.post('/route', async (req, res) => {
     try {
+      const status = dexService.getStatus();
+      if (!status.ready) {
+        return res.status(503).json({
+          success: false,
+          error: status.reason ?? 'DEX aggregation unavailable'
+        });
+      }
+
       const {
         tokenIn,
         tokenOut,
@@ -184,14 +200,16 @@ export function createDEXRoutes(dexService: DEXAggregationService) {
   // Health check for DEX services
   router.get('/health', async (req, res) => {
     try {
+      const status = dexService.getStatus();
       const dexs = dexService.getSupportedDEXs();
-      const activeDEXs = dexs.filter(d => d.config.isActive);
+      const activeDEXs = dexs.filter(d => d.isActive);
       
       const health = {
         totalDEXs: dexs.length,
         activeDEXs: activeDEXs.length,
         supportedTokens: dexService.getSupportedTokens().length,
-        status: activeDEXs.length > 0 ? 'healthy' : 'degraded'
+        status: status.ready && activeDEXs.length > 0 ? 'healthy' : 'degraded',
+        details: status.ready ? undefined : status.reason
       };
 
       res.status(health.status === 'healthy' ? 200 : 503).json({

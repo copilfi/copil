@@ -3,7 +3,6 @@ const { PrismaClient } = require('@prisma/client');
 
 // Import compiled services
 const AIAgentService = require('./dist/services/AIAgentService.js').default;
-const DEXAggregationService = require('./dist/services/DEXAggregationService.js').default;
 
 async function testCopilAgent() {
   try {
@@ -11,8 +10,7 @@ async function testCopilAgent() {
     
     // Initialize services
     const prisma = new PrismaClient();
-    const dexService = new DEXAggregationService();
-    const aiAgentService = new AIAgentService(prisma, dexService);
+    const aiAgentService = new AIAgentService(prisma);
     
     console.log('📋 Initializing AI Agent Service...');
     await aiAgentService.initialize();

@@ -8,15 +8,18 @@ import OracleService from '@/services/OracleService';
 import MarketDataService from '@/services/MarketDataService';
 import WebSocketService from '@/services/WebSocketService';
 import AIAgentService from '@/services/AIAgentService';
-import DEXAggregationService from '@/services/DEXAggregationService';
+import DEXAggregationService, { DEXAggregationServiceLike } from '@/services/DEXAggregationService';
+import UnavailableDEXAggregationService from '@/services/UnavailableDEXAggregationService';
 import EventIndexingService from '@/services/EventIndexingService';
 import redisStreamsService from '@/services/RedisStreamsService';
+import { DexExecutor, ConditionalOrderEngineContract, SeiProvider } from '@copil/blockchain';
 
 const prisma = new PrismaClient();
 import redis from '@/config/redis';
 import env from '@/config/env';
 
 let eventIndexingService: EventIndexingService | null = null;
+const ZERO_ADDRESS = '0x0000000000000000000000000000000000000000';
 
 async function bootstrap() {
   try {
@@ -37,11 +40,53 @@ async function bootstrap() {
     // Initialize services
     const oracleService = new OracleService();
     const marketDataService = new MarketDataService();
-    const dexService = new DEXAggregationService();
+    let dexService: DEXAggregationServiceLike;
+    let dexServiceStatus: { ready: boolean; reason?: string } = {
+      ready: false,
+      reason: 'DEX aggregation not initialized'
+    };
     blockchainService.registerMarketDataService(marketDataService);
-    
+
+    try {
+      const automationPrivateKey = env.AUTOMATION_PRIVATE_KEY || env.PRIVATE_KEY;
+      if (!automationPrivateKey) {
+        throw new Error('Automation key not configured');
+      }
+
+      const seiProvider = new SeiProvider({
+        rpcUrl: env.NODE_ENV === 'production' ? env.SEI_MAINNET_RPC_URL : env.SEI_TESTNET_RPC_URL,
+        chainId: env.NODE_ENV === 'production' ? env.SEI_CHAIN_ID : env.SEI_TESTNET_CHAIN_ID,
+        name: 'Sei Network',
+        blockExplorer: 'https://seitrace.com',
+        nativeCurrency: {
+          symbol: 'SEI',
+          name: 'Sei',
+          decimals: 18
+        },
+        contracts: {
+          entryPoint: env.ENTRY_POINT_ADDRESS || ZERO_ADDRESS,
+          conditionalOrderEngine: env.CONDITIONAL_ORDER_ENGINE_ADDRESS || ZERO_ADDRESS
+        }
+      }, automationPrivateKey);
+
+      const conditionalOrderEngine = new ConditionalOrderEngineContract(
+        seiProvider,
+        env.CONDITIONAL_ORDER_ENGINE_ADDRESS || ZERO_ADDRESS
+      );
+
+      const dexExecutor = new DexExecutor(seiProvider, conditionalOrderEngine);
+      dexService = new DEXAggregationService(dexExecutor);
+      dexServiceStatus = dexService.getStatus();
+      logger.info('✅ DEX aggregation service initialized for AI agent');
+    } catch (dexError) {
+      const reason = dexError instanceof Error ? dexError.message : 'Unknown initialization error';
+      dexService = new UnavailableDEXAggregationService(`DEX aggregation unavailable: ${reason}`);
+      dexServiceStatus = dexService.getStatus();
+      logger.warn('⚠️ DEX aggregation service unavailable for AI agent:', dexError);
+    }
+
     // Initialize AI Agent Service
-    const aiAgentService = new AIAgentService(prisma, dexService);
+    const aiAgentService = new AIAgentService(prisma);
     await aiAgentService.initialize();
     
     // Initialize Strategy Execution Service
@@ -75,6 +120,7 @@ async function bootstrap() {
       blockchainService,
       aiAgentService,
       dexService,
+      dexServiceStatus,
       eventIndexingService
     };
 
@@ -105,7 +151,7 @@ async function bootstrap() {
     logger.info(`   • Redis: ${redis.client.status === 'ready' ? 'Connected' : 'Disconnected'}`);
     logger.info(`   • Strategy Engine: ${strategyExecutionService.isRunning() ? 'Running' : 'Stopped'}`);
     logger.info(`   • AI Agent: ${aiAgentService.isReady() ? 'Ready' : 'Initializing'}`);
-    logger.info(`   • DEX Aggregation: Initialized`);
+    logger.info(`   • DEX Aggregation: ${dexServiceStatus.ready ? 'Initialized' : `Unavailable (${dexServiceStatus.reason ?? 'no reason provided'})`}`);
     logger.info(`   • Oracle Service: Initialized`);
     logger.info(`   • Market Data Service: Initialized`);
     logger.info(`   • WebSocket: Enabled with real-time updates`);

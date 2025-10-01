@@ -4,7 +4,6 @@ import { DeFiAgent, AgentConfig, ConversationContext } from '@copil/ai-agent';
 import { createAllTools } from '@copil/ai-agent';
 import { SeiProvider, DexExecutor, ConditionalOrderEngineContract } from '@copil/blockchain';
 import { TokenResolver } from '@copil/ai-agent';
-import DEXAggregationService from './DEXAggregationService';
 import env from '@/config/env';
 
 export interface ChatResponse {
@@ -24,10 +23,7 @@ export class AIAgentService {
   private tokenResolver!: TokenResolver;
   private initialized = false;
 
-  constructor(
-    private prisma: PrismaClient,
-    private dexService: DEXAggregationService
-  ) {
+  constructor(private prisma: PrismaClient) {
     logger.info('🤖 AI Agent Service initialized');
   }
 
@@ -277,7 +273,7 @@ export class AIAgentService {
         'balance_check',
         'portfolio_analysis'
       ],
-      supportedTokens: this.dexService.getSupportedTokens().map(t => t.symbol),
+      supportedTokens: this.getSupportedTokenSymbols(),
       supportedDEXs: ['dragonswap', 'symphony'],
       naturalLanguageFeatures: [
         'Intent extraction from conversational text',
@@ -296,6 +292,11 @@ export class AIAgentService {
         'Risk assessment'
       ]
     };
+  }
+
+  private getSupportedTokenSymbols(): string[] {
+    const resolver = this.tokenResolver ?? new TokenResolver();
+    return Object.keys(resolver.getAllTokens());
   }
 
   /**

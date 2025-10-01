@@ -7,6 +7,7 @@ import portfolioRoutes from './portfolio';
 import { createStrategyRoutes } from './strategy';
 import { createDEXRoutes } from './dex';
 import { createAIRoutes } from './ai';
+import { createSwapRoutes } from './swap.routes';
 // import { createMonitoringRoutes } from './monitoring';
 import { createOracleRoutes } from './oracle';
 import { createMarketRoutes } from './market';
@@ -15,13 +16,64 @@ import dcaRoutes from './dca';
 import ordersRoutes from './orders';
 import { blockchainService } from '@/services/RealBlockchainService';
 import { StrategyExecutionEngine } from '@/services/StrategyExecutionEngine';
-import DEXAggregationService from '@/services/DEXAggregationService';
+import DEXAggregationService, { DEXAggregationServiceLike } from '@/services/DEXAggregationService';
+import UnavailableDEXAggregationService from '@/services/UnavailableDEXAggregationService';
+import { AutomationSessionService } from '@/services/AutomationSessionService';
+import env from '@/config/env';
+import { SeiProvider, DexExecutor, ConditionalOrderEngineContract } from '@copil/blockchain';
 // import MonitoringService from '@/services/MonitoringService';
 import { PrismaClient } from '@prisma/client';
 
 const prisma = new PrismaClient();
-const executionEngine = new StrategyExecutionEngine(prisma, blockchainService);
-const dexService = new DEXAggregationService();
+const automationSessionService = new AutomationSessionService(prisma, blockchainService);
+const executionEngine = new StrategyExecutionEngine(prisma, blockchainService, automationSessionService);
+
+const automationPrivateKey = env.AUTOMATION_PRIVATE_KEY || env.PRIVATE_KEY;
+let dexExecutor: DexExecutor | null = null;
+let dexAggregationService: DEXAggregationServiceLike;
+let dexAggregationStatus: { ready: boolean; reason?: string } = {
+  ready: false,
+  reason: 'DEX aggregation not initialized'
+};
+
+try {
+  if (!automationPrivateKey) {
+    throw new Error('AUTOMATION_PRIVATE_KEY or PRIVATE_KEY must be configured');
+  }
+
+  const seiProvider = new SeiProvider({
+    rpcUrl: env.NODE_ENV === 'production' ? env.SEI_MAINNET_RPC_URL : env.SEI_TESTNET_RPC_URL,
+    chainId: env.NODE_ENV === 'production' ? env.SEI_CHAIN_ID : env.SEI_TESTNET_CHAIN_ID,
+    name: 'Sei Network',
+    blockExplorer: 'https://seitrace.com',
+    nativeCurrency: {
+      symbol: 'SEI',
+      name: 'Sei',
+      decimals: 18
+    },
+    contracts: {
+      entryPoint: env.ENTRY_POINT_ADDRESS || '0x0000000000000000000000000000000000000000',
+      conditionalOrderEngine: env.CONDITIONAL_ORDER_ENGINE_ADDRESS || '0x0000000000000000000000000000000000000000'
+    }
+  }, automationPrivateKey);
+
+  const conditionalOrderEngine = new ConditionalOrderEngineContract(
+    seiProvider,
+    env.CONDITIONAL_ORDER_ENGINE_ADDRESS || '0x0000000000000000000000000000000000000000'
+  );
+
+  dexExecutor = new DexExecutor(seiProvider, conditionalOrderEngine);
+  console.log('✅ DexExecutor initialized for swap routes');
+
+  dexAggregationService = new DEXAggregationService(dexExecutor);
+  dexAggregationStatus = dexAggregationService.getStatus();
+  console.log('✅ DEX aggregation service wired to live DexExecutor');
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ Failed to initialize DexExecutor:', message);
+  dexAggregationService = new UnavailableDEXAggregationService(`DEX aggregation unavailable: ${message}`);
+  dexAggregationStatus = dexAggregationService.getStatus();
+}
 // const monitoringService = new MonitoringService(prisma);
 // import redis from '@/config/redis';
 // import { asyncHandler } from '@/middleware/errorHandler';
@@ -38,8 +90,10 @@ router.get('/health', async (_req, res: Response) => {
       services: {
         database: false,
         redis: false,
-        blockchain: false
-      }
+        blockchain: false,
+        dexAggregation: false
+      },
+      details: {} as Record<string, string | undefined>
     };
 
     // Check database
@@ -53,6 +107,12 @@ router.get('/health', async (_req, res: Response) => {
     // Simple status for now
     health.services.redis = true;  // We know Redis is working from our tests
     health.services.blockchain = true;  // We know blockchain is working
+
+    const dexStatusCurrent = dexAggregationService.getStatus();
+    health.services.dexAggregation = dexStatusCurrent.ready;
+    if (!dexStatusCurrent.ready) {
+      health.details.dexAggregation = dexStatusCurrent.reason;
+    }
 
     const allHealthy = Object.values(health.services).every(status => status);
     health.status = allHealthy ? 'OK' : 'DEGRADED';
@@ -99,11 +159,27 @@ router.get('/info', async (_req, res: Response) => {
 
 // API routes - Add working routes first
 try {
-  router.use('/dex', createDEXRoutes(dexService));
-  console.log('✅ DEX routes registered');
+  router.use('/dex', createDEXRoutes(dexAggregationService));
+  if (dexAggregationStatus.ready) {
+    console.log('✅ DEX routes registered');
+  } else {
+    console.warn(`⚠️ DEX aggregation in fallback mode: ${dexAggregationStatus.reason ?? 'Unknown reason'}`);
+  }
 } catch (error) {
   const message = error instanceof Error ? error.message : String(error);
   console.error('❌ DEX routes failed:', message);
+}
+
+try {
+  router.use('/swap', createSwapRoutes(dexExecutor, blockchainService, automationSessionService));
+  if (dexExecutor) {
+    console.log('✅ Swap routes registered');
+  } else {
+    console.warn('⚠️ Swap routes registered in read-only mode: DexExecutor unavailable');
+  }
+} catch (error) {
+  const message = error instanceof Error ? error.message : String(error);
+  console.error('❌ Swap routes failed:', message);
 }
 
 try {
@@ -169,6 +245,7 @@ router.get('/', (_req, res: Response) => {
       dca: '/api/dca',
       orders: '/api/orders',
       dex: '/api/dex',
+      swap: '/api/swap',
       ai: '/api/ai',
       monitoring: '/api/monitoring',
       oracle: '/api/oracle',

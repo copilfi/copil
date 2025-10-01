@@ -34,6 +34,11 @@ const ENTRY_POINT_ABI = [
   'function getUserOpHash(tuple(address sender, uint256 nonce, bytes initCode, bytes callData, uint256 callGasLimit, uint256 verificationGasLimit, uint256 preVerificationGas, uint256 maxFeePerGas, uint256 maxPriorityFeePerGas, bytes paymasterAndData, bytes signature) calldata userOp) external view returns (bytes32)'
 ];
 
+const ERC20_ABI = [
+  'function allowance(address owner, address spender) view returns (uint256)',
+  'function approve(address spender, uint256 amount) returns (bool)'
+];
+
 class MarketDataPriceProvider implements TokenPriceProvider {
   constructor(private readonly marketDataService: MarketDataService) {}
 
@@ -588,6 +593,21 @@ class RealBlockchainService {
       return txHash;
     } catch (error) {
       logger.error('Failed to execute smart account transaction:', error);
+      throw error;
+    }
+  }
+
+  async getTokenAllowance(
+    tokenAddress: string,
+    owner: string,
+    spender: string
+  ): Promise<bigint> {
+    try {
+      const tokenContract = new Contract(tokenAddress, ERC20_ABI, this.provider);
+      const allowance = await tokenContract.allowance(owner, spender);
+      return BigInt(allowance.toString());
+    } catch (error) {
+      logger.error(`Failed to read allowance for token ${tokenAddress}`, error);
       throw error;
     }
   }

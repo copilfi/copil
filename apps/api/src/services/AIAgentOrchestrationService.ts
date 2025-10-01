@@ -1,6 +1,6 @@
 import { logger } from '@/utils/logger';
 import { PrismaClient } from '@prisma/client';
-import DEXAggregationService from './DEXAggregationService';
+import { DEXAggregationServiceLike } from './DEXAggregationService';
 import { StrategyExecutionEngine } from './StrategyExecutionEngine';
 import OpenAIService from './OpenAIService';
 
@@ -69,14 +69,14 @@ export interface ChatMessage {
 
 export class AIAgentOrchestrationService {
   private prisma: PrismaClient;
-  private dexService: DEXAggregationService;
+  private dexService: DEXAggregationServiceLike;
   private strategyEngine: StrategyExecutionEngine;
   private openaiService: OpenAIService;
   private chatSessions: Map<string, ChatContext> = new Map();
 
   constructor(
     prisma: PrismaClient,
-    dexService: DEXAggregationService,
+    dexService: DEXAggregationServiceLike,
     strategyEngine: StrategyExecutionEngine
   ) {
     this.prisma = prisma;
@@ -316,9 +316,19 @@ export class AIAgentOrchestrationService {
       risks: [] as string[]
     };
 
+    const dexStatus = this.getDexServiceStatus();
+
     switch (intent.action) {
       case 'swap':
         if (intent.tokenIn && intent.tokenOut && intent.amount) {
+          if (!dexStatus.ready) {
+            recommendations.strategy = 'Awaiting DEX connectivity';
+            recommendations.reasoning = dexStatus.reason ?? 'DEX aggregation service is currently unavailable.';
+            recommendations.risks = ['Cannot evaluate market quotes until DEX connectivity is restored'];
+            recommendations.alternatives = ['Retry once the DEX service is healthy'];
+            break;
+          }
+
           try {
             const quote = await this.dexService.getBestQuote({
               tokenIn: intent.tokenIn,
@@ -415,34 +425,41 @@ export class AIAgentOrchestrationService {
 
     // Check DEX support
     if (intent.tokenIn && intent.tokenOut) {
+      const dexStatus = this.getDexServiceStatus();
+
+      if (!dexStatus.ready) {
+        execution.requirements.push(dexStatus.reason ?? 'DEX aggregation unavailable');
+        return execution;
+      }
+
       const isSupported = await this.dexService.isPairSupported(intent.tokenIn, intent.tokenOut);
       if (!isSupported) {
         execution.requirements.push('Trading pair not supported on available DEXs');
       }
-    }
 
-    // Estimate costs if possible
-    if (intent.tokenIn && intent.tokenOut && intent.amount) {
-      try {
-        const quote = await this.dexService.getBestQuote({
-          tokenIn: intent.tokenIn,
-          tokenOut: intent.tokenOut,
-          amountIn: intent.amount,
-          slippage: intent.slippage || 0.5,
-          recipient: '0x0000000000000000000000000000000000000000'
-        });
+      // Estimate costs if possible
+      if (intent.amount) {
+        try {
+          const quote = await this.dexService.getBestQuote({
+            tokenIn: intent.tokenIn,
+            tokenOut: intent.tokenOut,
+            amountIn: intent.amount,
+            slippage: intent.slippage || 0.5,
+            recipient: '0x0000000000000000000000000000000000000000'
+          });
 
-        execution.estimatedCost = {
-          gas: quote.bestQuote.gasEstimate,
-          slippage: quote.bestQuote.slippage,
-          priceImpact: quote.bestQuote.priceImpact
-        };
+          execution.estimatedCost = {
+            gas: quote.bestQuote.gasEstimate,
+            slippage: quote.bestQuote.slippage,
+            priceImpact: quote.bestQuote.priceImpact
+          };
 
-        if (execution.requirements.length === 0) {
-          execution.canExecute = true;
+          if (execution.requirements.length === 0) {
+            execution.canExecute = true;
+          }
+        } catch (error) {
+          execution.requirements.push('Unable to get price quote');
         }
-      } catch (error) {
-        execution.requirements.push('Unable to get price quote');
       }
     }
 
@@ -527,6 +544,10 @@ export class AIAgentOrchestrationService {
     }
 
     return formatted;
+  }
+
+  private getDexServiceStatus(): { ready: boolean; reason?: string } {
+    return this.dexService.getStatus();
   }
 
   /**
