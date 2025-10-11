@@ -13,22 +13,28 @@ export class TasksService {
     private readonly tokenPriceRepository: Repository<TokenPrice>,
   ) {}
 
-  @Cron(CronExpression.EVERY_5_MINUTES)
+  @Cron(CronExpression.EVERY_MINUTE) // Changed to every minute for faster testing
   async handleCron() {
     console.log('Fetching trending token data...');
     const chains = ['ethereum', 'base', 'arbitrum']; // Example chains
 
     for (const chain of chains) {
-      const pairs = await this.dexScreenerService.getTrendingTokens(chain);
-      for (const pair of pairs) {
-        const tokenPrice = this.tokenPriceRepository.create({
-          chain: chain,
-          address: pair.baseToken.address,
-          symbol: pair.baseToken.symbol,
-          priceUsd: parseFloat(pair.priceUsd),
-          timestamp: new Date(),
-        });
-        await this.tokenPriceRepository.save(tokenPrice);
+      try {
+        const pairs = await this.dexScreenerService.getTrendingTokens(chain);
+        console.log(`Found ${pairs.length} pairs for ${chain}`);
+        
+        for (const pair of pairs) {
+          const tokenPrice = this.tokenPriceRepository.create({
+            chain: chain,
+            address: pair.baseToken.address,
+            symbol: pair.baseToken.symbol,
+            priceUsd: parseFloat(pair.priceUsd),
+            timestamp: new Date(),
+          });
+          await this.tokenPriceRepository.save(tokenPrice);
+        }
+      } catch (error) {
+        console.error(`Error fetching data for ${chain}:`, error instanceof Error ? error.message : String(error));
       }
     }
     console.log('Finished fetching token data.');

@@ -3,7 +3,9 @@ import { AppModule } from './app.module';
 
 async function bootstrap() {
   const app = await NestFactory.createApplicationContext(AppModule);
-  // Application logic will be handled by the BullMQ processors
-  // The application will run until it is manually stopped.
+  
+  // Prevent the application from exiting immediately
+  await new Promise(resolve => process.on('SIGINT', resolve));
+  await app.close();
 }
 bootstrap();

@@ -13,9 +13,9 @@ export class StrategyProcessor {
     private readonly tokenPriceRepository: Repository<TokenPrice>,
   ) {}
 
-  @Process('evaluate')
+  @Process('*') // Process all job types in this queue
   async handleStrategy(job: Job<any>) {
-    console.log(`[StrategyEvaluator] Processing job: ${job.id}`);
+    console.log(`[StrategyEvaluator] Processing job: ${job.id}, name: ${job.name}`);
     const strategy = await this.strategyRepository.findOne({ where: { id: job.data.strategyId } });
 
     if (!strategy || !strategy.isActive) {
