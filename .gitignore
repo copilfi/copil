@@ -1,0 +1,40 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-error.log
+pnpm-debug.log
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# Build outputs
+dist/
+build/
+.next/
+out/
+coverage/
+
+# Turborepo cache
+.turbo/
+
+# Logs
+logs/
+*.log
+
+# IDE settings
+.vscode/
+.idea/
+.DS_Store
+
+# TypeScript
+*.tsbuildinfo
+
+# Docker
+*.pid
+docker-data/
+
+# Project-specific exclusions
+Copil.md
+apps/web/

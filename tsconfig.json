@@ -1,0 +1,10 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/database" },
+    { "path": "./apps/api" },
+    { "path": "./apps/web" },
+    { "path": "./apps/strategy-evaluator" },
+    { "path": "./apps/data-ingestor" }
+  ]
+}
