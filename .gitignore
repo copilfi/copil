@@ -37,3 +37,4 @@ docker-data/
 
 # Project-specific exclusions
 Copil.md
+web/
