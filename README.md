@@ -29,17 +29,22 @@ Steps:
 - Install deps: `npm install`
 - Build shared package: `npm run build -w @copil/database`
 - Run DB migrations: `npm --workspace apps/api run migration:run`
-- Dev servers (all workspaces): `npm run dev` (spawns: web, api, data-ingestor, strategy-evaluator)
+- Dev servers (all workspaces): `npm run dev` (spawns: web, api, data-ingestor, strategy-evaluator, transaction-executor)
 
 Services:
 - Web: http://localhost:3000
 - API: http://localhost:3001
 - Postgres: `localhost:5432` (db: `copil`/`copil`)
 - Redis: `localhost:6379`
+- Transaction Executor (BullMQ worker): consumes `transaction-queue` jobs and records transaction logs
 
 Login flow:
 - Use the login page to create a session (email + privyDid). The web app stores a JWT in an HTTP-only cookie and proxies calls to the API.
 
 Automations:
 - Create an automation in `/(dashboard)/automations/builder`.
+- Builder form captures price-trigger details and downstream action metadata (swap/custom). Previous JSON-only definitions are still accepted but deprecated.
 - Active strategies are scheduled into BullMQ (`strategy-queue`). The Strategy Evaluator evaluates simple price triggers using data from the Data Ingestor, and can deactivate a strategy when its condition is met.
+- Executed actions emit transaction logs that are visible from the dashboard and via the API endpoint `/transaction/logs`.
+- Session keys (managed via `/session-keys`) gate automated execution; strategies should reference a valid `sessionKeyId` so downstream jobs have scoped signing authority.
+- Use the Session Keys dashboard tab to register keys and toggle their status; the automation builder consumes that list when creating strategies.

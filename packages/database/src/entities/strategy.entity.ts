@@ -1,5 +1,6 @@
 import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, ManyToOne } from 'typeorm';
 import { User } from './user.entity';
+import { StrategyDefinition } from '../types/strategy-definition';
 
 @Entity('Strategy')
 export class Strategy {
@@ -13,7 +14,7 @@ export class Strategy {
   name!: string;
 
   @Column({ type: 'jsonb' })
-  definition!: object; // Rules, triggers, actions
+  definition!: StrategyDefinition; // Rules, triggers, actions
 
   @Column({ type: 'text', nullable: true })
   schedule?: string; // Cron format

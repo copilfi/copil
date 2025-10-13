@@ -3,3 +3,7 @@ export * from './entities/wallet.entity';
 export * from './entities/strategy.entity';
 export * from './entities/transaction-log.entity';
 export * from './entities/token-price.entity';
+export * from './entities/session-key.entity';
+export * from './types/transaction-job';
+export * from './types/strategy-definition';
+export * from './constants/queues';

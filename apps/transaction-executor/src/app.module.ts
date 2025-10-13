@@ -2,18 +2,11 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import {
-  User,
-  Wallet,
-  Strategy,
-  TransactionLog,
-  TokenPrice,
-  SessionKey,
-  STRATEGY_QUEUE,
-  TRANSACTION_QUEUE,
-} from '@copil/database';
-
-import { StrategyProcessor } from './strategy.processor';
+import { Strategy, TransactionLog, User, Wallet, SessionKey, TRANSACTION_QUEUE } from '@copil/database';
+import { TransactionProcessor } from './transaction.processor';
+import { ExecutionService } from './execution/execution.service';
+import { LiFiClient } from './clients/lifi.client';
+import { SwapAggregatorClient } from './clients/swap-aggregator.client';
 
 @Module({
   imports: [
@@ -27,12 +20,12 @@ import { StrategyProcessor } from './strategy.processor';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey],
+        entities: [User, Wallet, Strategy, TransactionLog, SessionKey],
         synchronize: false,
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Strategy, TokenPrice]),
+    TypeOrmModule.forFeature([Strategy, TransactionLog, SessionKey]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -43,9 +36,10 @@ import { StrategyProcessor } from './strategy.processor';
       }),
       inject: [ConfigService],
     }),
-    BullModule.registerQueue({ name: STRATEGY_QUEUE }),
-    BullModule.registerQueue({ name: TRANSACTION_QUEUE }),
+    BullModule.registerQueue({
+      name: TRANSACTION_QUEUE,
+    }),
   ],
-  providers: [StrategyProcessor],
+  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient],
 })
 export class AppModule {}

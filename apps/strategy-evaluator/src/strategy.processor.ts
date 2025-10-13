@@ -1,53 +1,116 @@
-import { Processor, Process } from '@nestjs/bull';
-import { Job } from 'bullmq';
+import { Logger } from '@nestjs/common';
+import { InjectQueue, Processor, Process } from '@nestjs/bull';
+import { Job, Queue } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { Strategy, TokenPrice } from '@copil/database';
+import {
+  Strategy,
+  StrategyDefinition,
+  TokenPrice,
+  TransactionJobData,
+  STRATEGY_QUEUE,
+  TRANSACTION_QUEUE,
+} from '@copil/database';
 
-@Processor('strategy-queue')
+@Processor(STRATEGY_QUEUE)
 export class StrategyProcessor {
+  private readonly logger = new Logger(StrategyProcessor.name);
+
   constructor(
     @InjectRepository(Strategy)
     private readonly strategyRepository: Repository<Strategy>,
     @InjectRepository(TokenPrice)
     private readonly tokenPriceRepository: Repository<TokenPrice>,
+    @InjectQueue(TRANSACTION_QUEUE)
+    private readonly transactionQueue: Queue<TransactionJobData>,
   ) {}
 
   @Process('*') // Process all job types in this queue
-  async handleStrategy(job: Job<any>) {
-    console.log(`[StrategyEvaluator] Processing job: ${job.id}, name: ${job.name}`);
+  async handleStrategy(job: Job<{ strategyId: number }>) {
+    this.logger.debug(`Processing job: ${job.id}, name: ${job.name}`);
     const strategy = await this.strategyRepository.findOne({ where: { id: job.data.strategyId } });
 
     if (!strategy || !strategy.isActive) {
-      console.log(`[StrategyEvaluator] Strategy ${job.data.strategyId} not found or is inactive. Skipping.`);
+      this.logger.warn(`Strategy ${job.data.strategyId} not found or inactive. Skipping.`);
       return;
     }
 
-    console.log(`[StrategyEvaluator] Evaluating strategy: ${strategy.name}`);
+    this.logger.debug(`Evaluating strategy: ${strategy.name}`);
 
     // Simple price trigger evaluation logic
-    const definition = strategy.definition as any;
-    if (definition.type === 'price') {
+    const definition = strategy.definition as StrategyDefinition;
+    if (definition.trigger.type === 'price') {
       const latestPrice = await this.tokenPriceRepository.findOne({
-        where: { chain: definition.chain, address: definition.tokenAddress },
+        where: {
+          chain: definition.trigger.chain,
+          address: definition.trigger.tokenAddress,
+        },
         order: { timestamp: 'DESC' },
       });
 
       if (!latestPrice) {
-        console.log(`[StrategyEvaluator] No price data found for ${definition.tokenAddress} on ${definition.chain}.`);
+        this.logger.warn(
+          `No price data for ${definition.trigger.tokenAddress} on ${definition.trigger.chain}.`,
+        );
         return;
       }
 
-      console.log(`[StrategyEvaluator] Latest price for ${latestPrice.symbol}: ${latestPrice.priceUsd}, Target: ${definition.priceTarget}`);
+      this.logger.debug(
+        `Latest price for ${latestPrice.symbol}: ${latestPrice.priceUsd}, target: ${definition.trigger.priceTarget}`,
+      );
 
-      if (latestPrice.priceUsd >= definition.priceTarget) {
-        console.log(`[StrategyEvaluator] TRIGGER MET! Strategy: ${strategy.name}`);
-        // TODO: Execute the action (e.g., create a transaction job)
-        // For now, we can deactivate the strategy to prevent re-triggering
+      const comparator = definition.trigger.comparator ?? 'gte';
+      const conditionMet =
+        comparator === 'gte'
+          ? latestPrice.priceUsd >= definition.trigger.priceTarget
+          : latestPrice.priceUsd <= definition.trigger.priceTarget;
+
+      if (!conditionMet) {
+        this.logger.debug(`Trigger condition not met for strategy ${strategy.id}.`);
+        return;
+      }
+
+      if (!definition.sessionKeyId) {
+        this.logger.warn(
+          `Strategy ${strategy.id} missing sessionKeyId. Cannot enqueue transaction job.`,
+        );
+        return;
+      }
+
+      this.logger.log(`Trigger met for strategy ${strategy.name} (${strategy.id}). Enqueuing action.`);
+      await this.enqueueTransaction(strategy, definition);
+
+      if (!definition.repeat) {
         strategy.isActive = false;
         await this.strategyRepository.save(strategy);
-        console.log(`[StrategyEvaluator] Strategy ${strategy.name} deactivated after triggering.`);
+        this.logger.log(`Strategy ${strategy.name} deactivated after execution.`);
+        if (job.repeatJobKey) {
+          await job.queue.removeRepeatableByKey(job.repeatJobKey);
+          this.logger.debug(`Removed repeatable job for strategy ${strategy.id}.`);
+        }
       }
     }
+  }
+
+  private async enqueueTransaction(strategy: Strategy, definition: StrategyDefinition) {
+    const payload: TransactionJobData = {
+      strategyId: strategy.id,
+      userId: strategy.userId,
+      action: definition.action,
+      sessionKeyId: definition.sessionKeyId,
+      metadata: {
+        trigger: definition.trigger,
+        enqueuedAt: new Date().toISOString(),
+      },
+    };
+
+    await this.transactionQueue.add(
+      `strategy:${strategy.id}:execution`,
+      payload,
+      {
+        removeOnComplete: 100,
+        removeOnFail: false,
+      },
+    );
   }
 }

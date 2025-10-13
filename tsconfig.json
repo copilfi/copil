@@ -5,6 +5,7 @@
     { "path": "./apps/api" },
     { "path": "./apps/strategy-evaluator" },
     { "path": "./apps/data-ingestor" },
+    { "path": "./apps/transaction-executor" },
     { "path": "./web" }
   ]
 }

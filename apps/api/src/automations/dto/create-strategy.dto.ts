@@ -1,13 +1,12 @@
-import { IsString, IsObject, IsOptional, IsBoolean, IsNotEmpty } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsNotEmpty, IsDefined } from 'class-validator';
 
 export class CreateStrategyDto {
   @IsString()
   @IsNotEmpty()
   name!: string;
 
-  @IsObject()
-  @IsNotEmpty()
-  definition!: object;
+  @IsDefined()
+  definition!: unknown;
 
   @IsString()
   @IsOptional()
