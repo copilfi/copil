@@ -4,6 +4,7 @@ import { Repository } from 'typeorm';
 import { Strategy, TransactionLog, SessionKey } from '@copil/database';
 import { SwapAggregatorClient } from '../src/clients/swap-aggregator.client';
 import { LiFiClient } from '../src/clients/lifi.client';
+import { SignerService } from '../src/signer/signer.service';
 
 type MockedRepository<T> = Partial<
   Record<keyof Repository<T>, jest.Mock>
@@ -29,6 +30,7 @@ describe('ExecutionService', () => {
   let sessionKeyRepository: MockedRepository<SessionKey>;
   let swapClient: jest.Mocked<SwapAggregatorClient>;
   let lifiClient: jest.Mocked<LiFiClient>;
+  let signerService: jest.Mocked<SignerService>;
   let service: ExecutionService;
 
   beforeEach(() => {
@@ -52,6 +54,10 @@ describe('ExecutionService', () => {
       }),
     } as unknown as jest.Mocked<LiFiClient>;
 
+    signerService = {
+      signAndSend: jest.fn().mockResolvedValue({ status: 'pending', description: 'Pending signer' }),
+    } as unknown as jest.Mocked<SignerService>;
+
     transactionLogRepository.save.mockImplementation(async (entity) => ({ id: 1, ...entity }));
     transactionLogRepository.create.mockImplementation((entity) => entity as any);
 
@@ -61,6 +67,7 @@ describe('ExecutionService', () => {
       sessionKeyRepository as unknown as Repository<SessionKey>,
       swapClient,
       lifiClient,
+      signerService,
     );
   });
 
@@ -151,5 +158,48 @@ describe('ExecutionService', () => {
       }),
     );
     expect(swapClient.getQuote).not.toHaveBeenCalled();
+    expect(signerService.signAndSend).not.toHaveBeenCalled();
+  });
+
+  it('delegates to signer when transaction request is prepared', async () => {
+    strategyRepository.findOne.mockResolvedValue({ id: 10, userId: 3 } as Strategy);
+    sessionKeyRepository.findOne.mockResolvedValue({
+      id: 11,
+      userId: 3,
+      isActive: true,
+      expiresAt: null,
+      permissions: { actions: ['swap'] },
+    } as SessionKey);
+
+    swapClient.getQuote.mockResolvedValue({ supported: true });
+    swapClient.execute.mockResolvedValue({
+      success: false,
+      description: 'Prepared',
+      transactionRequest: { to: '0x123', data: '0xdeadbeef' },
+    });
+    signerService.signAndSend.mockResolvedValue({ status: 'pending', description: 'Awaiting signature' });
+
+    const job: TransactionJobData = {
+      strategyId: 10,
+      userId: 3,
+      sessionKeyId: 11,
+      action: {
+        type: 'swap',
+        chainId: 'base',
+        assetIn: '0xIn',
+        assetOut: '0xOut',
+        amountIn: '1',
+      },
+    };
+
+    await service.execute(job);
+
+    expect(signerService.signAndSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        userId: 3,
+        sessionKeyId: 11,
+        transaction: { to: '0x123', data: '0xdeadbeef' },
+      }),
+    );
   });
 });

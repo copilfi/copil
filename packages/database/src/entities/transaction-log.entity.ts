@@ -33,4 +33,5 @@ export class TransactionLog {
 
   @ManyToOne(() => Strategy)
   strategy!: Strategy;
+
 }

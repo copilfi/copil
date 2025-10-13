@@ -5,6 +5,7 @@ import { Repository } from 'typeorm';
 import { ExecutionResult, TransactionJobData } from './types';
 import { SwapAggregatorClient } from '../clients/swap-aggregator.client';
 import { LiFiClient } from '../clients/lifi.client';
+import { SignerService } from '../signer/signer.service';
 
 @Injectable()
 export class ExecutionService {
@@ -19,6 +20,7 @@ export class ExecutionService {
     private readonly sessionKeyRepository: Repository<SessionKey>,
     private readonly swapClient: SwapAggregatorClient,
     private readonly lifiClient: LiFiClient,
+    private readonly signerService: SignerService,
   ) {}
 
   async execute(job: TransactionJobData): Promise<void> {
@@ -60,9 +62,24 @@ export class ExecutionService {
       const result = await this.dispatch(job);
 
       if (result.transactionRequest) {
-        this.logger.warn(
-          `Transaction request prepared for strategy ${job.strategyId}. Signer integration pending.`,
-        );
+        const signerResult = await this.signerService.signAndSend({
+          userId: job.userId,
+          sessionKeyId: job.sessionKeyId!,
+          transaction: result.transactionRequest,
+          metadata: result.metadata,
+        });
+
+        if (signerResult.status === 'success') {
+          result.status = 'success';
+          result.txHash = signerResult.txHash;
+          result.description = signerResult.description ?? result.description;
+        } else if (signerResult.status === 'pending') {
+          result.status = 'skipped';
+          result.description = signerResult.description ?? result.description;
+        } else {
+          result.status = 'failed';
+          result.description = signerResult.description ?? 'Signer failed to broadcast transaction.';
+        }
       }
 
       await this.transactionLogRepository.update(pendingLog.id, {
@@ -226,7 +243,6 @@ export class ExecutionService {
 
     return this.transactionLogRepository.save(record);
   }
-
   private async validateSessionKey(job: TransactionJobData): Promise<{ valid: boolean; reason?: string }> {
     if (!job.sessionKeyId) {
       return {

@@ -45,12 +45,12 @@ describe('SessionKeysService', () => {
 
     await service.create(3, {
       publicKey: '0xabc',
-      permissions: { actions: ['swap'], chains: ['base'] },
+      permissions: { actions: ['swap'], chains: ['base'], notes: 'limited' },
     });
 
     expect(repo.create).toHaveBeenCalledWith(
       expect.objectContaining({
-        permissions: { actions: ['swap'], chains: ['base'] },
+        permissions: { actions: ['swap'], chains: ['base'], notes: 'limited' },
       }),
     );
   });

@@ -7,6 +7,7 @@ import { TransactionProcessor } from './transaction.processor';
 import { ExecutionService } from './execution/execution.service';
 import { LiFiClient } from './clients/lifi.client';
 import { SwapAggregatorClient } from './clients/swap-aggregator.client';
+import { SignerService } from './signer/signer.service';
 
 @Module({
   imports: [
@@ -40,6 +41,6 @@ import { SwapAggregatorClient } from './clients/swap-aggregator.client';
       name: TRANSACTION_QUEUE,
     }),
   ],
-  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient],
+  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService],
 })
 export class AppModule {}
