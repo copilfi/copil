@@ -17,3 +17,29 @@ Whether you are testing the product, sharing feedback, or exploring partnership 
 ## Contact
 
 For updates or collaboration inquiries, please use the official support channels or contact the maintainers directly.
+
+## Run Locally
+
+Prerequisites:
+- Docker (for Postgres + Redis) and Node 20+
+- Environment variables set in each app (see sample `.env` files in `apps/*`)
+
+Steps:
+- Start infra: `docker compose up -d`
+- Install deps: `npm install`
+- Build shared package: `npm run build -w @copil/database`
+- Run DB migrations: `npm --workspace apps/api run migration:run`
+- Dev servers (all workspaces): `npm run dev` (spawns: web, api, data-ingestor, strategy-evaluator)
+
+Services:
+- Web: http://localhost:3000
+- API: http://localhost:3001
+- Postgres: `localhost:5432` (db: `copil`/`copil`)
+- Redis: `localhost:6379`
+
+Login flow:
+- Use the login page to create a session (email + privyDid). The web app stores a JWT in an HTTP-only cookie and proxies calls to the API.
+
+Automations:
+- Create an automation in `/(dashboard)/automations/builder`.
+- Active strategies are scheduled into BullMQ (`strategy-queue`). The Strategy Evaluator evaluates simple price triggers using data from the Data Ingestor, and can deactivate a strategy when its condition is met.

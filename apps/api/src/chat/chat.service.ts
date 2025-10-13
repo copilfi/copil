@@ -6,7 +6,7 @@ import { ChatOpenAI } from '@langchain/openai';
 import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
 import { pull } from 'langchain/hub';
 import { AIMessage, HumanMessage } from '@langchain/core/messages';
-import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { ChatPromptTemplate, MessagesPlaceholder } from '@langchain/core/prompts';
 import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 
@@ -52,7 +52,20 @@ export class ChatService {
       apiKey: this.configService.get<string>('OPENAI_API_KEY'),
     });
 
-    const prompt = await pull<ChatPromptTemplate>('hwchase17/openai-tools-agent');
+    // Attempt to use the LangChain Hub prompt; fall back to a local prompt if unavailable
+    let prompt: ChatPromptTemplate;
+    try {
+      prompt = await pull<ChatPromptTemplate>('hwchase17/openai-tools-agent');
+    } catch (e) {
+      prompt = ChatPromptTemplate.fromMessages([
+        [
+          'system',
+          'You are Copil, an AI DeFi assistant. Use tools when needed and be concise. If you need on-chain balances, call get_wallet_balance.',
+        ],
+        new MessagesPlaceholder('chat_history'),
+        ['human', '{input}'],
+      ]);
+    }
 
     const agent = await createOpenAIToolsAgent({
       llm,
