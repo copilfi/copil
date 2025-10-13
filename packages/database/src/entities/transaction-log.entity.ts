@@ -25,6 +25,9 @@ export class TransactionLog {
   @Column({ type: 'text' })
   status!: string; // e.g., 'pending', 'success', 'failed'
 
+  @Column({ type: 'jsonb', nullable: true })
+  details?: Record<string, unknown>;
+
   @CreateDateColumn({ name: 'createdAt' })
   createdAt!: Date;
 

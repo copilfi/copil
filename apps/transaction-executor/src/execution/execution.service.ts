@@ -6,6 +6,7 @@ import { ExecutionResult, TransactionJobData } from './types';
 import { SwapAggregatorClient } from '../clients/swap-aggregator.client';
 import { LiFiClient } from '../clients/lifi.client';
 import { SignerService } from '../signer/signer.service';
+import { Job } from 'bullmq';
 
 @Injectable()
 export class ExecutionService {
@@ -23,7 +24,7 @@ export class ExecutionService {
     private readonly signerService: SignerService,
   ) {}
 
-  async execute(job: TransactionJobData): Promise<void> {
+  async execute(job: TransactionJobData, queueJob?: Job<TransactionJobData>): Promise<void> {
     this.logger.log(`Received job for strategy ${job.strategyId}: ${job.action.type}`);
 
     const strategy = await this.strategyRepository.findOne({ where: { id: job.strategyId } });
@@ -80,12 +81,17 @@ export class ExecutionService {
           result.status = 'failed';
           result.description = signerResult.description ?? 'Signer failed to broadcast transaction.';
         }
+
+        if (signerResult.status !== 'success' && queueJob) {
+          await this.scheduleRetry(queueJob, signerResult.description ?? result.description);
+        }
       }
 
       await this.transactionLogRepository.update(pendingLog.id, {
         status: result.status,
         description: result.description ?? pendingLog.description,
         txHash: result.txHash,
+        details: result.metadata ?? null,
       });
 
       if (result.status === 'success') {
@@ -112,6 +118,24 @@ export class ExecutionService {
 
       throw error;
     }
+  }
+
+  private async scheduleRetry(job: Job<TransactionJobData>, reason: string) {
+    const attempts = job.attemptsMade ?? 0;
+    const maxAttempts = 3;
+    const delayMs = 60_000 * Math.pow(2, attempts); // exponential backoff starting at 1 min
+
+    if (attempts >= maxAttempts) {
+      this.logger.error(
+        `Job ${job.id} reached max retry attempts (${maxAttempts}). Reason: ${reason}`,
+      );
+      return;
+    }
+
+    this.logger.warn(`Scheduling retry ${attempts + 1} for job ${job.id} after ${delayMs} ms.`);
+    await job.retry();
+    await job.update({ ...job.data });
+    await job.moveToDelayed(Date.now() + delayMs, 'retry');
   }
 
   private async dispatch(job: TransactionJobData): Promise<ExecutionResult> {
@@ -147,6 +171,8 @@ export class ExecutionService {
             txHash: swapResult.txHash,
             transactionRequest: swapResult.transactionRequest,
             metadata: {
+              chain: job.action.chainId,
+              transactionRequest: swapResult.transactionRequest,
               allowanceTarget: swapResult.allowanceTarget,
               rawQuote: swapResult.rawQuote,
             },
@@ -158,6 +184,8 @@ export class ExecutionService {
             swapResult.description ?? 'Swap execution failed without additional details.',
           transactionRequest: swapResult.transactionRequest,
           metadata: {
+            chain: job.action.chainId,
+            transactionRequest: swapResult.transactionRequest,
             allowanceTarget: swapResult.allowanceTarget,
             rawQuote: swapResult.rawQuote,
           },
@@ -195,7 +223,11 @@ export class ExecutionService {
             description: bridgeResult.description,
             txHash: bridgeResult.txHash,
             transactionRequest: bridgeResult.transactionRequest,
-            metadata: { rawQuote: bridgeResult.rawQuote },
+            metadata: {
+              chain: job.action.fromChainId,
+              transactionRequest: bridgeResult.transactionRequest,
+              rawQuote: bridgeResult.rawQuote,
+            },
           };
         }
         return {
@@ -203,7 +235,11 @@ export class ExecutionService {
           description:
             bridgeResult.description ?? 'Bridge execution failed without additional details.',
           transactionRequest: bridgeResult.transactionRequest,
-          metadata: { rawQuote: bridgeResult.rawQuote },
+          metadata: {
+            chain: job.action.fromChainId,
+            transactionRequest: bridgeResult.transactionRequest,
+            rawQuote: bridgeResult.rawQuote,
+          },
         };
       }
       case 'custom':

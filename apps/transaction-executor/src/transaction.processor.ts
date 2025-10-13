@@ -18,7 +18,7 @@ export class TransactionProcessor {
     );
 
     try {
-      await this.executionService.execute(job.data);
+      await this.executionService.execute(job.data, job);
       this.logger.debug(`Job ${job.id} completed.`);
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';

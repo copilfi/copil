@@ -48,7 +48,7 @@ Automations:
 - Executed actions emit transaction logs that are visible from the dashboard and via the API endpoint `/transaction/logs`.
 - Session keys (managed via `/session-keys`) gate automated execution; strategies should reference a valid `sessionKeyId` so downstream jobs have scoped signing authority.
 - Use the Session Keys dashboard tab to register keys and toggle their status; the automation builder consumes that list when creating strategies.
-- Transaction executor currently prepares swap/bridge transaction requests via configured aggregators; signer/broadcast integration is forthcoming, so logs may show "skipped" results until that layer is wired in.
+- Transaction executor now attempts to broadcast swap/bridge transactions automatically; if signer configuration is missing, logs show "skipped" status with payloads you can sign manually.
 
 ### Configuration
 
@@ -57,6 +57,9 @@ Automations:
   - `SWAP_AGGREGATOR_API_KEY` if the chosen aggregator requires it
 - LI.FI requests use `LIFI_API_BASE_URL` and `LIFI_API_KEY` when present; otherwise the default public endpoint is used.
 - Session key permissions support optional `actions` (`swap`, `bridge`, `custom`) and `chains` lists. The executor enforces these constraints before attempting a transaction.
+- Signer integration expects RPC endpoints and session key private keys:
+  - `RPC_URL_<CHAIN>` (e.g., `RPC_URL_ETHEREUM`, `RPC_URL_BASE`) or a fallback `RPC_URL`
+  - `SESSION_KEY_<ID>_PRIVATE_KEY` per registered session key (falls back to `SESSION_KEY_PRIVATE_KEY`)
 
 ### Testing
 
