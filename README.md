@@ -48,3 +48,17 @@ Automations:
 - Executed actions emit transaction logs that are visible from the dashboard and via the API endpoint `/transaction/logs`.
 - Session keys (managed via `/session-keys`) gate automated execution; strategies should reference a valid `sessionKeyId` so downstream jobs have scoped signing authority.
 - Use the Session Keys dashboard tab to register keys and toggle their status; the automation builder consumes that list when creating strategies.
+- Transaction executor currently prepares swap/bridge transaction requests via configured aggregators; signer/broadcast integration is forthcoming, so logs may show "skipped" results until that layer is wired in.
+
+### Configuration
+
+- Swap execution relies on an external aggregator (e.g., 0x or 1inch). Configure environment variables for the transaction executor service:
+  - `SWAP_AGGREGATOR_BASE_URL` (and optional per-chain overrides such as `SWAP_AGGREGATOR_BASE_URL_BASE`)
+  - `SWAP_AGGREGATOR_API_KEY` if the chosen aggregator requires it
+- LI.FI requests use `LIFI_API_BASE_URL` and `LIFI_API_KEY` when present; otherwise the default public endpoint is used.
+- Session key permissions support optional `actions` (`swap`, `bridge`, `custom`) and `chains` lists. The executor enforces these constraints before attempting a transaction.
+
+### Testing
+
+- Unit tests live under each workspace (`npm test --workspace transaction-executor`, `npm test --workspace api`, etc.).
+- In constrained environments (e.g., this CLI sandbox) Jest worker processes may crash before executing; rerun locally with full system access to validate changes.

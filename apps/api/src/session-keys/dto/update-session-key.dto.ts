@@ -1,4 +1,6 @@
-import { IsBoolean, IsDateString, IsObject, IsOptional } from 'class-validator';
+import { IsBoolean, IsDateString, IsOptional, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { SessionKeyPermissionsDto } from './permissions.dto';
 
 export class UpdateSessionKeyDto {
   @IsBoolean()
@@ -9,7 +11,8 @@ export class UpdateSessionKeyDto {
   @IsOptional()
   expiresAt?: string;
 
-  @IsObject()
+  @ValidateNested()
+  @Type(() => SessionKeyPermissionsDto)
   @IsOptional()
-  permissions?: Record<string, unknown>;
+  permissions?: SessionKeyPermissionsDto;
 }

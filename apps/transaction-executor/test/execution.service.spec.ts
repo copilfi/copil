@@ -38,15 +38,22 @@ describe('ExecutionService', () => {
 
     swapClient = {
       getQuote: jest.fn().mockResolvedValue({ supported: false, warning: 'not supported' }),
-      execute: jest.fn(),
+      execute: jest.fn().mockResolvedValue({
+        success: false,
+        description: 'not implemented',
+      }),
     } as unknown as jest.Mocked<SwapAggregatorClient>;
 
     lifiClient = {
       getQuote: jest.fn().mockResolvedValue({ supported: false, warning: 'not supported' }),
-      execute: jest.fn(),
+      execute: jest.fn().mockResolvedValue({
+        success: false,
+        description: 'not implemented',
+      }),
     } as unknown as jest.Mocked<LiFiClient>;
 
     transactionLogRepository.save.mockImplementation(async (entity) => ({ id: 1, ...entity }));
+    transactionLogRepository.create.mockImplementation((entity) => entity as any);
 
     service = new ExecutionService(
       strategyRepository as unknown as Repository<Strategy>,
@@ -83,6 +90,7 @@ describe('ExecutionService', () => {
       }),
     );
     expect(transactionLogRepository.save).toHaveBeenCalledTimes(1);
+    expect(swapClient.getQuote).not.toHaveBeenCalled();
   });
 
   it('fails when session key is missing', async () => {
@@ -108,5 +116,40 @@ describe('ExecutionService', () => {
         description: 'Session key is required for transaction execution.',
       }),
     );
+    expect(swapClient.getQuote).not.toHaveBeenCalled();
+  });
+
+  it('fails when session key action is not permitted', async () => {
+    strategyRepository.findOne.mockResolvedValue({ id: 5, userId: 2 } as Strategy);
+    sessionKeyRepository.findOne.mockResolvedValue({
+      id: 9,
+      userId: 2,
+      isActive: true,
+      expiresAt: null,
+      permissions: { actions: ['bridge'] },
+    } as SessionKey);
+
+    const job: TransactionJobData = {
+      strategyId: 5,
+      userId: 2,
+      sessionKeyId: 9,
+      action: {
+        type: 'swap',
+        chainId: 'base',
+        assetIn: '0xIn',
+        assetOut: '0xOut',
+        amountIn: '1',
+      },
+    };
+
+    await service.execute(job);
+
+    expect(transactionLogRepository.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        status: 'failed',
+        description: 'Session key 9 does not permit swap actions.',
+      }),
+    );
+    expect(swapClient.getQuote).not.toHaveBeenCalled();
   });
 });

@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { SessionKey } from '@copil/database';
+import { SessionKey, SessionKeyPermissions, SessionActionType } from '@copil/database';
 import { Repository } from 'typeorm';
 import { CreateSessionKeyDto } from './dto/create-session-key.dto';
 import { UpdateSessionKeyDto } from './dto/update-session-key.dto';
@@ -21,7 +21,7 @@ export class SessionKeysService {
     const sessionKey = this.sessionKeyRepository.create({
       userId,
       publicKey: dto.publicKey,
-      permissions: dto.permissions ?? {},
+      permissions: this.mapPermissions(dto.permissions),
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
       isActive: dto.isActive ?? true,
     });
@@ -46,9 +46,27 @@ export class SessionKeysService {
       sessionKey.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
     }
     if (dto.permissions !== undefined) {
-      sessionKey.permissions = dto.permissions;
+      sessionKey.permissions = this.mapPermissions(dto.permissions);
     }
 
     return this.sessionKeyRepository.save(sessionKey);
+  }
+
+  private mapPermissions(permissions?: { actions?: string[]; chains?: string[]; notes?: string }): SessionKeyPermissions {
+    if (!permissions) {
+      return {};
+    }
+
+    const mapped: SessionKeyPermissions = {};
+    if (permissions.actions) {
+      mapped.actions = permissions.actions.map((action) => action as SessionActionType);
+    }
+    if (permissions.chains) {
+      mapped.chains = permissions.chains;
+    }
+    if (permissions.notes) {
+      mapped.notes = permissions.notes;
+    }
+    return mapped;
   }
 }

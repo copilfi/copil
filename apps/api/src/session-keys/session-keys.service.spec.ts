@@ -27,6 +27,8 @@ describe('SessionKeysService', () => {
 
   beforeEach(() => {
     repo = createRepositoryMock<SessionKey>();
+    repo.create.mockImplementation((entity) => entity as SessionKey);
+    repo.save.mockImplementation(async (entity) => entity as SessionKey);
     service = new SessionKeysService(repo as unknown as Repository<SessionKey>);
   });
 
@@ -36,6 +38,21 @@ describe('SessionKeysService', () => {
     await expect(
       service.create(1, { publicKey: '0xabc', permissions: {}, isActive: true }),
     ).rejects.toBeInstanceOf(ConflictException);
+  });
+
+  it('maps permissions when creating a session key', async () => {
+    repo.findOne.mockResolvedValue(null);
+
+    await service.create(3, {
+      publicKey: '0xabc',
+      permissions: { actions: ['swap'], chains: ['base'] },
+    });
+
+    expect(repo.create).toHaveBeenCalledWith(
+      expect.objectContaining({
+        permissions: { actions: ['swap'], chains: ['base'] },
+      }),
+    );
   });
 
   it('updates an existing session key', async () => {
@@ -52,8 +69,6 @@ describe('SessionKeysService', () => {
     };
 
     repo.findOne.mockResolvedValue(existing);
-    repo.save.mockImplementation(async (entity) => entity as SessionKey);
-
     const result = await service.update(2, 5, { isActive: false });
 
     expect(result.isActive).toBe(false);

@@ -7,3 +7,4 @@ export * from './entities/session-key.entity';
 export * from './types/transaction-job';
 export * from './types/strategy-definition';
 export * from './constants/queues';
+export * from './types/session-key-permissions';

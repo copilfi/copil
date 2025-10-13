@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Strategy, TransactionLog, SessionKey } from '@copil/database';
+import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions } from '@copil/database';
 import { Repository } from 'typeorm';
 import { ExecutionResult, TransactionJobData } from './types';
 import { SwapAggregatorClient } from '../clients/swap-aggregator.client';
@@ -59,6 +59,12 @@ export class ExecutionService {
     try {
       const result = await this.dispatch(job);
 
+      if (result.transactionRequest) {
+        this.logger.warn(
+          `Transaction request prepared for strategy ${job.strategyId}. Signer integration pending.`,
+        );
+      }
+
       await this.transactionLogRepository.update(pendingLog.id, {
         status: result.status,
         description: result.description ?? pendingLog.description,
@@ -116,17 +122,29 @@ export class ExecutionService {
           slippageBps: job.action.slippageBps,
         });
 
-        return swapResult.success
-          ? {
-              status: 'success',
-              description: swapResult.description,
-              txHash: swapResult.txHash,
-            }
-          : {
-              status: 'failed',
-              description:
-                swapResult.description ?? 'Swap execution failed without additional details.',
-            };
+        const failureStatus = swapResult.transactionRequest ? 'skipped' : 'failed';
+        if (swapResult.success) {
+          return {
+            status: 'success',
+            description: swapResult.description,
+            txHash: swapResult.txHash,
+            transactionRequest: swapResult.transactionRequest,
+            metadata: {
+              allowanceTarget: swapResult.allowanceTarget,
+              rawQuote: swapResult.rawQuote,
+            },
+          };
+        }
+        return {
+          status: failureStatus,
+          description:
+            swapResult.description ?? 'Swap execution failed without additional details.',
+          transactionRequest: swapResult.transactionRequest,
+          metadata: {
+            allowanceTarget: swapResult.allowanceTarget,
+            rawQuote: swapResult.rawQuote,
+          },
+        };
       }
       case 'bridge': {
         const quote = await this.lifiClient.getQuote({
@@ -153,17 +171,23 @@ export class ExecutionService {
           slippageBps: job.action.slippageBps,
         });
 
-        return bridgeResult.success
-          ? {
-              status: 'success',
-              description: bridgeResult.description,
-              txHash: bridgeResult.txHash,
-            }
-          : {
-              status: 'failed',
-              description:
-                bridgeResult.description ?? 'Bridge execution failed without additional details.',
-            };
+        const failureStatus = bridgeResult.transactionRequest ? 'skipped' : 'failed';
+        if (bridgeResult.success) {
+          return {
+            status: 'success',
+            description: bridgeResult.description,
+            txHash: bridgeResult.txHash,
+            transactionRequest: bridgeResult.transactionRequest,
+            metadata: { rawQuote: bridgeResult.rawQuote },
+          };
+        }
+        return {
+          status: failureStatus,
+          description:
+            bridgeResult.description ?? 'Bridge execution failed without additional details.',
+          transactionRequest: bridgeResult.transactionRequest,
+          metadata: { rawQuote: bridgeResult.rawQuote },
+        };
       }
       case 'custom':
         return {
@@ -232,7 +256,30 @@ export class ExecutionService {
       return { valid: false, reason: `Session key ${sessionKey.id} has expired.` };
     }
 
-    // TODO: evaluate permissions against job.action & metadata once defined.
+    const permissions = sessionKey.permissions as SessionKeyPermissions | undefined;
+    if (permissions?.actions?.length && !permissions.actions.includes(job.action.type)) {
+      return {
+        valid: false,
+        reason: `Session key ${sessionKey.id} does not permit ${job.action.type} actions.`,
+      };
+    }
+
+    if (permissions?.chains?.length) {
+      const chains = new Set(permissions.chains.map((chain) => chain.toLowerCase()));
+      const checkChain = (chain?: string) => !chain || chains.has(chain.toLowerCase());
+      const chainAllowed =
+        job.action.type === 'bridge'
+          ? checkChain(job.action.fromChainId) && checkChain(job.action.toChainId)
+          : job.action.type === 'swap'
+            ? checkChain(job.action.chainId)
+            : true;
+      if (!chainAllowed) {
+        return {
+          valid: false,
+          reason: `Session key ${sessionKey.id} does not allow the requested chain(s).`,
+        };
+      }
+    }
 
     return { valid: true };
   }

@@ -1,12 +1,6 @@
-import {
-  Entity,
-  PrimaryGeneratedColumn,
-  Column,
-  CreateDateColumn,
-  UpdateDateColumn,
-  ManyToOne,
-} from 'typeorm';
+import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
 import { User } from './user.entity';
+import { SessionKeyPermissions } from '../types/session-key-permissions';
 
 @Entity('SessionKey')
 export class SessionKey {
@@ -20,7 +14,7 @@ export class SessionKey {
   publicKey!: string;
 
   @Column({ type: 'jsonb', default: () => "'{}'::jsonb" })
-  permissions!: Record<string, unknown>;
+  permissions!: SessionKeyPermissions;
 
   @Column({ type: 'timestamptz', nullable: true })
   expiresAt?: Date | null;

@@ -1,12 +1,15 @@
-import { IsString, IsOptional, IsObject, IsBoolean, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsBoolean, IsDateString, ValidateNested } from 'class-validator';
+import { Type } from 'class-transformer';
+import { SessionKeyPermissionsDto } from './permissions.dto';
 
 export class CreateSessionKeyDto {
   @IsString()
   publicKey!: string;
 
-  @IsObject()
+  @ValidateNested()
+  @Type(() => SessionKeyPermissionsDto)
   @IsOptional()
-  permissions?: Record<string, unknown>;
+  permissions?: SessionKeyPermissionsDto;
 
   @IsDateString()
   @IsOptional()
