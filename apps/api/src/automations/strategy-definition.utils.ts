@@ -3,6 +3,8 @@ import {
   StrategyDefinition,
   StrategyTriggerDefinition,
   TransactionAction,
+  PriceComparator,
+  PriceTriggerDefinition,
 } from '@copil/database';
 
 type PlainObject = Record<string, unknown>;
@@ -55,23 +57,22 @@ function parseTrigger(raw: unknown): StrategyTriggerDefinition {
     throw new BadRequestException(`Unsupported trigger type "${type}"`);
   }
 
-  const trigger = {
-    type: 'price' as const,
+  let comparator: PriceComparator | undefined;
+  if (raw.comparator !== undefined) {
+    const comparatorValue = ensureString(raw.comparator, 'trigger.comparator').toLowerCase();
+    if (comparatorValue !== 'gte' && comparatorValue !== 'lte') {
+      throw new BadRequestException('trigger.comparator must be "gte" or "lte"');
+    }
+    comparator = comparatorValue as PriceComparator;
+  }
+
+  return {
+    type: 'price',
     chain: ensureString(raw.chain, 'trigger.chain'),
     tokenAddress: ensureString(raw.tokenAddress, 'trigger.tokenAddress'),
     priceTarget: ensureNumber(raw.priceTarget, 'trigger.priceTarget'),
-    comparator: undefined as 'gte' | 'lte' | undefined,
-  };
-
-  if (raw.comparator !== undefined) {
-    const comparator = ensureString(raw.comparator, 'trigger.comparator').toLowerCase();
-    if (comparator !== 'gte' && comparator !== 'lte') {
-      throw new BadRequestException('trigger.comparator must be "gte" or "lte"');
-    }
-    trigger.comparator = comparator;
-  }
-
-  return trigger;
+    comparator,
+  } satisfies PriceTriggerDefinition;
 }
 
 function parseAction(raw: unknown): TransactionAction {
@@ -133,21 +134,21 @@ function parseLegacyDefinition(raw: PlainObject): StrategyDefinition | null {
     );
   }
 
-  const comparator =
+  const comparatorValue =
     raw.comparator !== undefined
       ? ensureString(raw.comparator, 'definition.comparator').toLowerCase()
       : undefined;
 
-  if (comparator && comparator !== 'gte' && comparator !== 'lte') {
+  if (comparatorValue && comparatorValue !== 'gte' && comparatorValue !== 'lte') {
     throw new BadRequestException('definition.comparator must be "gte" or "lte"');
   }
 
-  const trigger = {
-    type: 'price' as const,
+  const trigger: PriceTriggerDefinition = {
+    type: 'price',
     chain: ensureString(raw.chain, 'definition.chain'),
     tokenAddress: ensureString(raw.tokenAddress, 'definition.tokenAddress'),
     priceTarget: ensureNumber(raw.priceTarget, 'definition.priceTarget'),
-    comparator,
+    comparator: comparatorValue as PriceComparator | undefined,
   };
 
   const repeat =

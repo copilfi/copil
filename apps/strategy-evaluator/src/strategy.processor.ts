@@ -84,10 +84,6 @@ export class StrategyProcessor {
         strategy.isActive = false;
         await this.strategyRepository.save(strategy);
         this.logger.log(`Strategy ${strategy.name} deactivated after execution.`);
-        if (job.repeatJobKey) {
-          await job.queue.removeRepeatableByKey(job.repeatJobKey);
-          this.logger.debug(`Removed repeatable job for strategy ${strategy.id}.`);
-        }
       }
     }
   }

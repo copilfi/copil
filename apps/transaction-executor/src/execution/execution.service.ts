@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions } from '@copil/database';
 import { Repository } from 'typeorm';
+import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ExecutionResult, TransactionJobData } from './types';
 import { SwapAggregatorClient } from '../clients/swap-aggregator.client';
 import { LiFiClient } from '../clients/lifi.client';
@@ -49,7 +50,7 @@ export class ExecutionService {
 
     const sessionKeyValidation = await this.validateSessionKey(job);
     if (!sessionKeyValidation.valid) {
-      await this.recordLog(job, 'failed', sessionKeyValidation.reason);
+      await this.recordLog(job, 'failed', sessionKeyValidation.reason ?? 'Session key invalid.');
       return;
     }
 
@@ -83,16 +84,24 @@ export class ExecutionService {
         }
 
         if (signerResult.status !== 'success' && queueJob) {
-          await this.scheduleRetry(queueJob, signerResult.description ?? result.description);
-        }
+          await this.scheduleRetry(queueJob, signerResult.description ?? result.description ?? 'Signer error');
+      }
       }
 
-      await this.transactionLogRepository.update(pendingLog.id, {
+      const updatePayload: Partial<TransactionLog> = {
         status: result.status,
         description: result.description ?? pendingLog.description,
         txHash: result.txHash,
-        details: result.metadata ?? null,
-      });
+      };
+
+      const updateParams: QueryDeepPartialEntity<TransactionLog> = {
+        status: result.status,
+        description: result.description ?? pendingLog.description,
+        txHash: result.txHash,
+        ...(result.metadata ? { details: result.metadata as any } : {}),
+      };
+
+      await this.transactionLogRepository.update({ id: pendingLog.id }, updateParams);
 
       if (result.status === 'success') {
         this.logger.log(`Strategy ${job.strategyId} action completed successfully.`);
@@ -134,8 +143,6 @@ export class ExecutionService {
 
     this.logger.warn(`Scheduling retry ${attempts + 1} for job ${job.id} after ${delayMs} ms.`);
     await job.retry();
-    await job.update({ ...job.data });
-    await job.moveToDelayed(Date.now() + delayMs, 'retry');
   }
 
   private async dispatch(job: TransactionJobData): Promise<ExecutionResult> {

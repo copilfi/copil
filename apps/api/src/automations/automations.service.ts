@@ -57,8 +57,6 @@ export class AutomationsService {
         });
       }
     }
-
-    await this.purgeTransactionJobs(id);
     return savedStrategy;
   }
 
@@ -79,13 +77,22 @@ export class AutomationsService {
     const originalIsActive = strategy.isActive;
     const originalSchedule = strategy.schedule;
 
-    const updates: Partial<Strategy> = { ...updateStrategyDto };
+    const updates: Partial<Strategy> = {
+      name: updateStrategyDto.name,
+      schedule: updateStrategyDto.schedule,
+      isActive: updateStrategyDto.isActive,
+    };
+
+    let parsedDefinition: Strategy['definition'] | undefined;
     if (updateStrategyDto.definition !== undefined) {
-      updates.definition = parseStrategyDefinition(updateStrategyDto.definition);
-      await this.ensureSessionKeyOwnership(updates.definition.sessionKeyId, userId);
+      parsedDefinition = parseStrategyDefinition(updateStrategyDto.definition);
+      await this.ensureSessionKeyOwnership(parsedDefinition.sessionKeyId, userId);
     }
 
-    const updated = this.strategyRepository.merge(strategy, updates);
+    const updated = this.strategyRepository.merge(strategy, {
+      ...updates,
+      ...(parsedDefinition ? { definition: parsedDefinition } : {}),
+    });
     const savedStrategy = await this.strategyRepository.save(updated);
 
     const jobId = `strategy:${id}`;
