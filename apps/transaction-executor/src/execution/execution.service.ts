@@ -9,6 +9,13 @@ import { LiFiClient } from '../clients/lifi.client';
 import { SignerService } from '../signer/signer.service';
 import { Job } from 'bullmq';
 
+class RetryableExecutionError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'RetryableExecutionError';
+  }
+}
+
 @Injectable()
 export class ExecutionService {
   private readonly logger = new Logger(ExecutionService.name);
@@ -60,6 +67,9 @@ export class ExecutionService {
       `Executing ${job.action.type} action for strategy ${job.strategyId}`,
     );
 
+    let shouldRetry = false;
+    let retryMessage: string | undefined;
+
     try {
       const result = await this.dispatch(job);
 
@@ -84,15 +94,13 @@ export class ExecutionService {
         }
 
         if (signerResult.status !== 'success' && queueJob) {
-          await this.scheduleRetry(queueJob, signerResult.description ?? result.description ?? 'Signer error');
+          const assessment = this.evaluateRetry(queueJob, signerResult.description ?? result.description ?? 'Signer error');
+          if (assessment.shouldRetry) {
+            shouldRetry = true;
+            retryMessage = assessment.reason;
+          }
+        }
       }
-      }
-
-      const updatePayload: Partial<TransactionLog> = {
-        status: result.status,
-        description: result.description ?? pendingLog.description,
-        txHash: result.txHash,
-      };
 
       const updateParams: QueryDeepPartialEntity<TransactionLog> = {
         status: result.status,
@@ -112,37 +120,51 @@ export class ExecutionService {
           `Strategy ${job.strategyId} action failed. ${result.description ?? 'No details provided.'}`,
         );
       }
+
+      if (shouldRetry) {
+        throw new RetryableExecutionError(retryMessage ?? 'Retrying transaction job after external dependency signaled a transient error.');
+      }
     } catch (error) {
+      const isRetryable = error instanceof RetryableExecutionError;
       const message =
         error instanceof Error ? error.message : 'Unknown error occurred during execution.';
-      this.logger.error(
-        `Strategy ${job.strategyId} action threw an exception: ${message}`,
-        error instanceof Error ? error.stack : undefined,
-      );
+      if (isRetryable) {
+        this.logger.warn(
+          `Strategy ${job.strategyId} action will be retried: ${message}`,
+        );
+      } else {
+        this.logger.error(
+          `Strategy ${job.strategyId} action threw an exception: ${message}`,
+          error instanceof Error ? error.stack : undefined,
+        );
 
-      await this.transactionLogRepository.update(pendingLog.id, {
-        status: 'failed',
-        description: message,
-      });
+        await this.transactionLogRepository.update(pendingLog.id, {
+          status: 'failed',
+          description: message,
+        });
+      }
 
       throw error;
     }
   }
 
-  private async scheduleRetry(job: Job<TransactionJobData>, reason: string) {
-    const attempts = job.attemptsMade ?? 0;
-    const maxAttempts = 3;
-    const delayMs = 60_000 * Math.pow(2, attempts); // exponential backoff starting at 1 min
+  private evaluateRetry(job: Job<TransactionJobData>, reason: string): { shouldRetry: boolean; reason: string } {
+    const attemptsMade = job.attemptsMade ?? 0;
+    const maxAttempts = job.opts.attempts ?? 0;
 
-    if (attempts >= maxAttempts) {
+    if (maxAttempts > 0 && attemptsMade >= maxAttempts - 1) {
       this.logger.error(
-        `Job ${job.id} reached max retry attempts (${maxAttempts}). Reason: ${reason}`,
+        `Job ${job.id} reached the maximum retry attempts (${maxAttempts}). Reason: ${reason}`,
       );
-      return;
+      return { shouldRetry: false, reason };
     }
 
-    this.logger.warn(`Scheduling retry ${attempts + 1} for job ${job.id} after ${delayMs} ms.`);
-    await job.retry();
+    const nextAttempt = attemptsMade + 1;
+    const attemptInfo = maxAttempts > 0 ? `${nextAttempt}/${maxAttempts}` : `${nextAttempt}`;
+    this.logger.warn(
+      `Retrying job ${job.id} (attempt ${attemptInfo}). Reason: ${reason}`,
+    );
+    return { shouldRetry: true, reason };
   }
 
   private async dispatch(job: TransactionJobData): Promise<ExecutionResult> {

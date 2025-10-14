@@ -12,6 +12,9 @@ import {
   TRANSACTION_QUEUE,
 } from '@copil/database';
 
+const TRANSACTION_JOB_ATTEMPTS = 3;
+const TRANSACTION_JOB_BACKOFF_MS = 60_000;
+
 @Processor(STRATEGY_QUEUE)
 export class StrategyProcessor {
   private readonly logger = new Logger(StrategyProcessor.name);
@@ -106,6 +109,11 @@ export class StrategyProcessor {
       {
         removeOnComplete: 100,
         removeOnFail: false,
+        attempts: TRANSACTION_JOB_ATTEMPTS,
+        backoff: {
+          type: 'exponential',
+          delay: TRANSACTION_JOB_BACKOFF_MS,
+        },
       },
     );
   }
