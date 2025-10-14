@@ -3,6 +3,7 @@ import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { QuoteRequest } from '@lifi/sdk';
 import { AuthRequest } from '../auth/auth-request.interface';
+import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transaction')
@@ -12,6 +13,18 @@ export class TransactionController {
   @Post('quote')
   getQuote(@Body() quoteRequest: Omit<QuoteRequest, 'integrator'>) {
     return this.transactionService.getQuote(quoteRequest);
+  }
+
+  @Post('execute')
+  executeAdHocTransaction(
+    @Request() req: AuthRequest,
+    @Body() executeDto: ExecuteTransactionDto,
+  ) {
+    return this.transactionService.createAdHocTransactionJob(
+      req.user.id,
+      executeDto.sessionKeyId,
+      executeDto.action,
+    );
   }
 
   @Get('logs')

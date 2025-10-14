@@ -4,7 +4,8 @@ export type TransactionAction =
       chainId: string;
       assetIn: string;
       assetOut: string;
-      amountIn: string;
+      amountIn: string; // e.g., "0.1" for absolute, or "20" for percentage
+      amountInIsPercentage?: boolean; // If true, amountIn is a percentage
       slippageBps?: number;
     }
   | {
@@ -13,7 +14,8 @@ export type TransactionAction =
       toChainId: string;
       assetIn: string;
       assetOut: string;
-      amountIn: string;
+      amountIn: string; // e.g., "0.1" for absolute, or "20" for percentage
+      amountInIsPercentage?: boolean; // If true, amountIn is a percentage
       slippageBps?: number;
     }
   | {
@@ -23,7 +25,7 @@ export type TransactionAction =
     };
 
 export interface TransactionJobData {
-  strategyId: number;
+  strategyId: number | null; // Can be null for ad-hoc jobs
   userId: number;
   sessionKeyId?: number;
   action: TransactionAction;

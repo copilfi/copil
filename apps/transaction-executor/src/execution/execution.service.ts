@@ -33,26 +33,32 @@ export class ExecutionService {
   ) {}
 
   async execute(job: TransactionJobData, queueJob?: Job<TransactionJobData>): Promise<void> {
-    this.logger.log(`Received job for strategy ${job.strategyId}: ${job.action.type}`);
+    const jobDescription = job.strategyId
+      ? `strategy ${job.strategyId}`
+      : `ad-hoc job for user ${job.userId}`;
+    this.logger.log(`Received job for ${jobDescription}: ${job.action.type}`);
 
-    const strategy = await this.strategyRepository.findOne({ where: { id: job.strategyId } });
+    // If the job is tied to a strategy, validate it.
+    if (job.strategyId) {
+      const strategy = await this.strategyRepository.findOne({ where: { id: job.strategyId } });
 
-    if (!strategy) {
-      this.logger.warn(`Strategy ${job.strategyId} not found. Aborting execution.`);
-      await this.recordLog(job, 'failed', `Strategy ${job.strategyId} not found`);
-      return;
-    }
+      if (!strategy) {
+        this.logger.warn(`Strategy ${job.strategyId} not found. Aborting execution.`);
+        await this.recordLog(job, 'failed', `Strategy ${job.strategyId} not found`);
+        return;
+      }
 
-    if (strategy.userId !== job.userId) {
-      this.logger.warn(
-        `Strategy ${job.strategyId} does not belong to user ${job.userId}. Aborting execution.`,
-      );
-      await this.recordLog(
-        job,
-        'failed',
-        `Strategy ${job.strategyId} does not belong to user ${job.userId}`,
-      );
-      return;
+      if (strategy.userId !== job.userId) {
+        this.logger.warn(
+          `Strategy ${job.strategyId} does not belong to user ${job.userId}. Aborting execution.`,
+        );
+        await this.recordLog(
+          job,
+          'failed',
+          `Strategy ${job.strategyId} does not belong to user ${job.userId}`,
+        );
+        return;
+      }
     }
 
     const sessionKeyValidation = await this.validateSessionKey(job);
@@ -64,7 +70,7 @@ export class ExecutionService {
     const pendingLog = await this.recordLog(
       job,
       'pending',
-      `Executing ${job.action.type} action for strategy ${job.strategyId}`,
+      `Executing ${job.action.type} action for ${jobDescription}`,
     );
 
     let shouldRetry = false;
@@ -112,12 +118,12 @@ export class ExecutionService {
       await this.transactionLogRepository.update({ id: pendingLog.id }, updateParams);
 
       if (result.status === 'success') {
-        this.logger.log(`Strategy ${job.strategyId} action completed successfully.`);
+        this.logger.log(`Job for ${jobDescription} action completed successfully.`);
       } else if (result.status === 'skipped') {
-        this.logger.warn(`Strategy ${job.strategyId} action skipped. ${result.description ?? ''}`);
+        this.logger.warn(`Job for ${jobDescription} action skipped. ${result.description ?? ''}`);
       } else {
         this.logger.error(
-          `Strategy ${job.strategyId} action failed. ${result.description ?? 'No details provided.'}`,
+          `Job for ${jobDescription} action failed. ${result.description ?? 'No details provided.'}`,
         );
       }
 
@@ -130,11 +136,11 @@ export class ExecutionService {
         error instanceof Error ? error.message : 'Unknown error occurred during execution.';
       if (isRetryable) {
         this.logger.warn(
-          `Strategy ${job.strategyId} action will be retried: ${message}`,
+          `Job for ${jobDescription} action will be retried: ${message}`,
         );
       } else {
         this.logger.error(
-          `Strategy ${job.strategyId} action threw an exception: ${message}`,
+          `Job for ${jobDescription} action threw an exception: ${message}`,
           error instanceof Error ? error.stack : undefined,
         );
 
@@ -295,18 +301,20 @@ export class ExecutionService {
       job.action.type === 'bridge'
         ? job.action.toChainId
         : job.action.type === 'swap'
-          ? job.action.chainId
-          : undefined;
+        ? job.action.chainId
+        : undefined;
 
-    const record = this.transactionLogRepository.create({
-      userId: job.userId,
-      strategyId: job.strategyId,
-      description,
-      status,
-      chain,
-    });
+    const newLog = new TransactionLog();
+    newLog.userId = job.userId;
+    newLog.description = description;
+    newLog.status = status;
+    newLog.chain = chain;
 
-    return this.transactionLogRepository.save(record);
+    if (job.strategyId) {
+      newLog.strategyId = job.strategyId;
+    }
+
+    return this.transactionLogRepository.save(newLog);
   }
   private async validateSessionKey(job: TransactionJobData): Promise<{ valid: boolean; reason?: string }> {
     if (!job.sessionKeyId) {

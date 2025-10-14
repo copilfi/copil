@@ -29,7 +29,8 @@
     "@nestjs/typeorm": "^11.0.0",
     "bullmq": "^5.61.0",
     "pg": "^8.16.3",
-    "@copil/database": "1.0.0"
+    "@copil/database": "1.0.0",
+    "alchemy-sdk": "^3.3.1"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

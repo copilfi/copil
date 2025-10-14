@@ -4,8 +4,8 @@ import { ConfigService } from '@nestjs/config';
 type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
 interface TransactionRequest {
-  to: string;
-  data: string;
+  to: `0x${string}`;
+  data: `0x${string}`;
   value?: string;
 }
 
@@ -88,25 +88,19 @@ export class SwapAggregatorClient {
 
   async execute(request: SwapQuoteRequest): Promise<SwapExecutionResult> {
     const quote = await this.getQuote(request);
-    if (!quote.supported) {
+    if (!quote.supported || !quote.transactionRequest) {
       return {
         success: false,
-        description: quote.warning ?? 'Aggregator quote unavailable.',
-      };
-    }
-
-    if (!quote.transactionRequest) {
-      return {
-        success: false,
-        description: 'Aggregator did not return executable transaction data.',
+        description: quote.warning ?? 'Aggregator did not return executable transaction data.',
         rawQuote: quote.rawQuote,
       };
     }
 
-    // TODO: integrate signer/executor to broadcast transaction using session key.
+    // The `execute` method's job is to prepare the data for the signer.
+    // The actual broadcasting is handled by the SignerService.
     return {
-      success: false,
-      description: 'Swap transaction prepared; broadcasting not yet implemented.',
+      success: true,
+      description: 'Swap transaction prepared for signing.',
       transactionRequest: quote.transactionRequest,
       allowanceTarget: quote.allowanceTarget,
       rawQuote: quote.rawQuote,
@@ -135,8 +129,8 @@ export class SwapAggregatorClient {
       return undefined;
     }
     const { to, data, value } = quote;
-    if (typeof to === 'string' && typeof data === 'string') {
-      return { to, data, value: typeof value === 'string' ? value : undefined };
+    if (typeof to === 'string' && to.startsWith('0x') && typeof data === 'string' && data.startsWith('0x')) {
+      return { to: to as `0x${string}`, data: data as `0x${string}`, value: typeof value === 'string' ? value : undefined };
     }
     return undefined;
   }

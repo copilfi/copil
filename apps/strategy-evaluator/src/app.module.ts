@@ -14,6 +14,7 @@ import {
 } from '@copil/database';
 
 import { StrategyProcessor } from './strategy.processor';
+import { AlchemyService } from './alchemy.service';
 
 @Module({
   imports: [
@@ -32,7 +33,7 @@ import { StrategyProcessor } from './strategy.processor';
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Strategy, TokenPrice]),
+    TypeOrmModule.forFeature([Strategy, TokenPrice, Wallet]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -46,6 +47,6 @@ import { StrategyProcessor } from './strategy.processor';
     BullModule.registerQueue({ name: STRATEGY_QUEUE }),
     BullModule.registerQueue({ name: TRANSACTION_QUEUE }),
   ],
-  providers: [StrategyProcessor],
+  providers: [StrategyProcessor, AlchemyService],
 })
 export class AppModule {}

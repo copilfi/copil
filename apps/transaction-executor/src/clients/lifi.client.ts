@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { TransactionRequest } from '../execution/types'; // Use the central, strict type
 
 type FetchResponse = Awaited<ReturnType<typeof fetch>>;
 
@@ -10,12 +11,6 @@ interface BridgeQuoteRequest {
   assetOut: string;
   amountIn: string;
   slippageBps?: number;
-}
-
-interface TransactionRequest {
-  to: string;
-  data: string;
-  value?: string;
 }
 
 interface BridgeQuoteResponse {
@@ -78,44 +73,42 @@ export class LiFiClient {
 
   async execute(request: BridgeQuoteRequest): Promise<BridgeExecutionResult> {
     const quote = await this.getQuote(request);
-    if (!quote.supported) {
+    if (!quote.supported || !quote.transactionRequest) {
       return {
         success: false,
-        description: quote.warning ?? 'Bridge quote unavailable.',
-      };
-    }
-
-    if (!quote.transactionRequest) {
-      return {
-        success: false,
-        description: 'Bridge quote did not provide executable transaction data.',
+        description: quote.warning ?? 'Bridge quote did not provide executable transaction data.',
         rawQuote: quote.rawQuote,
       };
     }
 
     return {
-      success: false,
-      description: 'Bridge transaction prepared; broadcasting not yet implemented.',
+      success: true, // Let the execution service handle the broadcast
+      description: 'Bridge transaction prepared for signing.',
       transactionRequest: quote.transactionRequest,
       rawQuote: quote.rawQuote,
     };
   }
 
   private extractTransactionRequest(quote: any): TransactionRequest | undefined {
-    // LI.FI quotes may contain transactionRequest or steps with execution request data.
-    const maybeTx = quote?.transactionRequest ?? quote?.estimate?.approval?.transactionRequest;
-    if (maybeTx && typeof maybeTx === 'object') {
-      const { to, data, value } = maybeTx;
-      if (typeof to === 'string' && typeof data === 'string') {
-        return { to, data, value: typeof value === 'string' ? value : undefined };
-      }
+    const findTx = (tx: any): TransactionRequest | undefined => {
+        if (tx && typeof tx.to === 'string' && tx.to.startsWith('0x') && typeof tx.data === 'string' && tx.data.startsWith('0x')) {
+            return { 
+                to: tx.to as `0x${string}`,
+                data: tx.data as `0x${string}`,
+                value: typeof tx.value === 'string' ? tx.value : undefined 
+            };
+        }
+        return undefined;
     }
+
+    const maybeTx = quote?.transactionRequest ?? quote?.estimate?.approval?.transactionRequest;
+    const foundTx = findTx(maybeTx);
+    if(foundTx) return foundTx;
+
     const steps = Array.isArray(quote?.steps) ? quote.steps : [];
     for (const step of steps) {
-      const tx = step?.transactionRequest;
-      if (tx && typeof tx.to === 'string' && typeof tx.data === 'string') {
-        return { to: tx.to, data: tx.data, value: typeof tx.value === 'string' ? tx.value : undefined };
-      }
+      const stepTx = findTx(step?.transactionRequest);
+      if (stepTx) return stepTx;
     }
     return undefined;
   }
