@@ -7,10 +7,12 @@ import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { User } from '@copil/database';
 import { JwtStrategy } from './jwt.strategy';
+import { Wallet } from '@copil/database';
+import { SmartAccountService } from './smart-account.service';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([User]),
+    TypeOrmModule.forFeature([User, Wallet]),
     PassportModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],
@@ -22,7 +24,7 @@ import { JwtStrategy } from './jwt.strategy';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy],
+  providers: [AuthService, JwtStrategy, SmartAccountService],
   exports: [AuthService],
 })
 export class AuthModule {}

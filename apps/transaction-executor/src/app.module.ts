@@ -8,6 +8,7 @@ import { ExecutionService } from './execution/execution.service';
 import { LiFiClient } from './clients/lifi.client';
 import { SwapAggregatorClient } from './clients/swap-aggregator.client';
 import { SignerService } from './signer/signer.service';
+import { BundlerClient } from './clients/bundler.client';
 
 @Module({
   imports: [
@@ -26,7 +27,7 @@ import { SignerService } from './signer/signer.service';
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Strategy, TransactionLog, SessionKey]),
+    TypeOrmModule.forFeature([Strategy, TransactionLog, SessionKey, Wallet]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -41,6 +42,6 @@ import { SignerService } from './signer/signer.service';
       name: TRANSACTION_QUEUE,
     }),
   ],
-  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService],
+  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService, BundlerClient],
 })
 export class AppModule {}

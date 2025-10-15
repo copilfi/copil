@@ -9,8 +9,8 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
-  async login(@Body() body: { privyDid: string, email: string }) {
-    const user = await this.authService.findOrCreateUser(body.privyDid, body.email);
+  async login(@Body() body: { privyDid: string, email: string, walletAddress?: string }) {
+    const user = await this.authService.findOrCreateUser(body.privyDid, body.email, body.walletAddress);
     return this.authService.login(user);
   }
 

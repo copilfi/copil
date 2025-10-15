@@ -11,7 +11,10 @@ export class Wallet {
   userId!: number;
 
   @Column({ type: 'text' })
-  address!: string;
+  address!: string; // This is the EOA address from Privy
+
+  @Column({ type: 'text', nullable: true })
+  smartAccountAddress?: string; // This will be the ERC-4337 address
 
   @Column({ type: 'text' })
   chain!: string; // e.g., 'ethereum', 'base', 'sei'
