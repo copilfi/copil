@@ -6,6 +6,7 @@ import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey } from '
 
 import { TasksService } from './tasks.service';
 import { DexScreenerService } from './dexscreener.service';
+import { HealthService } from './health.service';
 
 @Module({
   imports: [
@@ -27,6 +28,6 @@ import { DexScreenerService } from './dexscreener.service';
     }),
     TypeOrmModule.forFeature([TokenPrice]),
   ],
-  providers: [TasksService, DexScreenerService],
+  providers: [TasksService, DexScreenerService, HealthService],
 })
 export class AppModule {}

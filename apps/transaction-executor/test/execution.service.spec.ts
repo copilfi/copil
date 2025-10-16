@@ -1,7 +1,8 @@
 import { ExecutionService } from '../src/execution/execution.service';
 import { TransactionJobData } from '../src/execution/types';
 import { Repository } from 'typeorm';
-import { Strategy, TransactionLog, SessionKey } from '@copil/database';
+import { Strategy, TransactionLog, SessionKey, Wallet } from '@copil/database';
+import { ConfigService } from '@nestjs/config';
 import { SwapAggregatorClient } from '../src/clients/swap-aggregator.client';
 import { LiFiClient } from '../src/clients/lifi.client';
 import { SignerService } from '../src/signer/signer.service';
@@ -31,12 +32,15 @@ describe('ExecutionService', () => {
   let swapClient: jest.Mocked<SwapAggregatorClient>;
   let lifiClient: jest.Mocked<LiFiClient>;
   let signerService: jest.Mocked<SignerService>;
+  let walletRepository: MockedRepository<Wallet>;
+  let configService: Partial<jest.Mocked<ConfigService>>;
   let service: ExecutionService;
 
   beforeEach(() => {
     strategyRepository = createRepositoryMock<Strategy>();
     transactionLogRepository = createRepositoryMock<TransactionLog>();
     sessionKeyRepository = createRepositoryMock<SessionKey>();
+    walletRepository = createRepositoryMock<Wallet>();
 
     swapClient = {
       getQuote: jest.fn().mockResolvedValue({ supported: false, warning: 'not supported' }),
@@ -61,13 +65,19 @@ describe('ExecutionService', () => {
     transactionLogRepository.save.mockImplementation(async (entity) => ({ id: 1, ...entity }));
     transactionLogRepository.create.mockImplementation((entity) => entity as any);
 
+    configService = {
+      get: jest.fn().mockReturnValue(undefined),
+    } as unknown as jest.Mocked<ConfigService>;
+
     service = new ExecutionService(
       strategyRepository as unknown as Repository<Strategy>,
       transactionLogRepository as unknown as Repository<TransactionLog>,
       sessionKeyRepository as unknown as Repository<SessionKey>,
+      walletRepository as unknown as Repository<Wallet>,
       swapClient,
       lifiClient,
       signerService,
+      configService as ConfigService,
     );
   });
 
@@ -171,7 +181,7 @@ describe('ExecutionService', () => {
       permissions: { actions: ['swap'] },
     } as SessionKey);
 
-    swapClient.getQuote.mockResolvedValue({ supported: true });
+    swapClient.getQuote.mockResolvedValue({ supported: true, allowanceTarget: undefined });
     swapClient.execute.mockResolvedValue({
       success: false,
       description: 'Prepared',
@@ -192,6 +202,10 @@ describe('ExecutionService', () => {
       },
     };
 
+    // Avoid real allowance checks by stubbing private helpers
+    jest.spyOn<any, any>(service as any, 'getOwnerAddress').mockResolvedValue('0x1111111111111111111111111111111111111111');
+    jest.spyOn<any, any>(service as any, 'readAllowance').mockResolvedValue(10n);
+
     await service.execute(job);
 
     expect(signerService.signAndSend).toHaveBeenCalledWith(
@@ -201,5 +215,53 @@ describe('ExecutionService', () => {
         transaction: { to: '0x123', data: '0xdeadbeef' },
       }),
     );
+  });
+
+  it('performs approval then swap when allowance is insufficient', async () => {
+    strategyRepository.findOne.mockResolvedValue({ id: 12, userId: 8 } as Strategy);
+    sessionKeyRepository.findOne.mockResolvedValue({
+      id: 15,
+      userId: 8,
+      isActive: true,
+      expiresAt: null,
+      permissions: { actions: ['swap'], chains: ['base'] },
+    } as SessionKey);
+
+    swapClient.getQuote.mockResolvedValue({ supported: true, allowanceTarget: '0x9999999999999999999999999999999999999999' });
+    swapClient.execute.mockResolvedValue({
+      success: false,
+      description: 'Prepared',
+      transactionRequest: { to: '0x2222222222222222222222222222222222222222', data: '0xabc' },
+    });
+
+    // First approval succeeds, then main tx succeeds
+    signerService.signAndSend
+      .mockResolvedValueOnce({ status: 'success', txHash: '0xapprove' })
+      .mockResolvedValueOnce({ status: 'success', txHash: '0xswap' });
+
+    // Stub allowance helpers
+    jest.spyOn<any, any>(service as any, 'getOwnerAddress').mockResolvedValue('0x1111111111111111111111111111111111111111');
+    jest.spyOn<any, any>(service as any, 'readAllowance').mockResolvedValue(0n);
+
+    const job: TransactionJobData = {
+      strategyId: 12,
+      userId: 8,
+      sessionKeyId: 15,
+      action: {
+        type: 'swap',
+        chainId: 'base',
+        assetIn: '0x3333333333333333333333333333333333333333',
+        assetOut: '0x4444444444444444444444444444444444444444',
+        amountIn: '1000',
+      },
+    };
+
+    await service.execute(job);
+
+    // First call is approval
+    expect(signerService.signAndSend.mock.calls[0][0].transaction.to).toBe('0x3333333333333333333333333333333333333333');
+    expect((signerService.signAndSend.mock.calls[0][0] as any).metadata?.purpose).toBe('approval');
+    // Second call is main swap
+    expect(signerService.signAndSend.mock.calls[1][0].transaction.to).toBe('0x2222222222222222222222222222222222222222');
   });
 });

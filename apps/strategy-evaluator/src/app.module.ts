@@ -15,6 +15,7 @@ import {
 
 import { StrategyProcessor } from './strategy.processor';
 import { AlchemyService } from './alchemy.service';
+import { HealthService } from './health.service';
 
 @Module({
   imports: [
@@ -47,6 +48,6 @@ import { AlchemyService } from './alchemy.service';
     BullModule.registerQueue({ name: STRATEGY_QUEUE }),
     BullModule.registerQueue({ name: TRANSACTION_QUEUE }),
   ],
-  providers: [StrategyProcessor, AlchemyService],
+  providers: [StrategyProcessor, AlchemyService, HealthService],
 })
 export class AppModule {}

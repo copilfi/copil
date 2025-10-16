@@ -9,6 +9,7 @@ import { LiFiClient } from './clients/lifi.client';
 import { SwapAggregatorClient } from './clients/swap-aggregator.client';
 import { SignerService } from './signer/signer.service';
 import { BundlerClient } from './clients/bundler.client';
+import { HealthService } from './health.service';
 
 @Module({
   imports: [
@@ -42,6 +43,6 @@ import { BundlerClient } from './clients/bundler.client';
       name: TRANSACTION_QUEUE,
     }),
   ],
-  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService, BundlerClient],
+  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService, BundlerClient, HealthService],
 })
 export class AppModule {}

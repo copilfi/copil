@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { AlchemyService } from './alchemy.service';
+import { TokenMetadataService } from './token-metadata.service';
 import { Network } from 'alchemy-sdk';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from '@copil/database';
@@ -11,6 +12,7 @@ export class PortfolioService {
     private readonly alchemyService: AlchemyService,
     @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
+    private readonly tokenMetadata: TokenMetadataService,
   ) {}
 
   private getNetworkEnum(chain: string): Network | null {
@@ -35,10 +37,28 @@ export class PortfolioService {
     }
     const sdk = this.alchemyService.getSdkForNetwork(network);
     const balances = await sdk.core.getTokenBalances(address);
+
+    const tokens = await Promise.all(
+      (balances.tokenBalances || []).map(async (t) => {
+        try {
+          const meta = t.contractAddress
+            ? await this.tokenMetadata.get(chain, t.contractAddress)
+            : { symbol: null, decimals: null };
+          return {
+            ...t,
+            symbol: meta.symbol ?? undefined,
+            decimals: meta.decimals ?? undefined,
+          };
+        } catch {
+          return t;
+        }
+      }),
+    );
+
     return {
       chain,
       address,
-      tokens: balances.tokenBalances,
+      tokens,
     };
   }
 

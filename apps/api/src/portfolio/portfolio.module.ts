@@ -3,12 +3,13 @@ import { PortfolioService } from './portfolio.service';
 import { PortfolioController } from './portfolio.controller';
 import { AlchemyService } from './alchemy.service';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Wallet } from '@copil/database';
+import { Wallet, TokenMetadata } from '@copil/database';
+import { TokenMetadataService } from './token-metadata.service';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([Wallet])],
+  imports: [TypeOrmModule.forFeature([Wallet, TokenMetadata])],
   controllers: [PortfolioController],
-  providers: [PortfolioService, AlchemyService],
-  exports: [PortfolioService, AlchemyService],
+  providers: [PortfolioService, AlchemyService, TokenMetadataService],
+  exports: [PortfolioService, AlchemyService, TokenMetadataService],
 })
 export class PortfolioModule {}

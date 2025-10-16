@@ -12,7 +12,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { AutomationsModule } from './automations/automations.module';
 import { SessionKeysModule } from './session-keys/session-keys.module';
 
-import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey } from '@copil/database';
+import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata } from '@copil/database';
 
 @Module({
   imports: [
@@ -28,7 +28,7 @@ import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey } from '
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey],
+        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false, // Disable auto-schema sync, we will use migrations
       }),
