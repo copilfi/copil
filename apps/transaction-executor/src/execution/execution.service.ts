@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions } from '@copil/database';
+import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions, Wallet } from '@copil/database';
 import { Repository } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ExecutionResult, TransactionJobData } from './types';
@@ -8,6 +9,8 @@ import { SwapAggregatorClient } from '../clients/swap-aggregator.client';
 import { LiFiClient } from '../clients/lifi.client';
 import { SignerService } from '../signer/signer.service';
 import { Job } from 'bullmq';
+import { createPublicClient, http, encodeFunctionData, Chain } from 'viem';
+import { mainnet, base, arbitrum, linea } from 'viem/chains';
 
 class RetryableExecutionError extends Error {
   constructor(message: string) {
@@ -27,9 +30,12 @@ export class ExecutionService {
     private readonly transactionLogRepository: Repository<TransactionLog>,
     @InjectRepository(SessionKey)
     private readonly sessionKeyRepository: Repository<SessionKey>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
     private readonly swapClient: SwapAggregatorClient,
     private readonly lifiClient: LiFiClient,
     private readonly signerService: SignerService,
+    private readonly configService: ConfigService,
   ) {}
 
   async execute(job: TransactionJobData, queueJob?: Job<TransactionJobData>): Promise<void> {
@@ -190,6 +196,60 @@ export class ExecutionService {
           };
         }
 
+        // Approval flow: if ERC-20 and allowance is insufficient, submit approve first.
+        let approvalTxHash: string | undefined;
+        const allowanceTarget = quote.allowanceTarget;
+        try {
+          if (allowanceTarget && this.isErc20(job.action.assetIn)) {
+            const owner = await this.getOwnerAddress(job.userId, job.action.chainId);
+            if (!owner) {
+              return {
+                status: 'failed',
+                description: `Smart account/wallet not found for user ${job.userId} on ${job.action.chainId}.`,
+              };
+            }
+
+            const allowance = await this.readAllowance(
+              job.action.chainId,
+              job.action.assetIn as `0x${string}`,
+              owner,
+              allowanceTarget as `0x${string}`,
+            );
+
+            const required = BigInt(job.action.amountIn);
+            if (allowance < required) {
+              const approveData = encodeFunctionData({
+                abi: this.erc20Abi,
+                functionName: 'approve',
+                args: [allowanceTarget as `0x${string}`, required],
+              });
+
+              const approveResult = await this.signerService.signAndSend({
+                userId: job.userId,
+                sessionKeyId: job.sessionKeyId!,
+                transaction: { to: job.action.assetIn as `0x${string}`, data: approveData },
+                metadata: { chain: job.action.chainId, purpose: 'approval' },
+              });
+
+              if (approveResult.status !== 'success') {
+                return {
+                  status: approveResult.status,
+                  description: approveResult.description ?? 'Approval failed.',
+                  metadata: {
+                    chain: job.action.chainId,
+                    allowanceTarget,
+                    approval: 'failed',
+                  },
+                };
+              }
+              approvalTxHash = approveResult.txHash;
+            }
+          }
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          return { status: 'failed', description: `Approval check failed: ${msg}` };
+        }
+
         const swapResult = await this.swapClient.execute({
           chainId: job.action.chainId,
           assetIn: job.action.assetIn,
@@ -210,6 +270,7 @@ export class ExecutionService {
               transactionRequest: swapResult.transactionRequest,
               allowanceTarget: swapResult.allowanceTarget,
               rawQuote: swapResult.rawQuote,
+              approvalTxHash,
             },
           };
         }
@@ -223,6 +284,7 @@ export class ExecutionService {
             transactionRequest: swapResult.transactionRequest,
             allowanceTarget: swapResult.allowanceTarget,
             rawQuote: swapResult.rawQuote,
+            approvalTxHash,
           },
         };
       }
@@ -315,6 +377,87 @@ export class ExecutionService {
     }
 
     return this.transactionLogRepository.save(newLog);
+  }
+  
+  private isErc20(assetAddress: string): boolean {
+    const lower = assetAddress?.toLowerCase();
+    if (!lower) return false;
+    const natives = new Set([
+      'eth',
+      'native',
+      '0xeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee',
+      '0x0000000000000000000000000000000000000000',
+    ]);
+    return !natives.has(lower);
+  }
+
+  private chainMap: Record<string, Chain> = {
+    ethereum: mainnet,
+    base,
+    arbitrum,
+    linea,
+  };
+
+  private getRpcUrl(chain: string): string {
+    const key = `RPC_URL_${chain.toUpperCase()}`;
+    const url = this.configService.get<string>(key) ?? this.configService.get<string>('RPC_URL');
+    if (!url) {
+      throw new Error(`RPC URL for chain ${chain} not configured.`);
+    }
+    return url;
+  }
+
+  private async getOwnerAddress(userId: number, chain: string): Promise<`0x${string}` | undefined> {
+    const wallet = await this.walletRepository.findOne({ where: { userId, chain } });
+    const address = (wallet?.smartAccountAddress ?? wallet?.address) as `0x${string}` | undefined;
+    return address;
+  }
+
+  private getPublicClient(chainName: string) {
+    const chain = this.chainMap[chainName.toLowerCase()];
+    if (!chain) {
+      throw new Error(`Unsupported chain: ${chainName}`);
+    }
+    return createPublicClient({ transport: http(this.getRpcUrl(chainName)), chain });
+  }
+
+  private erc20Abi = [
+    {
+      type: 'function',
+      name: 'allowance',
+      stateMutability: 'view',
+      inputs: [
+        { name: 'owner', type: 'address' },
+        { name: 'spender', type: 'address' },
+      ],
+      outputs: [{ name: '', type: 'uint256' }],
+    },
+    {
+      type: 'function',
+      name: 'approve',
+      stateMutability: 'nonpayable',
+      inputs: [
+        { name: 'spender', type: 'address' },
+        { name: 'value', type: 'uint256' },
+      ],
+      outputs: [{ name: '', type: 'bool' }],
+    },
+  ] as const;
+
+  private async readAllowance(
+    chainName: string,
+    token: `0x${string}`,
+    owner: `0x${string}`,
+    spender: `0x${string}`,
+  ): Promise<bigint> {
+    const client = this.getPublicClient(chainName);
+    const value = await client.readContract({
+      abi: this.erc20Abi,
+      address: token,
+      functionName: 'allowance',
+      args: [owner, spender],
+    });
+    return value as bigint;
   }
   private async validateSessionKey(job: TransactionJobData): Promise<{ valid: boolean; reason?: string }> {
     if (!job.sessionKeyId) {
