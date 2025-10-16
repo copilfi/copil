@@ -304,6 +304,29 @@ export class ExecutionService {
           };
         }
 
+        // If Li.Fi indicates approval is needed, submit that first
+        let approvalTxHash: string | undefined;
+        if (quote.approvalTransactionRequest) {
+          const approveRes = await this.signerService.signAndSend({
+            userId: job.userId,
+            sessionKeyId: job.sessionKeyId!,
+            transaction: quote.approvalTransactionRequest,
+            metadata: { chain: job.action.fromChainId, purpose: 'bridge-approval' },
+          });
+          if (approveRes.status !== 'success') {
+            return {
+              status: approveRes.status,
+              description: approveRes.description ?? 'Bridge approval failed.',
+              metadata: {
+                chain: job.action.fromChainId,
+                approval: 'failed',
+                approvalSpender: quote.approvalSpender,
+              },
+            };
+          }
+          approvalTxHash = approveRes.txHash;
+        }
+
         const bridgeResult = await this.lifiClient.execute({
           fromChainId: job.action.fromChainId,
           toChainId: job.action.toChainId,
@@ -324,6 +347,8 @@ export class ExecutionService {
               chain: job.action.fromChainId,
               transactionRequest: bridgeResult.transactionRequest,
               rawQuote: bridgeResult.rawQuote,
+              approvalTxHash,
+              approvalSpender: quote.approvalSpender,
             },
           };
         }
@@ -336,6 +361,8 @@ export class ExecutionService {
             chain: job.action.fromChainId,
             transactionRequest: bridgeResult.transactionRequest,
             rawQuote: bridgeResult.rawQuote,
+            approvalTxHash,
+            approvalSpender: quote.approvalSpender,
           },
         };
       }

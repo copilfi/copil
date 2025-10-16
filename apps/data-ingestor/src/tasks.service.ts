@@ -16,7 +16,8 @@ export class TasksService {
   @Cron(CronExpression.EVERY_MINUTE) // Changed to every minute for faster testing
   async handleCron() {
     console.log('Fetching trending token data...');
-    const chains = ['ethereum', 'base', 'arbitrum']; // Example chains
+    const chainsEnv = process.env.INGEST_CHAINS || 'ethereum,base,arbitrum';
+    const chains = chainsEnv.split(',').map((c) => c.trim()).filter(Boolean);
 
     for (const chain of chains) {
       try {
@@ -24,6 +25,9 @@ export class TasksService {
         console.log(`Found ${pairs.length} pairs for ${chain}`);
         
         for (const pair of pairs) {
+          if (!pair?.priceUsd || isNaN(parseFloat(pair.priceUsd))) {
+            continue;
+          }
           const tokenPrice = this.tokenPriceRepository.create({
             chain: chain,
             address: pair.baseToken.address,

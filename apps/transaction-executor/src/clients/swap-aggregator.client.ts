@@ -41,49 +41,46 @@ export class SwapAggregatorClient {
   constructor(private readonly configService: ConfigService) {}
 
   async getQuote(request: SwapQuoteRequest): Promise<SwapQuoteResponse> {
-    const baseUrl = this.getBaseUrl(request.chainId);
-    if (!baseUrl) {
+    const candidates = this.getBaseCandidates(request.chainId);
+    if (candidates.length === 0) {
       return {
         supported: false,
         warning: `No swap aggregator configured for chain ${request.chainId}.`,
       };
     }
 
-    const url = new URL('/swap/v1/quote', baseUrl);
-    url.searchParams.set('sellToken', request.assetIn);
-    url.searchParams.set('buyToken', request.assetOut);
-    url.searchParams.set('sellAmount', request.amountIn);
+    let lastWarning = '';
+    for (const c of candidates) {
+      try {
+        const url = new URL('/swap/v1/quote', c.baseUrl);
+        url.searchParams.set('sellToken', request.assetIn);
+        url.searchParams.set('buyToken', request.assetOut);
+        url.searchParams.set('sellAmount', request.amountIn);
 
-    let response: FetchResponse;
-    try {
-      response = await this.safeFetch(url, {
-        headers: this.buildHeaders(),
-      });
-    } catch (error) {
-      return {
-        supported: false,
-        warning: (error as Error).message,
-      };
+        const response = await this.safeFetch(url, { headers: c.headers });
+        if (!response.ok) {
+          const text = await response.text();
+          lastWarning = `Provider ${c.label} failed (${response.status}): ${text.slice(0, 200)}`;
+          this.logger.warn(lastWarning);
+          continue; // try next candidate
+        }
+
+        const quote = await response.json();
+        const transactionRequest = this.extractTransactionRequest(quote);
+        return {
+          supported: true,
+          rawQuote: quote,
+          transactionRequest,
+          allowanceTarget: quote.allowanceTarget ?? quote.tx?.to ?? quote.spender,
+        };
+      } catch (error) {
+        lastWarning = `Provider ${c.label} error: ${(error as Error).message}`;
+        this.logger.warn(lastWarning);
+        continue;
+      }
     }
 
-    if (!response.ok) {
-      const text = await response.text();
-      this.logger.warn(`Swap quote failed (${response.status}): ${text}`);
-      return {
-        supported: false,
-        warning: `Aggregator quote failed (${response.status}).`,
-      };
-    }
-
-    const quote = await response.json();
-    const transactionRequest = this.extractTransactionRequest(quote);
-
-    return {
-      supported: true,
-      rawQuote: quote,
-      transactionRequest,
-      allowanceTarget: quote.allowanceTarget,
-    };
+    return { supported: false, warning: lastWarning || 'All aggregators failed' };
   }
 
   async execute(request: SwapQuoteRequest): Promise<SwapExecutionResult> {
@@ -107,17 +104,25 @@ export class SwapAggregatorClient {
     };
   }
 
-  private getBaseUrl(chainId: string): string | undefined {
-    const keyed = this.configService.get<string>(
-      `SWAP_AGGREGATOR_BASE_URL_${chainId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase()}`,
-    );
-    if (keyed) return keyed;
-    return this.configService.get<string>('SWAP_AGGREGATOR_BASE_URL');
+  private getBaseCandidates(chainId: string): Array<{ baseUrl: string; headers: Record<string, string>; label: string }> {
+    const norm = chainId.replace(/[^a-zA-Z0-9]/g, '').toUpperCase();
+    const primary =
+      this.configService.get<string>(`SWAP_AGGREGATOR_BASE_URL_${norm}`) ??
+      this.configService.get<string>('SWAP_AGGREGATOR_BASE_URL');
+    const alt =
+      this.configService.get<string>(`SWAP_AGGREGATOR_ALT_BASE_URL_${norm}`) ??
+      this.configService.get<string>('SWAP_AGGREGATOR_ALT_BASE_URL');
+
+    const list: Array<{ baseUrl: string; headers: Record<string, string>; label: string }> = [];
+    if (primary) list.push({ baseUrl: primary, headers: this.buildHeaders('primary'), label: 'primary' });
+    if (alt) list.push({ baseUrl: alt, headers: this.buildHeaders('alt'), label: 'alt' });
+    return list;
   }
 
-  private buildHeaders(): Record<string, string> {
+  private buildHeaders(which: 'primary' | 'alt'): Record<string, string> {
     const headers: Record<string, string> = {};
-    const apiKey = this.configService.get<string>('SWAP_AGGREGATOR_API_KEY');
+    const keyName = which === 'primary' ? 'SWAP_AGGREGATOR_API_KEY' : 'SWAP_AGGREGATOR_ALT_API_KEY';
+    const apiKey = this.configService.get<string>(keyName);
     if (apiKey) {
       headers['Authorization'] = `Bearer ${apiKey}`;
     }
@@ -136,11 +141,16 @@ export class SwapAggregatorClient {
   }
 
   private async safeFetch(url: URL, init: RequestInit): Promise<FetchResponse> {
+    const timeoutMs = Number(this.configService.get<string>('SWAP_AGGREGATOR_TIMEOUT_MS') ?? '10000');
+    const controller = new AbortController();
+    const id = setTimeout(() => controller.abort(), Math.max(1000, timeoutMs));
     try {
-      return await fetch(url, init);
+      return await fetch(url, { ...init, signal: controller.signal });
     } catch (error) {
       this.logger.error(`Swap aggregator fetch failed: ${(error as Error).message}`);
       throw new Error('Swap aggregator unavailable');
+    } finally {
+      clearTimeout(id);
     }
   }
 }

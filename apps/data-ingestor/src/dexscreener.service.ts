@@ -3,7 +3,7 @@ import axios from 'axios';
 
 @Injectable()
 export class DexScreenerService {
-  private readonly API_URL = 'https://api.dexscreener.com/latest/dex';
+  private readonly API_URL = process.env.DEX_SCREENER_API_URL || 'https://api.dexscreener.com/latest/dex';
 
   // Key token addresses to track per chain
   private readonly KEY_TOKENS: Record<string, string[]> = {
@@ -26,11 +26,12 @@ export class DexScreenerService {
     const chainId = this.getChainId(chain);
     const keyTokens = this.KEY_TOKENS[chainId] || [];
     const allPairs: any[] = [];
+    const timeout = Number(process.env.DEX_SCREENER_TIMEOUT_MS ?? '8000');
 
     // Fetch data for key tokens first
     for (const tokenAddress of keyTokens) {
       try {
-        const response = await axios.get(`${this.API_URL}/tokens/${tokenAddress}`);
+        const response = await axios.get(`${this.API_URL}/tokens/${tokenAddress}`, { timeout });
         const pairs = response.data.pairs || [];
         // Get the pair for this specific chain
         const chainPairs = pairs.filter((p: any) => p.chainId === chainId);
@@ -45,7 +46,8 @@ export class DexScreenerService {
     // Also search for additional trending pairs
     try {
       const searchResponse = await axios.get(`${this.API_URL}/search`, {
-        params: { q: `${chainId} USDC` }
+        params: { q: `${chainId} USDC` },
+        timeout,
       });
       const searchPairs = searchResponse.data.pairs || [];
       const chainPairs = searchPairs
@@ -58,7 +60,8 @@ export class DexScreenerService {
 
     // Remove duplicates based on baseToken address
     const uniquePairs = allPairs.filter((pair, index, self) =>
-      index === self.findIndex((p) => p.baseToken.address === pair.baseToken.address)
+      pair?.baseToken?.address &&
+      index === self.findIndex((p) => p?.baseToken?.address === pair.baseToken.address)
     );
 
     return uniquePairs.slice(0, 10);

@@ -17,7 +17,9 @@ interface BridgeQuoteResponse {
   supported: boolean;
   warning?: string;
   rawQuote?: unknown;
-  transactionRequest?: TransactionRequest;
+  transactionRequest?: TransactionRequest; // main tx
+  approvalTransactionRequest?: TransactionRequest; // optional approval tx
+  approvalSpender?: string;
 }
 
 interface BridgeExecutionResult {
@@ -62,12 +64,15 @@ export class LiFiClient {
     }
 
     const quote = await response.json();
-    const transactionRequest = this.extractTransactionRequest(quote);
+    const approvalTx = this.extractApprovalTransactionRequest(quote);
+    const transactionRequest = this.extractMainTransactionRequest(quote, approvalTx);
 
     return {
       supported: true,
       rawQuote: quote,
       transactionRequest,
+      approvalTransactionRequest: approvalTx,
+      approvalSpender: quote?.estimate?.approval?.approvalAddress ?? quote?.estimate?.approval?.spender,
     };
   }
 
@@ -89,26 +94,41 @@ export class LiFiClient {
     };
   }
 
-  private extractTransactionRequest(quote: any): TransactionRequest | undefined {
-    const findTx = (tx: any): TransactionRequest | undefined => {
-        if (tx && typeof tx.to === 'string' && tx.to.startsWith('0x') && typeof tx.data === 'string' && tx.data.startsWith('0x')) {
-            return { 
-                to: tx.to as `0x${string}`,
-                data: tx.data as `0x${string}`,
-                value: typeof tx.value === 'string' ? tx.value : undefined 
-            };
-        }
-        return undefined;
+  private toTransactionRequest(tx: any): TransactionRequest | undefined {
+    if (
+      tx &&
+      typeof tx.to === 'string' && tx.to.startsWith('0x') &&
+      typeof tx.data === 'string' && tx.data.startsWith('0x')
+    ) {
+      return {
+        to: tx.to as `0x${string}`,
+        data: tx.data as `0x${string}`,
+        value: typeof tx.value === 'string' ? tx.value : undefined,
+      };
     }
+    return undefined;
+  }
 
-    const maybeTx = quote?.transactionRequest ?? quote?.estimate?.approval?.transactionRequest;
-    const foundTx = findTx(maybeTx);
-    if(foundTx) return foundTx;
+  private extractApprovalTransactionRequest(quote: any): TransactionRequest | undefined {
+    const approvalTx = quote?.estimate?.approval?.transactionRequest;
+    return this.toTransactionRequest(approvalTx);
+  }
 
+  private extractMainTransactionRequest(
+    quote: any,
+    approvalTx?: TransactionRequest,
+  ): TransactionRequest | undefined {
+    // Prefer an explicit main transactionRequest if present
+    const top = this.toTransactionRequest(quote?.transactionRequest);
+    if (top && (!approvalTx || top.to !== approvalTx.to || top.data !== approvalTx.data)) {
+      return top;
+    }
     const steps = Array.isArray(quote?.steps) ? quote.steps : [];
     for (const step of steps) {
-      const stepTx = findTx(step?.transactionRequest);
-      if (stepTx) return stepTx;
+      const stepTx = this.toTransactionRequest(step?.transactionRequest);
+      if (stepTx && (!approvalTx || stepTx.to !== approvalTx.to || stepTx.data !== approvalTx.data)) {
+        return stepTx;
+      }
     }
     return undefined;
   }
