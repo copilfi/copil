@@ -7,6 +7,7 @@ export type TransactionIntent =
       toToken: string;
       fromAmount: string;
       userAddress: string;
+      slippageBps?: number;
     }
   | {
       type: 'custom';

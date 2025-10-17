@@ -27,7 +27,17 @@ export class TransactionService {
 
   async getQuote(intent: TransactionIntent) {
     const quoteResponse = await this.chainAbstractionClient.getQuote({ intent });
-    return quoteResponse.quote;
+    const quote = quoteResponse.quote as any;
+
+    // Non-custodial guard: require an executable transactionRequest
+    const tx = quote?.transactionRequest;
+    const validTx = tx && typeof tx.to === 'string' && tx.to.startsWith('0x') && typeof tx.data === 'string' && tx.data.startsWith('0x');
+    if (!validTx) {
+      throw new BadRequestException(
+        'Quote is not executable with a local signature. Only non-custodial transaction requests are supported.',
+      );
+    }
+    return quote;
   }
 
   async getLogs(userId: number, limit = 20): Promise<TransactionLog[]> {
@@ -36,6 +46,18 @@ export class TransactionService {
       order: { createdAt: 'DESC' },
       take: Math.min(Math.max(limit, 1), 100),
     });
+  }
+
+  async compareQuotes(intent: TransactionIntent): Promise<{
+    onebalance: { supported: boolean; quote?: any; error?: string };
+    lifi: { supported: boolean; raw?: any; error?: string; transactionRequest?: any };
+  }> {
+    const ob = await this.getQuote(intent)
+      .then((q) => ({ supported: true, quote: q }))
+      .catch((e) => ({ supported: false, error: (e as Error).message }));
+
+    const lifi = await this.chainAbstractionClient.getLiFiQuoteForIntent(intent);
+    return { onebalance: ob, lifi };
   }
 
   async createAdHocTransactionJob(

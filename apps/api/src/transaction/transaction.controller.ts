@@ -4,15 +4,27 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
+import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transaction')
 export class TransactionController {
-  constructor(private readonly transactionService: TransactionService) {}
+  constructor(
+    private readonly transactionService: TransactionService,
+    private readonly chainClient: ChainAbstractionClient,
+  ) {}
 
   @Post('quote')
   getQuote(@Body() getQuoteDto: GetQuoteDto) {
     return this.transactionService.getQuote(getQuoteDto.intent);
+  }
+
+  @Post('quote/providers')
+  async compareQuotes(@Body() getQuoteDto: GetQuoteDto) {
+    const intent = getQuoteDto.intent;
+    const ob = await this.transactionService.getQuote(intent).then((q) => ({ supported: true, quote: q })).catch((e) => ({ supported: false, error: (e as Error).message }));
+    const lifi = await this.chainClient.getLiFiQuoteForIntent(intent);
+    return { onebalance: ob, lifi };
   }
 
   @Post('execute')

@@ -1,6 +1,12 @@
 import { createPublicClient, http, defineChain, PublicClient, encodeFunctionData } from 'viem';
-import { GetQuoteResponse, TransactionIntent, Quote } from './types';
+import { GetQuoteResponse, TransactionIntent, Quote, AssetBalance } from './types';
 import { dragonswapRouterAbi } from './abis/dragonswap-router.abi';
+
+// A simple logger, in a real app this would be a proper NestJS logger injected.
+const logger = {
+    log: (...args: any[]) => console.log('[SeiClient]', ...args),
+    error: (...args: any[]) => console.error('[SeiClient]', ...args),
+};
 
 // As per the research, define the Sei network for viem
 export const seiChain = defineChain({
@@ -41,7 +47,7 @@ export class SeiClient {
   }
 
   async getBalance(address: `0x${string}`): Promise<AssetBalance[]> {
-    this.logger.log(`Fetching balance for ${address} on Sei...`);
+    logger.log(`Fetching balance for ${address} on Sei...`);
     try {
       const nativeBalance = await this.client.getBalance({
         address,
@@ -60,13 +66,13 @@ export class SeiClient {
 
       return [nativeAsset];
     } catch (error) {
-      this.logger.error(`Error fetching Sei balance for ${address}:`, error);
+      logger.error(`Error fetching Sei balance for ${address}:`, error);
       throw new Error('Failed to fetch balance from Sei.');
     }
   }
 
   async getSwapQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
-    console.log('Getting Sei swap quote for intent:', intent);
+    logger.log('Getting Sei swap quote for intent:', intent);
 
     if (intent.type !== 'swap' && intent.type !== 'bridge') {
         throw new Error('SeiClient only supports swap/bridge intents');
@@ -115,8 +121,16 @@ export class SeiClient {
       return { quote };
 
     } catch (error) {
-      console.error('Error simulating Sei swap:', error);
+      logger.error('Error simulating Sei swap:', error);
       throw new Error('Failed to get quote from Sei DEX.');
     }
+  }
+
+  async getBridgeQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    logger.log('Getting Sei bridge quote for intent:', intent);
+    // Placeholder implementation to preserve non-custodial guarantees and clear UX.
+    // Bridging to/from Sei will be implemented via Axelar gateway contracts as per ADR-003.
+    // Until then, we fail fast with a clear message so upstream API can respond appropriately.
+    throw new Error('Sei bridge quote not implemented yet. See ADR-003 for rollout plan.');
   }
 }

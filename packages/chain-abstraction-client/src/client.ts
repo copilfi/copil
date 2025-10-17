@@ -9,6 +9,7 @@ import {
 } from './types';
 import { GetAggregatedBalanceResponseSchema, GetQuoteResponseSchema } from './schemas';
 import { SeiClient } from './sei-client';
+import { z } from 'zod';
 
 const SUPPORTED_ONEBALANCE_CHAINS = [
   'ethereum',
@@ -71,9 +72,61 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     }
 
     if (this.isSei(intent.fromChain) || this.isSei(intent.toChain)) {
-      return this.seiClient.getSwapQuote(intent);
+      if (intent.type === 'swap') {
+        return this.seiClient.getSwapQuote(intent);
+      }
+      // Bridge path involving Sei
+      return this.seiClient.getBridgeQuote(intent);
     }
+    // Non-Sei paths use OneBalance
     return this.getOneBalanceQuote(intent);
+  }
+
+  // Experimental: Get a Li.Fi quote for comparison (does not affect execution flow)
+  async getLiFiQuoteForIntent(intent: TransactionIntent): Promise<{ supported: boolean; raw?: any; error?: string; transactionRequest?: any }> {
+    try {
+      const url = new URL('https://li.quest/v1/quote');
+      const fromChain = this.mapChainNameToId(intent.fromChain);
+      const toChain = this.mapChainNameToId(intent.toChain);
+      if (!fromChain || !toChain) {
+        return { supported: false, error: 'Unsupported chain mapping for LiFi' };
+      }
+      url.searchParams.set('fromChain', String(fromChain));
+      url.searchParams.set('toChain', String(toChain));
+      url.searchParams.set('fromToken', intent.fromToken);
+      url.searchParams.set('toToken', intent.toToken);
+      url.searchParams.set('fromAmount', intent.fromAmount);
+      const res = await axios.get(url.toString());
+      if (res.status !== 200) {
+        return { supported: false, error: `LiFi quote failed (${res.status})` };
+      }
+      const tx = this.extractTransactionRequest(res.data);
+      return { supported: true, raw: res.data, transactionRequest: tx };
+    } catch (e) {
+      return { supported: false, error: (e as Error).message };
+    }
+  }
+
+  private extractTransactionRequest(quote: any): any | undefined {
+    const isTx = (tx: any) => tx && typeof tx.to === 'string' && tx.to.startsWith('0x') && typeof tx.data === 'string' && tx.data.startsWith('0x');
+    const tryTx = quote?.transactionRequest ?? quote?.estimate?.approval?.transactionRequest;
+    if (isTx(tryTx)) return tryTx;
+    const steps = Array.isArray(quote?.steps) ? quote.steps : [];
+    for (const step of steps) {
+      if (isTx(step?.transactionRequest)) return step.transactionRequest;
+    }
+    return undefined;
+  }
+
+  private mapChainNameToId(name: string): number | undefined {
+    const map: Record<string, number> = {
+      ethereum: 1,
+      base: 8453,
+      arbitrum: 42161,
+      linea: 59144,
+      avalanche: 43114,
+    };
+    return map[name.toLowerCase()];
   }
 
   private async getOneBalanceQuote(
@@ -95,7 +148,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       destination: {
         asset: intent.toToken,
       },
-      slippageTolerance: 50, // Default to 0.5% slippage
+      slippageTolerance: typeof (intent as any).slippageBps === 'number' ? (intent as any).slippageBps : 50, // basis points
     };
 
     try {

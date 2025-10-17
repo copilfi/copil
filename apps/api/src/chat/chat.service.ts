@@ -14,6 +14,52 @@ import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { TransactionIntent } from '@copil/database';
 
+class CompareQuotesTool extends StructuredTool {
+  name = 'compare_quotes';
+  description =
+    'Compare quotes from multiple providers (OneBalance primary, Li.Fi as reference). Use this before executing a transaction to present options to the user. This does not move funds.';
+  schema = z.object({
+    intent: z.object({
+      type: z.enum(['swap', 'bridge']).describe('The type of transaction.'),
+      fromChain: z.string(),
+      toChain: z.string(),
+      fromToken: z.string(),
+      toToken: z.string(),
+      fromAmount: z.string(),
+      userAddress: z.string(),
+      slippageBps: z.number().optional(),
+    }),
+  });
+
+  constructor(private readonly transactionService: TransactionService) {
+    super();
+  }
+
+  async _call({ intent }: z.infer<typeof this.schema>) {
+    try {
+      const res = await this.transactionService.compareQuotes(intent as TransactionIntent);
+      const ob = res.onebalance;
+      const lifi = res.lifi;
+
+      const obLine = ob.supported
+        ? `OneBalance: est receive ${ob.quote?.toAmount ?? 'n/a'} (tx ready: yes)`
+        : `OneBalance: unavailable (${ob.error ?? 'n/a'})`;
+      const lifiLine = lifi.supported
+        ? `Li.Fi: est receive ${lifi.raw?.estimate?.toAmount ?? 'n/a'} (tx ready: ${lifi.transactionRequest ? 'yes' : 'no'})`
+        : `Li.Fi: unavailable (${lifi.error ?? 'n/a'})`;
+
+      return [
+        'Quote comparison:',
+        `- ${obLine}`,
+        `- ${lifiLine}`,
+        'Note: Only non-custodial, locally signable transactions will be executed.',
+      ].join('\n');
+    } catch (error) {
+      return `Error comparing quotes: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+}
+
 // Tool to get the user's entire portfolio
 class GetPortfolioTool extends StructuredTool {
   name = 'get_portfolio';
@@ -53,6 +99,7 @@ class CreateTransactionTool extends StructuredTool {
         toChain: z.string().describe("The destination chain name (e.g., 'base')."),
         toToken: z.string().describe("The destination token symbol or address."),
         userAddress: z.string().describe("The user's wallet address performing the transaction."),
+        slippageBps: z.number().optional().describe('Optional slippage tolerance in basis points (e.g., 50 = 0.5%)'),
         name: z.string().optional(),
         parameters: z.record(z.string(), z.unknown()).optional(),
       })
@@ -101,6 +148,7 @@ export class ChatService {
   ) {
     const tools = [
       new GetPortfolioTool(this.portfolioService, user.id),
+      new CompareQuotesTool(this.transactionService),
       new CreateTransactionTool(this.transactionService, user.id),
     ];
 
@@ -117,15 +165,17 @@ export class ChatService {
 
         You have access to the following tools:
         - get_portfolio: Use this to check the user's token balances across all their wallets.
+        - compare_quotes: Use this to retrieve quotes from multiple providers (OneBalance primary, Li.Fi as reference) and present options to the user.
         - create_transaction: Use this to perform any action that moves funds, like swapping or bridging tokens.
 
         IMPORTANT: Before using 'create_transaction', you MUST follow these steps:
         1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
-        2. Determine all the parameters for the 'intent' object for the 'create_transaction' tool.
-        3. Present the plan to the user in a clear, human-readable format. For example: "I am about to swap 1 ETH on Ethereum for USDC on Base on your behalf."
-        4. Ask for their explicit confirmation to proceed.
-        5. After confirmation, you MUST ask them for the sessionKeyId to use for the transaction.
-        6. Only after you have confirmation AND the sessionKeyId, you may call the 'create_transaction' tool.`,
+        2. Determine all the parameters for the 'intent' object. Include optional 'slippageBps' if the user provided it.
+        3. Call 'compare_quotes' with that intent and present the results clearly. If a provider returns a non-executable or custodial flow, note that it will not be used.
+        4. Present the plan and the preferred route to the user in a clear, human-readable format.
+        5. Ask for their explicit confirmation to proceed.
+        6. After confirmation, ask for the sessionKeyId to use for the transaction.
+        7. Only after you have confirmation AND the sessionKeyId, call 'create_transaction'.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],
