@@ -1,15 +1,16 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import {
   TransactionLog,
   TRANSACTION_QUEUE,
   TransactionJobData,
-  TransactionAction,
+  TransactionIntent,
 } from '@copil/database';
-import { getQuote, QuoteRequest } from '@lifi/sdk';
 import { Repository } from 'typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
+import { ChainAbstractionClient, AssetBalance } from '@copil/chain-abstraction-client';
+import { PortfolioService } from '../portfolio/portfolio.service';
 
 @Injectable()
 export class TransactionService {
@@ -20,12 +21,13 @@ export class TransactionService {
     private readonly transactionLogRepository: Repository<TransactionLog>,
     @InjectQueue(TRANSACTION_QUEUE)
     private readonly transactionQueue: Queue<TransactionJobData>,
+    private readonly chainAbstractionClient: ChainAbstractionClient,
+    private readonly portfolioService: PortfolioService, // Injected PortfolioService
   ) {}
 
-  async getQuote(quoteRequest: Omit<QuoteRequest, 'integrator'>) {
-    // The SDK is configured globally by LiFiConfigService
-    const quote = await getQuote(quoteRequest);
-    return quote;
+  async getQuote(intent: TransactionIntent) {
+    const quoteResponse = await this.chainAbstractionClient.getQuote({ intent });
+    return quoteResponse.quote;
   }
 
   async getLogs(userId: number, limit = 20): Promise<TransactionLog[]> {
@@ -39,13 +41,39 @@ export class TransactionService {
   async createAdHocTransactionJob(
     userId: number,
     sessionKeyId: number,
-    action: TransactionAction,
+    intent: TransactionIntent,
   ): Promise<TransactionJobData> {
+    let finalIntent = { ...intent };
+
+    // Handle percentage-based amounts if needed
+    if (finalIntent.type === 'swap' || finalIntent.type === 'bridge') {
+      if ((finalIntent as any).amountInIsPercentage) {
+        const absoluteAmount = await this.calculateAbsoluteAmount(
+          userId,
+          finalIntent.fromChain,
+          finalIntent.fromToken,
+          parseFloat(finalIntent.fromAmount),
+        );
+
+        if (!absoluteAmount) {
+          throw new BadRequestException(
+            `Could not calculate absolute amount for ${finalIntent.fromToken} on chain ${finalIntent.fromChain}. Check if you have a balance.`,
+          );
+        }
+
+        finalIntent.fromAmount = absoluteAmount;
+      }
+    }
+
+    // First, get a quote for the intended transaction
+    const quote = await this.getQuote(finalIntent);
+
     const jobData: TransactionJobData = {
       strategyId: null, // Explicitly set strategyId to null for ad-hoc jobs
       userId,
       sessionKeyId,
-      action,
+      intent: finalIntent,
+      quote, // Pass the entire quote object to the executor
       metadata: {
         source: 'ad-hoc',
         enqueuedAt: new Date().toISOString(),
@@ -62,5 +90,33 @@ export class TransactionService {
     );
 
     return job.data;
+  }
+
+  private async calculateAbsoluteAmount(
+    userId: number,
+    chain: string,
+    tokenAddress: string,
+    percentage: number,
+  ): Promise<string | null> {
+    const portfolio = (await this.portfolioService.getPortfolioForUser(
+      userId,
+    )) as AssetBalance[];
+
+    const token = portfolio.find(
+      (b) =>
+        b.assetId.toLowerCase().includes(tokenAddress.toLowerCase()) &&
+        b.assetId.toLowerCase().includes(chain.toLowerCase()),
+    );
+
+    if (!token || !token.amount) {
+      this.logger.warn(`No balance found for token ${tokenAddress} for user ${userId} on chain ${chain}.`);
+      return null;
+    }
+
+    const balance = BigInt(token.amount);
+    const amountToSell = (balance * BigInt(percentage)) / BigInt(100);
+
+    this.logger.log(`Calculated ${percentage}% of balance for ${tokenAddress}: ${amountToSell.toString()}`);
+    return amountToSell.toString();
   }
 }

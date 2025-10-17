@@ -1,25 +1,16 @@
+import { HttpModule } from '@nestjs/axios';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import {
-  User,
-  Wallet,
-  Strategy,
-  TransactionLog,
-  TokenPrice,
-  SessionKey,
-  STRATEGY_QUEUE,
-  TRANSACTION_QUEUE,
-} from '@copil/database';
-
+import { Strategy, TokenPrice, Wallet, STRATEGY_QUEUE } from '@copil/database';
 import { StrategyProcessor } from './strategy.processor';
-import { AlchemyService } from './alchemy.service';
 import { HealthService } from './health.service';
 
 @Module({
   imports: [
     ConfigModule.forRoot(),
+    HttpModule,
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -29,7 +20,7 @@ import { HealthService } from './health.service';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey],
+        entities: [Strategy, TokenPrice, Wallet],
         synchronize: false,
       }),
       inject: [ConfigService],
@@ -46,8 +37,7 @@ import { HealthService } from './health.service';
       inject: [ConfigService],
     }),
     BullModule.registerQueue({ name: STRATEGY_QUEUE }),
-    BullModule.registerQueue({ name: TRANSACTION_QUEUE }),
   ],
-  providers: [StrategyProcessor, AlchemyService, HealthService],
+  providers: [StrategyProcessor, HealthService],
 })
 export class AppModule {}

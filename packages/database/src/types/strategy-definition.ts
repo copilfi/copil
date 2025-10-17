@@ -1,4 +1,4 @@
-import { TransactionAction } from './transaction-job';
+import { TransactionIntent } from './transaction-job';
 
 export type PriceComparator = 'gte' | 'lte';
 
@@ -14,7 +14,7 @@ export type StrategyTriggerDefinition = PriceTriggerDefinition;
 
 export interface StrategyDefinition {
   trigger: StrategyTriggerDefinition;
-  action: TransactionAction;
+  intent: TransactionIntent;
   repeat?: boolean;
   sessionKeyId?: number;
 }

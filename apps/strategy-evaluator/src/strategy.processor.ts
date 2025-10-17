@@ -1,39 +1,34 @@
 import { Logger } from '@nestjs/common';
 import { InjectQueue, Processor, Process } from '@nestjs/bull';
-import { Job, Queue } from 'bullmq';
+import { Job } from 'bullmq';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { HttpService } from '@nestjs/axios';
+import { ConfigService } from '@nestjs/config';
+import { firstValueFrom } from 'rxjs';
+import axios from 'axios';
 import {
   Strategy,
   StrategyDefinition,
   TokenPrice,
-  TransactionAction,
-  TransactionJobData,
-  Wallet,
   STRATEGY_QUEUE,
-  TRANSACTION_QUEUE,
 } from '@copil/database';
-import { AlchemyService } from './alchemy.service';
-import { Network, Utils } from 'alchemy-sdk';
-
-const TRANSACTION_JOB_ATTEMPTS = 3;
-const TRANSACTION_JOB_BACKOFF_MS = 60_000;
 
 @Processor(STRATEGY_QUEUE)
 export class StrategyProcessor {
   private readonly logger = new Logger(StrategyProcessor.name);
+  private readonly apiServiceUrl: string;
 
   constructor(
     @InjectRepository(Strategy)
     private readonly strategyRepository: Repository<Strategy>,
     @InjectRepository(TokenPrice)
     private readonly tokenPriceRepository: Repository<TokenPrice>,
-    @InjectRepository(Wallet)
-    private readonly walletRepository: Repository<Wallet>,
-    @InjectQueue(TRANSACTION_QUEUE)
-    private readonly transactionQueue: Queue<TransactionJobData>,
-    private readonly alchemyService: AlchemyService,
-  ) {}
+    private readonly httpService: HttpService,
+    private readonly configService: ConfigService,
+  ) {
+    this.apiServiceUrl = this.configService.get<string>('API_SERVICE_URL', 'http://localhost:3001');
+  }
 
   @Process('*') // Process all job types in this queue
   async handleStrategy(job: Job<{ strategyId: number }>) {
@@ -57,13 +52,13 @@ export class StrategyProcessor {
 
       if (!definition.sessionKeyId) {
         this.logger.warn(
-          `Strategy ${strategy.id} missing sessionKeyId. Cannot enqueue transaction job.`,
+          `Strategy ${strategy.id} missing sessionKeyId. Cannot trigger transaction execution.`,
         );
         return;
       }
 
-      this.logger.log(`Trigger met for strategy ${strategy.name} (${strategy.id}). Enqueuing action.`);
-      await this.enqueueTransaction(strategy, definition);
+      this.logger.log(`Trigger met for strategy ${strategy.name} (${strategy.id}). Triggering execution.`);
+      await this.triggerExecution(strategy, definition);
 
       if (!definition.repeat) {
         strategy.isActive = false;
@@ -101,93 +96,32 @@ export class StrategyProcessor {
       : latestPrice.priceUsd <= definition.trigger.priceTarget;
   }
 
-  private async enqueueTransaction(strategy: Strategy, definition: StrategyDefinition) {
-    let finalAction = definition.action;
-
-    // Handle percentage-based amounts
-    if (finalAction.type === 'swap' && finalAction.amountInIsPercentage) {
-        const absoluteAmount = await this.calculateAbsoluteAmount(
-            strategy.userId,
-            finalAction.chainId,
-            finalAction.assetIn,
-            parseFloat(finalAction.amountIn),
-        );
-
-        if (!absoluteAmount) {
-            this.logger.error(`Could not calculate absolute amount for strategy ${strategy.id}. Skipping.`);
-            return;
-        }
-
-        finalAction = {
-            ...finalAction,
-            amountIn: absoluteAmount,
-            amountInIsPercentage: false, // Ensure the job has an absolute value
-        };
-    }
-
-    const payload: TransactionJobData = {
-      strategyId: strategy.id,
-      userId: strategy.userId,
-      action: finalAction,
+  private async triggerExecution(strategy: Strategy, definition: StrategyDefinition) {
+    const payload = {
+      intent: definition.intent,
       sessionKeyId: definition.sessionKeyId,
-      metadata: {
-        trigger: definition.trigger,
-        enqueuedAt: new Date().toISOString(),
-      },
     };
 
-    await this.transactionQueue.add(`strategy:${strategy.id}:execution`, payload, {
-      removeOnComplete: 100,
-      removeOnFail: false,
-      attempts: TRANSACTION_JOB_ATTEMPTS,
-      backoff: {
-        type: 'exponential',
-        delay: TRANSACTION_JOB_BACKOFF_MS,
-      },
-    });
-  }
-
-  private async calculateAbsoluteAmount(
-    userId: number,
-    chain: string,
-    tokenAddress: string,
-    percentage: number,
-  ): Promise<string | null> {
-    const wallet = await this.walletRepository.findOne({ where: { userId, chain } });
-    if (!wallet) {
-      this.logger.warn(`No wallet found for user ${userId} on chain ${chain}.`);
-      return null;
-    }
-
-    const network = this.getNetworkEnum(chain);
-    if (!network) {
-        this.logger.warn(`Unsupported chain for balance check: ${chain}.`);
-        return null;
-    }
-
-    const sdk = this.alchemyService.getSdkForNetwork(network);
-    const balances = await sdk.core.getTokenBalances(wallet.address, [tokenAddress]);
-    const tokenBalance = balances.tokenBalances[0];
-
-    if (!tokenBalance || !tokenBalance.tokenBalance) {
-        this.logger.warn(`No balance found for token ${tokenAddress} on wallet ${wallet.address}.`);
-        return null;
-    }
-
-    const balance = BigInt(tokenBalance.tokenBalance);
-    const amountToSell = (balance * BigInt(percentage)) / BigInt(100);
-
-    this.logger.log(`Calculated ${percentage}% of balance for ${tokenAddress}: ${amountToSell.toString()}`);
-    return amountToSell.toString();
-  }
-
-  private getNetworkEnum(chain: string): Network | null {
-    switch (chain.toLowerCase()) {
-      case 'ethereum': return Network.ETH_MAINNET;
-      case 'base': return Network.BASE_MAINNET;
-      case 'arbitrum': return Network.ARB_MAINNET;
-      case 'linea': return Network.LINEA_MAINNET;
-      default: return null;
+    try {
+      this.logger.log(`Calling API service to execute transaction for strategy ${strategy.id}`);
+      const endpoint = `${this.apiServiceUrl}/transaction/execute`;
+      // We don't need to pass the user ID, as the API service will resolve it from the session key
+      // or we might need a service account token for this internal call.
+      // For now, we assume the endpoint is protected and requires some auth.
+      // This is a placeholder for the actual authenticated call.
+      await firstValueFrom(this.httpService.post(endpoint, payload));
+      this.logger.log(`Successfully triggered execution for strategy ${strategy.id}`);
+    } catch (error) {
+      let errorMessage = 'Unknown error';
+      if (axios.isAxiosError(error)) {
+        errorMessage = error.response?.data?.message ?? error.message;
+      } else if (error instanceof Error) {
+        errorMessage = error.message;
+      }
+      this.logger.error(
+        `Failed to trigger execution for strategy ${strategy.id} via API call: ${errorMessage}`,
+      );
+      // Optionally, handle retry logic or mark the strategy as failed
     }
   }
 }

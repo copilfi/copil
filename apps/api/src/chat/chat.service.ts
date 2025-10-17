@@ -12,132 +12,74 @@ import {
 } from '@langchain/core/prompts';
 import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { TransactionAction } from '@copil/database';
+import { TransactionIntent } from '@copil/database';
 
-// Existing Tool
-class GetWalletBalanceTool extends StructuredTool {
-  name = 'get_wallet_balance';
-  description =
-    'Get the token balances for a given wallet address on a specific chain. Supported chains are: ethereum, base, arbitrum, linea.';
-  schema = z.object({
-    address: z.string().describe('The wallet address to check.'),
-    chain: z.string().describe('The chain to check the balance on.'),
-  });
+// Tool to get the user's entire portfolio
+class GetPortfolioTool extends StructuredTool {
+  name = 'get_portfolio';
+  description = "Get the user's aggregated token balances across all supported chains.";
+  schema = z.object({}); // No parameters needed as user is inferred
 
-  constructor(private readonly portfolioService: PortfolioService) {
+  constructor(private readonly portfolioService: PortfolioService, private readonly userId: number) {
     super();
   }
 
-  async _call({ address, chain }: z.infer<typeof this.schema>) {
+  async _call(_: z.infer<typeof this.schema>) {
     try {
-      const balances = await this.portfolioService.getWalletBalance(
-        address,
-        chain,
-      );
-      return JSON.stringify(balances);
+      const portfolio = await this.portfolioService.getPortfolioForUser(this.userId);
+      return JSON.stringify(portfolio);
     } catch (error) {
-      return `Error getting wallet balance: ${
+      return `Error getting portfolio: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`;
     }
   }
 }
 
-// New Tool for Getting Quotes
-class GetSwapQuoteTool extends StructuredTool {
-  name = 'get_swap_quote';
+// A single tool to handle quoting and executing a transaction
+class CreateTransactionTool extends StructuredTool {
+  name = 'create_transaction';
   description =
-    'Get a quote for a token swap. This should be used to show the user the expected outcome of a swap before executing it.';
-  schema = z.object({
-    fromChain: z.string().describe("The source chain name (e.g., 'ethereum')."),
-    fromToken: z.string().describe("The source token address."),
-    fromAmount: z
-      .string()
-      .describe(
-        "The amount of the source token to sell (in its native decimals, e.g., '1000000000000000000' for 1 ETH).",
-      ),
-    toChain: z.string().describe("The destination chain name (e.g., 'base')."),
-    toToken: z.string().describe("The destination token address."),
-    userAddress: z
-      .string()
-      .describe("The user's wallet address performing the swap."),
-  });
-
-  constructor(private readonly transactionService: TransactionService) {
-    super();
-  }
-
-  async _call({
-    fromChain,
-    fromToken,
-    fromAmount,
-    toChain,
-    toToken,
-    userAddress,
-  }: z.infer<typeof this.schema>) {
-    try {
-      const quote = await this.transactionService.getQuote({
-        fromChain: fromChain,
-        fromToken: fromToken,
-        fromAmount: fromAmount,
-        toChain: toChain,
-        toToken: toToken,
-        fromAddress: userAddress,
-      });
-      // Correctly access properties from the quote object
-      const fromChainId = quote.action.fromChainId;
-      const toChainId = quote.action.toChainId;
-      const gasCost = quote.estimate.gasCosts?.[0]?.amountUSD ?? '0';
-
-      return `Quote received: Sell ${quote.action.fromAmount} of ${quote.action.fromToken} on chain ${fromChainId} to receive an estimated ${quote.estimate.toAmount} of ${quote.action.toToken} on chain ${toChainId}. Transaction cost is estimated at ${gasCost} USD.`;
-    } catch (error) {
-      return `Error getting quote: ${
-        error instanceof Error ? error.message : 'Unknown error'
-      }`;
-    }
-  }
-}
-
-// New Tool for Executing Swaps, now aware of the user context
-class ExecuteSwapTool extends StructuredTool {
-  name = 'execute_swap';
-  description =
-    'Execute a token swap. This should only be called after the user has confirmed the quote. Requires the session key ID to authorize the transaction.';
+    'Gets a quote and queues a transaction based on user intent. This is the primary tool for any action that moves funds. The user must confirm the action before this tool is called.';
   schema = z.object({
     sessionKeyId: z
       .number()
-      .describe('The session key ID to sign the transaction.'),
-    swapAction: z
-      .object({
-        type: z.literal('swap'),
-        chainId: z.string(),
-        assetIn: z.string(),
-        assetOut: z.string(),
-        amountIn: z.string(),
-        slippageBps: z.number().optional(),
+      .describe('The session key ID required to authorize the transaction.'),
+    intent: z.object({
+        type: z.enum(['swap', 'bridge', 'custom']).describe("The type of transaction."),
+        fromChain: z.string().describe("The source chain name (e.g., 'ethereum')."),
+        fromToken: z.string().describe("The source token symbol or address (e.g., 'ETH', '0x...')."),
+        fromAmount: z.string().describe("The amount of the source token to send (in native units)."),
+        toChain: z.string().describe("The destination chain name (e.g., 'base')."),
+        toToken: z.string().describe("The destination token symbol or address."),
+        userAddress: z.string().describe("The user's wallet address performing the transaction."),
+        name: z.string().optional(),
+        parameters: z.record(z.string(), z.unknown()).optional(),
       })
-      .describe('The swap action object detailing the transaction.'),
+      .describe("The user's intent for the transaction"),
   });
 
   constructor(
     private readonly transactionService: TransactionService,
-    private readonly userId: number, // Injected user ID
+    private readonly userId: number,
   ) {
     super();
   }
 
-  async _call({ sessionKeyId, swapAction }: z.infer<typeof this.schema>) {
+  async _call({ sessionKeyId, intent }: z.infer<typeof this.schema>) {
     try {
+      // The service now handles getting the quote and enqueuing the job
       const result = await this.transactionService.createAdHocTransactionJob(
-        this.userId, // Use the injected userId
+        this.userId,
         sessionKeyId,
-        swapAction as TransactionAction,
+        intent as TransactionIntent, // Cast to the correct type
       );
-      return `Swap execution has been successfully queued. Job data: ${JSON.stringify(
-        result,
-      )}`;
+      
+      const quote = result.quote as any;
+      const jobIntent = result.intent as any;
+      return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote.toAmount} of ${jobIntent.toToken}.`;
     } catch (error) {
-      return `Error executing swap: ${
+      return `Error creating transaction: ${
         error instanceof Error ? error.message : 'Unknown error'
       }`;
     }
@@ -158,9 +100,8 @@ export class ChatService {
     chatHistory: (HumanMessage | AIMessage)[],
   ) {
     const tools = [
-      new GetWalletBalanceTool(this.portfolioService),
-      new GetSwapQuoteTool(this.transactionService),
-      new ExecuteSwapTool(this.transactionService, user.id), // Pass user.id during tool instantiation
+      new GetPortfolioTool(this.portfolioService, user.id),
+      new CreateTransactionTool(this.transactionService, user.id),
     ];
 
     const llm = new ChatOpenAI({
@@ -175,17 +116,16 @@ export class ChatService {
         `You are Copil, an AI DeFi assistant. Your goal is to help users by answering questions and executing transactions on their behalf.
 
         You have access to the following tools:
-        - get_wallet_balance: Use this to check a user's token balances on a specific chain.
-        - get_swap_quote: Use this to get a price quote for a token swap. Always do this before executing a swap to inform the user of the cost and outcome.
-        - execute_swap: Use this to execute a swap. You must only use this tool after the user has explicitly confirmed a quote you provided. You must ask the user for the sessionKeyId to use for the transaction.
+        - get_portfolio: Use this to check the user's token balances across all their wallets.
+        - create_transaction: Use this to perform any action that moves funds, like swapping or bridging tokens.
 
-        A typical user flow for a swap is:
-        1. User asks to swap tokens.
-        2. You use 'get_wallet_balance' if you need to know their current holdings.
-        3. You use 'get_swap_quote' to get the details of the proposed swap.
-        4. You present the quote to the user in a clear, human-readable format and ask for their confirmation to proceed.
-        5. If the user confirms, you MUST ask them which sessionKeyId they want to use.
-        6. Once you have the sessionKeyId, you call 'execute_swap' with the correct parameters from the quote and the provided sessionKeyId.`,
+        IMPORTANT: Before using 'create_transaction', you MUST follow these steps:
+        1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
+        2. Determine all the parameters for the 'intent' object for the 'create_transaction' tool.
+        3. Present the plan to the user in a clear, human-readable format. For example: "I am about to swap 1 ETH on Ethereum for USDC on Base on your behalf."
+        4. Ask for their explicit confirmation to proceed.
+        5. After confirmation, you MUST ask them for the sessionKeyId to use for the transaction.
+        6. Only after you have confirmation AND the sessionKeyId, you may call the 'create_transaction' tool.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],

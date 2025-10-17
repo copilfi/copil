@@ -1,9 +1,9 @@
 import { Controller, Post, Body, UseGuards, Get, Query, Request } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { QuoteRequest } from '@lifi/sdk';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
+import { GetQuoteDto } from './dto/get-quote.dto';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transaction')
@@ -11,8 +11,8 @@ export class TransactionController {
   constructor(private readonly transactionService: TransactionService) {}
 
   @Post('quote')
-  getQuote(@Body() quoteRequest: Omit<QuoteRequest, 'integrator'>) {
-    return this.transactionService.getQuote(quoteRequest);
+  getQuote(@Body() getQuoteDto: GetQuoteDto) {
+    return this.transactionService.getQuote(getQuoteDto.intent);
   }
 
   @Post('execute')
@@ -23,7 +23,7 @@ export class TransactionController {
     return this.transactionService.createAdHocTransactionJob(
       req.user.id,
       executeDto.sessionKeyId,
-      executeDto.action,
+      executeDto.intent,
     );
   }
 

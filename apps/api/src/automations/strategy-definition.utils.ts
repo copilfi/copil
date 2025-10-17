@@ -2,7 +2,7 @@ import { BadRequestException } from '@nestjs/common';
 import {
   StrategyDefinition,
   StrategyTriggerDefinition,
-  TransactionAction,
+  TransactionIntent, // Changed from TransactionAction
   PriceComparator,
   PriceTriggerDefinition,
 } from '@copil/database';
@@ -75,52 +75,39 @@ function parseTrigger(raw: unknown): StrategyTriggerDefinition {
   } satisfies PriceTriggerDefinition;
 }
 
-function parseAction(raw: unknown): TransactionAction {
+// Renamed from parseAction to parseIntent
+function parseIntent(raw: unknown): TransactionIntent {
   if (!isPlainObject(raw)) {
-    throw new BadRequestException('Strategy action must be an object');
+    throw new BadRequestException('Strategy intent must be an object');
   }
 
-  const type = ensureString(raw.type, 'action.type').toLowerCase();
+  const type = ensureString(raw.type, 'intent.type').toLowerCase();
 
   switch (type) {
     case 'swap':
+    case 'bridge': // Treat swap and bridge similarly as per new TransactionIntent
       return {
-        type: 'swap',
-        chainId: ensureString(raw.chainId, 'action.chainId'),
-        assetIn: ensureString(raw.assetIn, 'action.assetIn'),
-        assetOut: ensureString(raw.assetOut, 'action.assetOut'),
-        amountIn: ensureString(raw.amountIn, 'action.amountIn'),
-        slippageBps:
-          raw.slippageBps !== undefined
-            ? ensureNumber(raw.slippageBps, 'action.slippageBps')
-            : undefined,
-      };
-    case 'bridge':
-      return {
-        type: 'bridge',
-        fromChainId: ensureString(raw.fromChainId, 'action.fromChainId'),
-        toChainId: ensureString(raw.toChainId, 'action.toChainId'),
-        assetIn: ensureString(raw.assetIn, 'action.assetIn'),
-        assetOut: ensureString(raw.assetOut, 'action.assetOut'),
-        amountIn: ensureString(raw.amountIn, 'action.amountIn'),
-        slippageBps:
-          raw.slippageBps !== undefined
-            ? ensureNumber(raw.slippageBps, 'action.slippageBps')
-            : undefined,
+        type: type as 'swap' | 'bridge',
+        fromChain: ensureString(raw.fromChain, 'intent.fromChain'),
+        toChain: ensureString(raw.toChain, 'intent.toChain'),
+        fromToken: ensureString(raw.fromToken, 'intent.fromToken'),
+        toToken: ensureString(raw.toToken, 'intent.toToken'),
+        fromAmount: ensureString(raw.fromAmount, 'intent.fromAmount'),
+        userAddress: ensureString(raw.userAddress, 'intent.userAddress'),
       };
     case 'custom':
       return {
         type: 'custom',
-        name: ensureString(raw.name, 'action.name'),
+        name: ensureString(raw.name, 'intent.name'),
         parameters: isPlainObject(raw.parameters) ? raw.parameters : {},
       };
     default:
-      throw new BadRequestException(`Unsupported action type "${type}"`);
+      throw new BadRequestException(`Unsupported intent type "${type}"`);
   }
 }
 
 function parseLegacyDefinition(raw: PlainObject): StrategyDefinition | null {
-  if ('trigger' in raw || 'action' in raw) {
+  if ('trigger' in raw || 'intent' in raw || 'action' in raw) { // Check for both new and old properties
     return null;
   }
 
@@ -161,11 +148,11 @@ function parseLegacyDefinition(raw: PlainObject): StrategyDefinition | null {
 
   return {
     trigger,
-    action: {
+    intent: { // Changed from action to intent
       type: 'custom',
       name: 'legacy-definition',
       parameters: {
-        note: 'Legacy strategy missing explicit action; execution will be skipped.',
+        note: 'Legacy strategy missing explicit intent; execution will be skipped.',
       },
     },
     repeat,
@@ -187,13 +174,13 @@ export function parseStrategyDefinition(input: unknown): StrategyDefinition {
     throw new BadRequestException('Strategy definition requires a trigger');
   }
 
-  if (!('action' in input)) {
-    throw new BadRequestException('Strategy definition requires an action');
+  if (!('intent' in input)) { // Changed from action to intent
+    throw new BadRequestException('Strategy definition requires an intent');
   }
 
   const definition: StrategyDefinition = {
     trigger: parseTrigger(input.trigger),
-    action: parseAction(input.action),
+    intent: parseIntent(input.intent), // Changed from action to intent
       repeat:
         input.repeat !== undefined ? ensureBoolean(input.repeat, 'definition.repeat') : undefined,
       sessionKeyId:

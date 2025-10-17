@@ -1,22 +1,12 @@
-export type TransactionAction =
+export type TransactionIntent =
   | {
-      type: 'swap';
-      chainId: string;
-      assetIn: string;
-      assetOut: string;
-      amountIn: string; // e.g., "0.1" for absolute, or "20" for percentage
-      amountInIsPercentage?: boolean; // If true, amountIn is a percentage
-      slippageBps?: number;
-    }
-  | {
-      type: 'bridge';
-      fromChainId: string;
-      toChainId: string;
-      assetIn: string;
-      assetOut: string;
-      amountIn: string; // e.g., "0.1" for absolute, or "20" for percentage
-      amountInIsPercentage?: boolean; // If true, amountIn is a percentage
-      slippageBps?: number;
+      type: 'swap' | 'bridge';
+      fromChain: string;
+      toChain: string;
+      fromToken: string;
+      toToken: string;
+      fromAmount: string;
+      userAddress: string;
     }
   | {
       type: 'custom';
@@ -24,10 +14,12 @@ export type TransactionAction =
       parameters: Record<string, unknown>;
     };
 
+// This is the data that will be passed to the transaction queue
 export interface TransactionJobData {
   strategyId: number | null; // Can be null for ad-hoc jobs
   userId: number;
-  sessionKeyId?: number;
-  action: TransactionAction;
+  sessionKeyId: number;
+  intent: TransactionIntent;
+  quote: any; // The quote object received from the chain abstraction layer (e.g., OneBalance)
   metadata?: Record<string, unknown>;
 }

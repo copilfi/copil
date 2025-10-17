@@ -1,0 +1,21 @@
+{
+  "name": "@copil/chain-abstraction-client",
+  "version": "0.1.0",
+  "private": true,
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "scripts": {
+    "test": "jest",
+    "build": "tsc -b"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0",
+    "jest": "^29.0.0"
+  },
+  "dependencies": {
+    "@copil/database": "1.0.0",
+    "axios": "^1.0.0",
+    "viem": "^2.0.0",
+    "zod": "^3.22.4"
+  }
+}

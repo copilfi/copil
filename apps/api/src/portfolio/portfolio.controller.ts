@@ -13,11 +13,4 @@ export class PortfolioController {
     return this.portfolioService.getPortfolioForUser(req.user.id);
   }
 
-  @Get('balance/:chain/:address')
-  getWalletBalance(
-    @Param('chain') chain: string,
-    @Param('address') address: string,
-  ) {
-    return this.portfolioService.getWalletBalance(address, chain);
-  }
 }

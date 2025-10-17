@@ -1,10 +1,10 @@
-import { TransactionAction } from '@copil/database';
+import { TransactionIntent } from '@copil/database';
 import { IsInt, IsNotEmpty, IsObject } from 'class-validator';
 
 export class ExecuteTransactionDto {
   @IsObject()
   @IsNotEmpty()
-  action!: TransactionAction;
+  intent!: TransactionIntent;
 
   @IsInt()
   @IsNotEmpty()

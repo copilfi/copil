@@ -1,6 +1,6 @@
-import type { TransactionJobData, TransactionAction } from '@copil/database';
+import type { TransactionJobData, TransactionIntent } from '@copil/database';
 
-export type { TransactionJobData, TransactionAction };
+export type { TransactionJobData, TransactionIntent };
 
 // Define the strict TransactionRequest type here
 export interface TransactionRequest {
@@ -10,9 +10,9 @@ export interface TransactionRequest {
 }
 
 export interface ExecutionResult {
-  status: 'success' | 'failed' | 'skipped';
+  status: 'success' | 'failed' | 'skipped' | 'pending';
   description?: string;
   txHash?: string;
-  transactionRequest?: TransactionRequest; // Use the strict type
+  transactionRequest?: any; // Loosening this type to accommodate OneBalance's structure for now
   metadata?: Record<string, unknown>;
 }

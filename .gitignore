@@ -37,4 +37,5 @@ docker-data/
 
 # Project-specific exclusions
 Copil.md
+onebalance.txt
 web/

@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { http, createPublicClient, parseEther, Chain } from 'viem';
+import { http, createPublicClient, parseEther, Chain, createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base, arbitrum, linea, mainnet } from 'viem/chains';
 import { entryPoint06Address } from 'viem/account-abstraction';
@@ -10,8 +10,8 @@ import { BundlerClient } from '../clients/bundler.client';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from '@copil/database';
 import { Repository } from 'typeorm';
+import { seiChain } from '@copil/chain-abstraction-client'; // Import seiChain
 
-// Interface definitions remain mostly the same
 export interface SignAndSendRequest {
   userId: number;
   sessionKeyId: number;
@@ -20,14 +20,12 @@ export interface SignAndSendRequest {
     data: `0x${string}`;
     value?: string;
   };
-  metadata?: {
-    chain?: string;
-  } & Record<string, unknown>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface SignAndSendResult {
   status: 'success' | 'pending' | 'failed';
-  txHash?: string; // This will now be the UserOperation hash
+  txHash?: string;
   description?: string;
 }
 
@@ -36,6 +34,7 @@ const chainMap: Record<string, Chain> = {
   base,
   arbitrum,
   linea,
+  sei: seiChain, // Add Sei to the map
 };
 
 @Injectable()
@@ -50,13 +49,27 @@ export class SignerService {
   ) {}
 
   async signAndSend(request: SignAndSendRequest): Promise<SignAndSendResult> {
-    const { userId, sessionKeyId, transaction, metadata } = request;
-    const chainName = metadata?.chain ?? 'base';
+    const chainName = (request.metadata?.chain as string) ?? 'base';
     const chain = chainMap[chainName.toLowerCase()];
 
     if (!chain) {
       return { status: 'failed', description: `Unsupported chain: ${chainName}` };
     }
+
+    if (chain.id === seiChain.id) {
+      return this.signAndSendSeiTransaction(chainName, chain, request);
+    } else {
+      return this.signAndSendEvmTransaction(chainName, chain, request);
+    }
+  }
+
+  private async signAndSendSeiTransaction(
+    chainName: string,
+    chain: Chain,
+    request: SignAndSendRequest,
+  ): Promise<SignAndSendResult> {
+    this.logger.log(`Executing a native Sei transaction.`);
+    const { sessionKeyId, transaction } = request;
 
     const sessionKey = this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
@@ -65,20 +78,66 @@ export class SignerService {
         description: `Private key for session key ID ${sessionKeyId} not found.`,
       };
     }
-    
-    const wallet = await this.walletRepository.findOne({ where: { userId, chain: chainName }});
+
+    try {
+      const walletClient = createWalletClient({
+        account: privateKeyToAccount(sessionKey),
+        chain: chain,
+        transport: http(this.getRpcUrl(chainName)),
+      });
+
+      this.logger.log(`Sending transaction via native Sei signer to ${transaction.to}`);
+
+      const txHash = await walletClient.sendTransaction({
+        to: transaction.to,
+        data: transaction.data,
+        value: transaction.value ? parseEther(transaction.value) : undefined,
+      });
+
+      this.logger.log(`Sei transaction successful with hash: ${txHash}`);
+
+      return {
+        status: 'success',
+        txHash,
+        description: `Sei transaction successfully sent.`,
+      };
+    } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Sei transaction failed: ${message}`, error);
+        return { status: 'failed', description: `Sei transaction failed: ${message}` };
+    }
+  }
+
+  private async signAndSendEvmTransaction(
+    chainName: string,
+    chain: Chain,
+    request: SignAndSendRequest,
+  ): Promise<SignAndSendResult> {
+    const { userId, sessionKeyId, transaction } = request;
+
+    const sessionKey = this.getSessionKey(sessionKeyId);
+    if (!sessionKey) {
+      return {
+        status: 'failed',
+        description: `Private key for session key ID ${sessionKeyId} not found.`,
+      };
+    }
+
+    const wallet = await this.walletRepository.findOne({ where: { userId, chain: chainName } });
     if (!wallet || !wallet.smartAccountAddress) {
-        return { status: 'failed', description: `Smart Account for user ${userId} on chain ${chainName} not found.` };
+      return {
+        status: 'failed',
+        description: `Smart Account for user ${userId} on chain ${chainName} not found.`,
+      };
     }
 
     try {
       const publicClient = createPublicClient({ transport: http(this.getRpcUrl(chainName)) });
-
       const sessionKeySigner = privateKeyToAccount(sessionKey);
 
       const safeAccount = await toSafeSmartAccount({
         client: publicClient,
-        owners: [sessionKeySigner],
+        owners: [sessionKeySigner], // This might need adjustment for proper session key usage
         version: '1.4.1',
         entryPoint: { address: entryPoint06Address, version: '0.6' },
         address: wallet.smartAccountAddress as `0x${string}`,

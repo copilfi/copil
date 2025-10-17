@@ -5,11 +5,10 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Strategy, TransactionLog, User, Wallet, SessionKey, TRANSACTION_QUEUE } from '@copil/database';
 import { TransactionProcessor } from './transaction.processor';
 import { ExecutionService } from './execution/execution.service';
-import { LiFiClient } from './clients/lifi.client';
-import { SwapAggregatorClient } from './clients/swap-aggregator.client';
 import { SignerService } from './signer/signer.service';
 import { BundlerClient } from './clients/bundler.client';
 import { HealthService } from './health.service';
+import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 
 @Module({
   imports: [
@@ -43,6 +42,23 @@ import { HealthService } from './health.service';
       name: TRANSACTION_QUEUE,
     }),
   ],
-  providers: [ExecutionService, TransactionProcessor, LiFiClient, SwapAggregatorClient, SignerService, BundlerClient, HealthService],
+  providers: [
+    ExecutionService,
+    TransactionProcessor,
+    SignerService,
+    BundlerClient,
+    HealthService,
+    {
+      provide: ChainAbstractionClient,
+      useFactory: (configService: ConfigService) => {
+        const apiKey = configService.get<string>('ONEBALANCE_API_KEY');
+        if (!apiKey) {
+          throw new Error('ONEBALANCE_API_KEY is not defined in environment variables.');
+        }
+        return new ChainAbstractionClient(apiKey);
+      },
+      inject: [ConfigService],
+    },
+  ],
 })
 export class AppModule {}
