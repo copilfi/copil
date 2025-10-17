@@ -27,6 +27,43 @@ export class TransactionController {
     return { onebalance: ob, lifi };
   }
 
+  @Get('bridge/config')
+  getBridgeConfigStatus() {
+    const chains = ['ethereum', 'base', 'arbitrum', 'linea'];
+    const perChain = chains.map((c) => {
+      const key = `AXELAR_GATEWAY_ADDRESS_${c.toUpperCase()}`;
+      const addr = process.env[key];
+      return { chain: c, env: key, present: Boolean(addr), address: addr ?? null };
+    });
+    const globals = [
+      { key: 'SEI_BRIDGE_ENABLED', value: process.env.SEI_BRIDGE_ENABLED ?? null },
+      { key: 'AXELAR_SEI_CHAIN_NAME', value: process.env.AXELAR_SEI_CHAIN_NAME ?? 'sei' },
+      { key: 'AXELAR_TOKEN_SYMBOL_USDC', value: process.env.AXELAR_TOKEN_SYMBOL_USDC ?? 'aUSDC' },
+    ];
+    const ready = globals.find(g => g.key === 'SEI_BRIDGE_ENABLED')?.value === 'true' && perChain.some((p) => p.present);
+    return { ready, perChain, globals };
+  }
+
+  @Get('chains')
+  getSupportedChains() {
+    // Executable chains are those our signer/bundler is configured for
+    const executable = [
+      { name: 'ethereum', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
+      { name: 'base', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
+      { name: 'arbitrum', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
+      { name: 'linea', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
+      { name: 'sei', capabilities: ['swap', 'bridge'], provider: 'Sei (swap), Axelar (bridge)' },
+    ];
+
+    // Read-only networks (aggregated balances visible via OneBalance, execution pending)
+    const readOnly = [
+      { name: 'avalanche', provider: 'OneBalance (balances, quote preview)' },
+      { name: 'solana', provider: 'OneBalance (balances only)' },
+    ];
+
+    return { executable, readOnly };
+  }
+
   @Post('execute')
   executeAdHocTransaction(
     @Request() req: AuthRequest,

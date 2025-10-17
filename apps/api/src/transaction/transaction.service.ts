@@ -26,6 +26,8 @@ export class TransactionService {
   ) {}
 
   async getQuote(intent: TransactionIntent) {
+    // Validate chain support before attempting to quote to avoid non-executable routes
+    this.ensureChainsSupported(intent);
     const quoteResponse = await this.chainAbstractionClient.getQuote({ intent });
     const quote = quoteResponse.quote as any;
 
@@ -38,6 +40,49 @@ export class TransactionService {
       );
     }
     return quote;
+  }
+
+  private ensureChainsSupported(intent: TransactionIntent) {
+    const evmExecutable = new Set(['ethereum', 'base', 'arbitrum', 'linea']);
+    const isSei = (c?: string) => (c ?? '').toLowerCase() === 'sei';
+
+    const from = (intent as any).fromChain?.toLowerCase?.() as string | undefined;
+    const to = (intent as any).toChain?.toLowerCase?.() as string | undefined;
+
+    // swap intents must execute on the source chain
+    if (intent.type === 'swap') {
+      if (isSei(from)) return; // Sei swap handled by Sei client
+      if (!from || !evmExecutable.has(from)) {
+        throw new BadRequestException(
+          `Unsupported source chain for execution: ${from ?? 'unknown'}. Supported: ${Array.from(evmExecutable).join(', ')}, plus 'sei' (native).`,
+        );
+      }
+      return;
+    }
+
+    // bridge intents: allow EVM<->EVM via OneBalance (limited to configured EVMs) and EVM<->Sei via Axelar
+    if (intent.type === 'bridge') {
+      const fromOk = from && (evmExecutable.has(from) || isSei(from));
+      const toOk = to && (evmExecutable.has(to) || isSei(to));
+      if (!fromOk || !toOk) {
+        throw new BadRequestException(
+          `Unsupported bridge path (${from} -> ${to}). Supported EVMs: ${Array.from(evmExecutable).join(', ')}, and 'sei' via Axelar.`,
+        );
+      }
+      // For Sei paths, require the other side to be one of our EVMs
+      if (isSei(from) || isSei(to)) {
+        const other = isSei(from) ? to : from;
+        if (!other || !evmExecutable.has(other)) {
+          throw new BadRequestException(
+            `For Sei bridges, the EVM side must be one of: ${Array.from(evmExecutable).join(', ')}.`,
+          );
+        }
+      }
+      return;
+    }
+
+    // default guard
+    throw new BadRequestException(`Unsupported intent type: ${intent.type}`);
   }
 
   async getLogs(userId: number, limit = 20): Promise<TransactionLog[]> {

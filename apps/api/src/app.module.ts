@@ -13,6 +13,8 @@ import { AutomationsModule } from './automations/automations.module';
 import { SessionKeysModule } from './session-keys/session-keys.module';
 
 import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata } from '@copil/database';
+import { PolicyController } from './policy/policy.controller';
+import { PolicyService } from './policy/policy.service';
 
 @Module({
   imports: [
@@ -50,8 +52,9 @@ import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMe
     TransactionModule,
     AutomationsModule,
     SessionKeysModule,
+    TypeOrmModule.forFeature([Wallet]),
   ],
-  controllers: [AppController, HealthController],
-  providers: [AppService],
+  controllers: [AppController, HealthController, PolicyController],
+  providers: [AppService, PolicyService],
 })
 export class AppModule {}

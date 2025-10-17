@@ -28,6 +28,7 @@ export interface Quote {
   toAmount: string;
   gasCostUsd?: string; // Made optional
   transactionRequest: any; // The raw request for signing
+  approvalTransactionRequest?: any; // Optional approval tx before main tx
 }
 
 export interface GetQuoteResponse {

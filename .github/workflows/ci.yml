@@ -80,3 +80,5 @@ jobs:
       - name: Unit tests - Transaction Executor
         run: npm test --workspace apps/transaction-executor -- --passWithNoTests
 
+      - name: Unit tests - Chain Abstraction Client
+        run: npm test --workspace @copil/chain-abstraction-client -- --passWithNoTests

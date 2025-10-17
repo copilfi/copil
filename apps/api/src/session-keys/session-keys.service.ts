@@ -52,7 +52,7 @@ export class SessionKeysService {
     return this.sessionKeyRepository.save(sessionKey);
   }
 
-  private mapPermissions(permissions?: { actions?: string[]; chains?: string[]; notes?: string }): SessionKeyPermissions {
+  private mapPermissions(permissions?: { actions?: string[]; chains?: string[]; notes?: string; allowedContracts?: string[]; spendLimits?: { token: string; maxAmount: string; windowSec?: number } }): SessionKeyPermissions {
     if (!permissions) {
       return {};
     }
@@ -63,6 +63,12 @@ export class SessionKeysService {
     }
     if (permissions.chains) {
       mapped.chains = permissions.chains;
+    }
+    if (permissions.allowedContracts) {
+      mapped.allowedContracts = permissions.allowedContracts;
+    }
+    if (permissions.spendLimits) {
+      mapped.spendLimits = permissions.spendLimits.map((s) => ({ token: s.token, maxAmount: s.maxAmount, windowSec: s.windowSec }));
     }
     if (permissions.notes) {
       mapped.notes = permissions.notes;

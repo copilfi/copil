@@ -96,23 +96,73 @@ export class ExecutionService {
   }
 
   private async executeTransaction(job: TransactionJobData): Promise<ExecutionResult> {
-    // The complex dispatch logic is replaced by this simpler flow.
-    // The quote and transactionRequest are already in the job payload.
-    const { quote } = job;
-
+    const { quote } = job as any;
     if (!quote?.transactionRequest) {
-      return {
-        status: 'failed',
-        description: 'No transactionRequest found in the job payload from the quote.',
-      };
+      return { status: 'failed', description: 'No transactionRequest found in the job payload from the quote.' };
     }
 
-    // The signer service is now responsible for all signing and broadcasting.
+    // Enforce session key on-chain-like policy at app layer (defense-in-depth)
+    const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: job.sessionKeyId! } });
+    const perms = sessionKey?.permissions as SessionKeyPermissions | undefined;
+
+    // allowedContracts: the destination contract of main tx (and optional approval tx) must be whitelisted if provided
+    if (perms?.allowedContracts?.length) {
+      const allowed = new Set(perms.allowedContracts.map((a) => a.toLowerCase()));
+      const mainToOk = typeof quote.transactionRequest?.to === 'string' && allowed.has((quote.transactionRequest.to as string).toLowerCase());
+      const approvalToOk = !quote.approvalTransactionRequest || (typeof quote.approvalTransactionRequest?.to === 'string' && allowed.has((quote.approvalTransactionRequest.to as string).toLowerCase()));
+      if (!mainToOk || !approvalToOk) {
+        return {
+          status: 'failed',
+          description: 'Destination contract not permitted by session key policy.',
+          metadata: { to: quote.transactionRequest?.to, approvalTo: quote.approvalTransactionRequest?.to },
+        };
+      }
+    }
+
+    // spendLimits: simple per-transaction cap by source token
+    if (perms?.spendLimits?.length) {
+      const limits = perms.spendLimits;
+      const token = (job.intent as any)?.fromToken as string | undefined;
+      const amount = (job.intent as any)?.fromAmount as string | undefined;
+      if (token && amount) {
+        const lim = limits.find((l) => l.token.toLowerCase() === token.toLowerCase());
+        if (lim) {
+          try {
+            const amt = BigInt(amount);
+            const cap = BigInt(lim.maxAmount);
+            if (amt > cap) {
+              return { status: 'failed', description: 'Requested amount exceeds session key spend limit.', metadata: { token, amount, cap: lim.maxAmount } };
+            }
+          } catch {
+            // If parsing fails, fail closed
+            return { status: 'failed', description: 'Invalid amount or spend limit in policy.', metadata: { token, amount, limit: lim.maxAmount } };
+          }
+        }
+      }
+    }
+
+    // Optional approval step first
+    if (quote.approvalTransactionRequest) {
+      const approveRes = await this.signerService.signAndSend({
+        userId: job.userId,
+        sessionKeyId: job.sessionKeyId!,
+        transaction: quote.approvalTransactionRequest,
+        metadata: { intent: job.intent, quoteId: quote.id, purpose: 'approval', chain: (job.intent as any)?.fromChain },
+      });
+      if (approveRes.status !== 'success') {
+        return {
+          status: approveRes.status,
+          description: approveRes.description ?? 'Approval transaction failed or was skipped.',
+          metadata: { quoteId: quote.id, intent: job.intent },
+        };
+      }
+    }
+
     const signerResult = await this.signerService.signAndSend({
       userId: job.userId,
       sessionKeyId: job.sessionKeyId!,
-      transaction: quote.transactionRequest, // Pass the request from the quote
-      metadata: { intent: job.intent, quoteId: quote.id },
+      transaction: quote.transactionRequest,
+      metadata: { intent: job.intent, quoteId: quote.id, chain: (job.intent as any)?.fromChain },
     });
 
     return {

@@ -9,6 +9,7 @@ import {
 } from './types';
 import { GetAggregatedBalanceResponseSchema, GetQuoteResponseSchema } from './schemas';
 import { SeiClient } from './sei-client';
+import { AxelarBridgeClient } from './axelar-bridge.client';
 import { z } from 'zod';
 
 const SUPPORTED_ONEBALANCE_CHAINS = [
@@ -27,6 +28,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
   private onebalanceApiKey: string;
   private onebalanceApiBaseUrl = 'https://be.onebalance.io/api';
   private seiClient: SeiClient;
+  private axelarBridge: AxelarBridgeClient;
 
   constructor(onebalanceApiKey: string) {
     if (!onebalanceApiKey) {
@@ -34,6 +36,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     }
     this.onebalanceApiKey = onebalanceApiKey;
     this.seiClient = new SeiClient();
+    this.axelarBridge = new AxelarBridgeClient();
   }
 
   private isSei(chain: string): boolean {
@@ -75,8 +78,8 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       if (intent.type === 'swap') {
         return this.seiClient.getSwapQuote(intent);
       }
-      // Bridge path involving Sei
-      return this.seiClient.getBridgeQuote(intent);
+      // Bridge path involving Sei via Axelar gateway
+      return this.axelarBridge.getSeiBridgeQuote(intent);
     }
     // Non-Sei paths use OneBalance
     return this.getOneBalanceQuote(intent);
@@ -124,6 +127,9 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       base: 8453,
       arbitrum: 42161,
       linea: 59144,
+      optimism: 10,
+      polygon: 137,
+      bsc: 56,
       avalanche: 43114,
     };
     return map[name.toLowerCase()];
