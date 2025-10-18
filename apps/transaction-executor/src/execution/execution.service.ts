@@ -141,13 +141,14 @@ export class ExecutionService {
       }
     }
 
+    const chainName = (job.intent as any)?.fromChain ?? (job.metadata as any)?.chain;
     // Optional approval step first
     if (quote.approvalTransactionRequest) {
       const approveRes = await this.signerService.signAndSend({
         userId: job.userId,
         sessionKeyId: job.sessionKeyId!,
         transaction: quote.approvalTransactionRequest,
-        metadata: { intent: job.intent, quoteId: quote.id, purpose: 'approval', chain: (job.intent as any)?.fromChain },
+        metadata: { intent: job.intent, quoteId: quote.id, purpose: 'approval', chain: chainName },
       });
       if (approveRes.status !== 'success') {
         return {
@@ -162,7 +163,7 @@ export class ExecutionService {
       userId: job.userId,
       sessionKeyId: job.sessionKeyId!,
       transaction: quote.transactionRequest,
-      metadata: { intent: job.intent, quoteId: quote.id, chain: (job.intent as any)?.fromChain },
+      metadata: { intent: job.intent, quoteId: quote.id, chain: chainName },
     });
 
     return {

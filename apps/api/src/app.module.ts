@@ -15,6 +15,8 @@ import { SessionKeysModule } from './session-keys/session-keys.module';
 import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata } from '@copil/database';
 import { PolicyController } from './policy/policy.controller';
 import { PolicyService } from './policy/policy.service';
+import { SmartAccountController } from './smart-account/smart-account.controller';
+import { SmartAccountOrchestratorService } from './smart-account/smart-account.service';
 
 @Module({
   imports: [
@@ -54,7 +56,7 @@ import { PolicyService } from './policy/policy.service';
     SessionKeysModule,
     TypeOrmModule.forFeature([Wallet]),
   ],
-  controllers: [AppController, HealthController, PolicyController],
-  providers: [AppService, PolicyService],
+  controllers: [AppController, HealthController, PolicyController, SmartAccountController],
+  providers: [AppService, PolicyService, SmartAccountOrchestratorService],
 })
 export class AppModule {}

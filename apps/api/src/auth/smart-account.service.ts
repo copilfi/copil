@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { http, createPublicClient, Chain, concat, encodeFunctionData } from 'viem';
-import { mainnet, base, arbitrum, linea } from 'viem/chains';
+import { mainnet, base, arbitrum, linea, optimism, polygon, bsc, avalanche } from 'viem/chains';
 import { getSenderAddress } from 'permissionless/actions';
 import { entryPoint06Address } from 'viem/account-abstraction';
 import {
@@ -14,6 +14,10 @@ const chainMap: Record<string, Chain> = {
   base,
   arbitrum,
   linea,
+  optimism,
+  polygon,
+  bsc,
+  avalanche,
 };
 
 @Injectable()
