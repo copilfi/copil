@@ -136,7 +136,10 @@ export class SignerService {
     }
 
     try {
-      const publicClient = createPublicClient({ transport: http(this.getRpcUrl(chainName)) });
+      const publicClient = createPublicClient({ 
+        transport: http(this.getRpcUrl(chainName)),
+        chain: chain, // Add chain to publicClient
+      });
       const sessionKeySigner = privateKeyToAccount(sessionKey);
 
       const safeAccount = await toSafeSmartAccount({
