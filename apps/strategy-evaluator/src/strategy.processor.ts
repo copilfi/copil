@@ -27,7 +27,7 @@ export class StrategyProcessor {
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
   ) {
-    this.apiServiceUrl = this.configService.get<string>('API_SERVICE_URL', 'http://localhost:3001');
+    this.apiServiceUrl = this.configService.get<string>('API_SERVICE_URL', 'http://localhost:4311');
   }
 
   @Process('*') // Process all job types in this queue

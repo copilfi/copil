@@ -4,6 +4,7 @@ import { SessionKey, SessionKeyPermissions, SessionActionType } from '@copil/dat
 import { Repository } from 'typeorm';
 import { CreateSessionKeyDto } from './dto/create-session-key.dto';
 import { UpdateSessionKeyDto } from './dto/update-session-key.dto';
+import { SessionKeyPermissionsDto } from './dto/permissions.dto';
 
 @Injectable()
 export class SessionKeysService {
@@ -52,7 +53,7 @@ export class SessionKeysService {
     return this.sessionKeyRepository.save(sessionKey);
   }
 
-  private mapPermissions(permissions?: { actions?: string[]; chains?: string[]; notes?: string; allowedContracts?: string[]; spendLimits?: { token: string; maxAmount: string; windowSec?: number } }): SessionKeyPermissions {
+  private mapPermissions(permissions?: SessionKeyPermissionsDto): SessionKeyPermissions {
     if (!permissions) {
       return {};
     }

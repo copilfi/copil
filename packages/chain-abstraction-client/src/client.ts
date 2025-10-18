@@ -88,6 +88,9 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
   // Experimental: Get a Li.Fi quote for comparison (does not affect execution flow)
   async getLiFiQuoteForIntent(intent: TransactionIntent): Promise<{ supported: boolean; raw?: any; error?: string; transactionRequest?: any }> {
     try {
+      if (intent.type !== 'swap' && intent.type !== 'bridge') {
+        return { supported: false, error: 'LiFi comparator supports only swap/bridge intents' };
+      }
       const url = new URL('https://li.quest/v1/quote');
       const fromChain = this.mapChainNameToId(intent.fromChain);
       const toChain = this.mapChainNameToId(intent.toChain);

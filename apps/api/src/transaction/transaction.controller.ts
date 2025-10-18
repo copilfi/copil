@@ -46,22 +46,29 @@ export class TransactionController {
 
   @Get('chains')
   getSupportedChains() {
+    const has = (k: string) => Boolean(process.env[k]);
+    const bundlerOk = has('PIMLICO_API_KEY');
+    const rpc = (chain: string) => has(`RPC_URL_${chain.toUpperCase()}`);
+
     // Executable chains are those our signer/bundler is configured for
     const executable = [
-      { name: 'ethereum', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
-      { name: 'base', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
-      { name: 'arbitrum', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
-      { name: 'linea', capabilities: ['swap', 'bridge'], provider: 'OneBalance' },
-      { name: 'sei', capabilities: ['swap', 'bridge'], provider: 'Sei (swap), Axelar (bridge)' },
+      { name: 'ethereum', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('ethereum') },
+      { name: 'base', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('base') },
+      { name: 'arbitrum', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('arbitrum') },
+      { name: 'linea', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('linea') },
+      { name: 'optimism', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('optimism') },
+      { name: 'polygon', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('polygon') },
+      { name: 'bsc', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('bsc') },
+      { name: 'avalanche', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('avalanche') },
+      { name: 'sei', capabilities: ['swap', 'bridge'], provider: 'Sei (swap), Axelar (bridge)', ready: rpc('sei') },
     ];
 
     // Read-only networks (aggregated balances visible via OneBalance, execution pending)
     const readOnly = [
-      { name: 'avalanche', provider: 'OneBalance (balances, quote preview)' },
       { name: 'solana', provider: 'OneBalance (balances only)' },
     ];
 
-    return { executable, readOnly };
+    return { executable, readOnly, requirements: { bundler: 'PIMLICO_API_KEY', rpcEnv: 'RPC_URL_<CHAIN>' } };
   }
 
   @Post('execute')

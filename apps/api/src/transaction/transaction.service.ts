@@ -43,7 +43,7 @@ export class TransactionService {
   }
 
   private ensureChainsSupported(intent: TransactionIntent) {
-    const evmExecutable = new Set(['ethereum', 'base', 'arbitrum', 'linea']);
+    const evmExecutable = new Set(['ethereum', 'base', 'arbitrum', 'linea', 'optimism', 'polygon', 'bsc', 'avalanche']);
     const isSei = (c?: string) => (c ?? '').toLowerCase() === 'sei';
 
     const from = (intent as any).fromChain?.toLowerCase?.() as string | undefined;

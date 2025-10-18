@@ -2,7 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { http, createPublicClient, parseEther, Chain, createWalletClient } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
-import { base, arbitrum, linea, mainnet } from 'viem/chains';
+import { base, arbitrum, linea, mainnet, optimism, polygon, bsc, avalanche } from 'viem/chains';
 import { entryPoint06Address } from 'viem/account-abstraction';
 import { createSmartAccountClient } from 'permissionless/clients';
 import { toSafeSmartAccount } from 'permissionless/accounts';
@@ -34,6 +34,10 @@ const chainMap: Record<string, Chain> = {
   base,
   arbitrum,
   linea,
+  optimism,
+  polygon,
+  bsc,
+  avalanche,
   sei: seiChain, // Add Sei to the map
 };
 
