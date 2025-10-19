@@ -58,6 +58,7 @@ export class TransactionController {
       { name: 'polygon', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('polygon') },
       { name: 'bsc', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('bsc') },
       { name: 'avalanche', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('avalanche') },
+      { name: 'hyperevm', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('hyperevm') },
       { name: 'sei', capabilities: ['swap', 'bridge'], provider: 'Sei (swap), Axelar (bridge)', ready: rpc('sei') },
     ];
 

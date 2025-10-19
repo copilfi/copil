@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { http, createPublicClient, parseEther, Chain, createWalletClient } from 'viem';
+import { http, createPublicClient, parseEther, Chain, createWalletClient, defineChain } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
 import { base, arbitrum, linea, mainnet, optimism, polygon, bsc, avalanche } from 'viem/chains';
 import { entryPoint06Address } from 'viem/account-abstraction';
@@ -30,6 +30,14 @@ export interface SignAndSendResult {
   description?: string;
 }
 
+const hyperEvm: Chain = defineChain({
+  id: 999,
+  name: 'HyperEVM',
+  network: 'hyperevm',
+  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
+  rpcUrls: { default: { http: ['https://rpc.hyper.invalid'] } },
+});
+
 const chainMap: Record<string, Chain> = {
   ethereum: mainnet,
   base,
@@ -39,6 +47,7 @@ const chainMap: Record<string, Chain> = {
   polygon,
   bsc,
   avalanche,
+  hyperevm: hyperEvm,
   sei: seiChain, // Add Sei to the map
 };
 
@@ -174,6 +183,8 @@ export class SignerService {
       );
 
       const userOpHash = await smartAccountClient.sendTransaction({
+        account: safeAccount,
+        chain,
         to: transaction.to,
         data: transaction.data,
         value: transaction.value ? parseEther(transaction.value) : undefined,
