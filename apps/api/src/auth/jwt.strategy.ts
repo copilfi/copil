@@ -133,6 +133,14 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!(typeof payload?.iss === 'string' && payload.iss.includes('auth.privy.io'))) {
       throw new Error('Invalid token issuer.');
     }
+    const expectedAud = this.configService.get<string>('PRIVY_APP_ID') || this.configService.get<string>('PRIVY_EXPECT_AUD');
+    const aud = payload?.aud;
+    if (expectedAud) {
+      const audOk = Array.isArray(aud) ? aud.includes(expectedAud) : aud === expectedAud;
+      if (!audOk) {
+        throw new Error('Invalid token audience.');
+      }
+    }
     const privyDid: string | undefined = typeof payload?.sub === 'string' ? payload.sub : undefined;
     if (!privyDid) {
       throw new Error('Invalid token payload: missing subject.');

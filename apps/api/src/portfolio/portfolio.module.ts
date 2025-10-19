@@ -5,6 +5,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Wallet, TokenMetadata } from '@copil/database';
 
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
+import { SmartAccountService as AddressService } from '../auth/smart-account.service';
 import { ConfigService } from '@nestjs/config';
 
 @Module({
@@ -12,6 +13,7 @@ import { ConfigService } from '@nestjs/config';
   controllers: [PortfolioController],
   providers: [
     PortfolioService,
+    AddressService,
     {
       provide: ChainAbstractionClient,
       useFactory: (configService: ConfigService) => {

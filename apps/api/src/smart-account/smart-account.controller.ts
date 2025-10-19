@@ -1,4 +1,4 @@
-import { Controller, Post, UseGuards, Body, Request } from '@nestjs/common';
+import { Controller, Post, UseGuards, Body, Request, Get, Query } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { SmartAccountOrchestratorService } from './smart-account.service';
@@ -15,5 +15,9 @@ export class SmartAccountController {
     }
     return this.orchestrator.deploy(req.user.id, body.sessionKeyId, body.chain);
   }
-}
 
+  @Get('status')
+  status(@Request() req: AuthRequest, @Query('chain') chain?: string) {
+    return this.orchestrator.status(req.user.id, chain);
+  }
+}

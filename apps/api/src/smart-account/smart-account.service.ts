@@ -5,6 +5,8 @@ import { Repository } from 'typeorm';
 import { Queue } from 'bullmq';
 import { Wallet, TransactionLog, TRANSACTION_QUEUE, TransactionIntent, TransactionJobData } from '@copil/database';
 import { SmartAccountService as AddressService } from '../auth/smart-account.service';
+import { ConfigService } from '@nestjs/config';
+import { createPublicClient, http } from 'viem';
 
 @Injectable()
 export class SmartAccountOrchestratorService {
@@ -16,6 +18,7 @@ export class SmartAccountOrchestratorService {
     @InjectQueue(TRANSACTION_QUEUE)
     private readonly txQueue: Queue<TransactionJobData>,
     private readonly addressService: AddressService,
+    private readonly configService: ConfigService,
   ) {}
 
   async ensureWallet(userId: number, chain: string): Promise<Wallet> {
@@ -58,5 +61,30 @@ export class SmartAccountOrchestratorService {
     const job = await this.txQueue.add(`deploy:user:${userId}:${chain}`, jobData, { removeOnComplete: 50, removeOnFail: 200 });
     return { jobId: job.id, smartAccountAddress: wallet.smartAccountAddress };
   }
-}
 
+  private getRpcUrl(chain: string): string {
+    const key = `RPC_URL_${chain.toUpperCase()}`;
+    const url = this.configService.get<string>(key) ?? this.configService.get<string>('RPC_URL');
+    if (!url) throw new BadRequestException(`RPC URL for chain ${chain} not configured.`);
+    return url;
+  }
+
+  async status(userId: number, chain?: string) {
+    const targets = chain
+      ? [chain]
+      : ['ethereum', 'base', 'arbitrum', 'linea', 'optimism', 'polygon', 'bsc', 'avalanche'];
+    const results: any[] = [];
+    for (const c of targets) {
+      try {
+        const wallet = await this.ensureWallet(userId, c);
+        const url = this.getRpcUrl(c);
+        const client = createPublicClient({ transport: http(url) });
+        const code = await client.getBytecode({ address: wallet.smartAccountAddress as `0x${string}` });
+        results.push({ chain: c, smartAccountAddress: wallet.smartAccountAddress, deployed: Boolean(code && code !== '0x') });
+      } catch (e) {
+        results.push({ chain: c, error: (e as Error).message });
+      }
+    }
+    return { results };
+  }
+}

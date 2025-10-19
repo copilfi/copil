@@ -4,6 +4,8 @@ import { SessionKey, SessionKeyPermissions, SessionActionType } from '@copil/dat
 import { Repository } from 'typeorm';
 import { CreateSessionKeyDto } from './dto/create-session-key.dto';
 import { UpdateSessionKeyDto } from './dto/update-session-key.dto';
+import { SmartAccountOrchestratorService } from '../smart-account/smart-account.service';
+import { ConfigService } from '@nestjs/config';
 import { SessionKeyPermissionsDto } from './dto/permissions.dto';
 
 @Injectable()
@@ -11,6 +13,8 @@ export class SessionKeysService {
   constructor(
     @InjectRepository(SessionKey)
     private readonly sessionKeyRepository: Repository<SessionKey>,
+    private readonly orchestrator: SmartAccountOrchestratorService,
+    private readonly configService: ConfigService,
   ) {}
 
   async create(userId: number, dto: CreateSessionKeyDto): Promise<SessionKey> {
@@ -26,8 +30,17 @@ export class SessionKeysService {
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
       isActive: dto.isActive ?? true,
     });
+    const saved = await this.sessionKeyRepository.save(sessionKey);
 
-    return this.sessionKeyRepository.save(sessionKey);
+    // Optional auto-deploy on session key creation
+    if (this.configService.get<string>('AUTO_DEPLOY_ON_SESSION_KEY') === 'true') {
+      const chain = this.configService.get<string>('DEFAULT_DEPLOY_CHAIN');
+      if (chain) {
+        void this.orchestrator.deploy(userId, saved.id, chain).catch(() => void 0);
+      }
+    }
+
+    return saved;
   }
 
   findAll(userId: number): Promise<SessionKey[]> {

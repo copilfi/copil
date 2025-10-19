@@ -25,6 +25,6 @@ import { SmartAccountService } from './smart-account.service';
   ],
   controllers: [AuthController],
   providers: [AuthService, JwtStrategy, SmartAccountService],
-  exports: [AuthService],
+  exports: [AuthService, SmartAccountService],
 })
 export class AuthModule {}

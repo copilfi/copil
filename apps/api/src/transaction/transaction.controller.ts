@@ -22,9 +22,7 @@ export class TransactionController {
   @Post('quote/providers')
   async compareQuotes(@Body() getQuoteDto: GetQuoteDto) {
     const intent = getQuoteDto.intent;
-    const ob = await this.transactionService.getQuote(intent).then((q) => ({ supported: true, quote: q })).catch((e) => ({ supported: false, error: (e as Error).message }));
-    const lifi = await this.chainClient.getLiFiQuoteForIntent(intent);
-    return { onebalance: ob, lifi };
+    return this.transactionService.compareQuotes(intent);
   }
 
   @Get('bridge/config')

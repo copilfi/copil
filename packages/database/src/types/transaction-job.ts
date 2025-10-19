@@ -8,6 +8,7 @@ export type TransactionIntent =
       fromAmount: string;
       userAddress: string;
       slippageBps?: number;
+      destinationAddress?: string; // optional alternative receiver for aggregated flows (e.g., Safe on destination)
     }
   | {
       type: 'custom';

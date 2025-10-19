@@ -102,6 +102,10 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       url.searchParams.set('fromToken', intent.fromToken);
       url.searchParams.set('toToken', intent.toToken);
       url.searchParams.set('fromAmount', intent.fromAmount);
+      const dest = (intent as any).destinationAddress as string | undefined;
+      if (dest && typeof dest === 'string') {
+        url.searchParams.set('toAddress', dest);
+      }
       const res = await axios.get(url.toString());
       if (res.status !== 200) {
         return { supported: false, error: `LiFi quote failed (${res.status})` };
@@ -148,7 +152,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     }
 
     // Construct the request body for the OneBalance API
-    const requestBody = {
+    const requestBody: any = {
       accounts: [{ address: intent.userAddress }],
       source: {
         asset: intent.fromToken,
@@ -159,6 +163,9 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       },
       slippageTolerance: typeof (intent as any).slippageBps === 'number' ? (intent as any).slippageBps : 50, // basis points
     };
+    if ((intent as any).destinationAddress && typeof (intent as any).destinationAddress === 'string') {
+      requestBody.destination.address = (intent as any).destinationAddress;
+    }
 
     try {
       const response = await axios.post(

@@ -7,6 +7,7 @@ import { entryPoint06Address } from 'viem/account-abstraction';
 import { createSmartAccountClient } from 'permissionless/clients';
 import { toSafeSmartAccount } from 'permissionless/accounts';
 import { BundlerClient } from '../clients/bundler.client';
+import { PaymasterClient } from '../clients/paymaster.client';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet } from '@copil/database';
 import { Repository } from 'typeorm';
@@ -48,6 +49,7 @@ export class SignerService {
   constructor(
     private readonly configService: ConfigService,
     private readonly bundlerClient: BundlerClient,
+    private readonly paymasterClient: PaymasterClient,
     @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
   ) {}
@@ -150,11 +152,22 @@ export class SignerService {
         address: wallet.smartAccountAddress as `0x${string}`,
       });
 
-      const smartAccountClient = createSmartAccountClient({
+      const usePaymaster = this.configService.get<string>('PAYMASTER_ENABLED') === 'true';
+      const baseConfig: any = {
         account: safeAccount,
         chain,
         bundlerTransport: this.bundlerClient.getTransport(chain),
-      });
+      };
+      if (usePaymaster) {
+        try {
+          baseConfig.paymasterTransport = this.paymasterClient.getTransport(chain);
+          this.logger.log(`Paymaster transport configured for ${chainName}`);
+        } catch (e) {
+          this.logger.warn(`Paymaster disabled for ${chainName}: ${(e as Error).message}`);
+        }
+      }
+
+      const smartAccountClient = createSmartAccountClient(baseConfig);
 
       this.logger.log(
         `Sending UserOperation via Smart Account ${safeAccount.address} on ${chainName}`,

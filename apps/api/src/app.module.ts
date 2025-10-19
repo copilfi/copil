@@ -17,6 +17,8 @@ import { PolicyController } from './policy/policy.controller';
 import { PolicyService } from './policy/policy.service';
 import { SmartAccountController } from './smart-account/smart-account.controller';
 import { SmartAccountOrchestratorService } from './smart-account/smart-account.service';
+import { OnboardingController } from './onboarding/onboarding.controller';
+import { OnboardingService } from './onboarding/onboarding.service';
 
 @Module({
   imports: [
@@ -54,9 +56,12 @@ import { SmartAccountOrchestratorService } from './smart-account/smart-account.s
     TransactionModule,
     AutomationsModule,
     SessionKeysModule,
-    TypeOrmModule.forFeature([Wallet]),
+    TypeOrmModule.forFeature([Wallet, TransactionLog]),
+    BullModule.registerQueue({
+      name: 'transaction-queue',
+    }),
   ],
-  controllers: [AppController, HealthController, PolicyController, SmartAccountController],
-  providers: [AppService, PolicyService, SmartAccountOrchestratorService],
+  controllers: [AppController, HealthController, PolicyController, SmartAccountController, OnboardingController],
+  providers: [AppService, PolicyService, SmartAccountOrchestratorService, OnboardingService],
 })
 export class AppModule {}

@@ -96,13 +96,42 @@ export class TransactionService {
   async compareQuotes(intent: TransactionIntent): Promise<{
     onebalance: { supported: boolean; quote?: any; error?: string };
     lifi: { supported: boolean; raw?: any; error?: string; transactionRequest?: any };
+    recommendation?: { provider: string; executable: boolean; reason: string; estToAmount?: string };
+    explain?: string;
   }> {
     const ob = await this.getQuote(intent)
       .then((q) => ({ supported: true, quote: q }))
       .catch((e) => ({ supported: false, error: (e as Error).message }));
 
     const lifi = await this.chainAbstractionClient.getLiFiQuoteForIntent(intent);
-    return { onebalance: ob, lifi };
+    const rec = this.makeRecommendation(ob, lifi);
+    return { onebalance: ob, lifi, recommendation: rec.recommendation, explain: rec.explain };
+  }
+
+  private makeRecommendation(
+    ob: { supported: boolean; quote?: any; error?: string },
+    lifi: { supported: boolean; raw?: any; error?: string; transactionRequest?: any },
+  ): { recommendation?: { provider: string; executable: boolean; reason: string; estToAmount?: string }; explain?: string } {
+    const isExecutable = (q: any) => Boolean(q && typeof q.transactionRequest?.to === 'string' && q.transactionRequest?.to.startsWith('0x'));
+    // Prefer OneBalance when executable
+    if (ob.supported && ob.quote && isExecutable(ob.quote)) {
+      return {
+        recommendation: { provider: 'onebalance', executable: true, reason: 'Non-custodial route with executable transactionRequest', estToAmount: ob.quote?.toAmount },
+        explain: 'OneBalance provides an executable tx for your wallet. Fewer steps and non-custodial.',
+      };
+    }
+    // Fallback to LiFi if it has an executable tx
+    if (lifi.supported && isExecutable({ transactionRequest: lifi.transactionRequest })) {
+      return {
+        recommendation: { provider: 'lifi', executable: true, reason: 'OneBalance not executable; LiFi fallback available', estToAmount: undefined },
+        explain: 'LiFi offers a viable route. Review details before signing.',
+      };
+    }
+    // No executable routes
+    return {
+      recommendation: { provider: 'none', executable: false, reason: ob.error ?? lifi.error ?? 'No executable route found' },
+      explain: 'No non-custodial route with a ready transaction. Adjust parameters or try later.',
+    };
   }
 
   async createAdHocTransactionJob(

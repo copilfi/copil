@@ -1,0 +1,115 @@
+import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
+import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { AuthRequest } from '../auth/auth-request.interface';
+import { OnboardingService } from './onboarding.service';
+import { TransactionService } from '../transaction/transaction.service';
+import { encodeFunctionData } from 'viem';
+
+const ERC20_ABI = [
+  { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+  { type: 'function', name: 'approve', stateMutability: 'nonpayable', inputs: [ { name: 'spender', type: 'address' }, { name: 'value', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+] as const;
+
+@UseGuards(JwtAuthGuard)
+@Controller('onboarding')
+export class OnboardingController {
+  constructor(
+    private readonly svc: OnboardingService,
+    private readonly txService: TransactionService,
+  ) {}
+
+  @Get('addresses')
+  addresses(@Request() req: AuthRequest) {
+    return this.svc.getAddresses(req.user.id);
+  }
+
+  @Get('status')
+  status(@Request() req: AuthRequest, @Query('chain') chain?: string) {
+    return this.svc.getStatus(req.user.id, chain);
+  }
+
+  @Get('recommendation')
+  recommend(@Request() req: AuthRequest, @Query('preferred') preferred?: string) {
+    return this.svc.recommendChain(req.user.id, preferred);
+  }
+
+  @Post('prepare/native-transfer')
+  prepareNativeTransfer(@Body() body: { chain: string; to: `0x${string}`; valueWei: string }) {
+    if (!body?.to || !body?.valueWei) throw new Error('to and valueWei are required');
+    return { transactionRequest: { to: body.to, value: body.valueWei, data: '0x' }, chain: body.chain };
+  }
+
+  @Post('prepare/erc20-transfer')
+  prepareErc20Transfer(@Body() body: { chain: string; token: `0x${string}`; to: `0x${string}`; amount: string }) {
+    if (!body?.token || !body?.to || !body?.amount) throw new Error('token, to and amount are required');
+    const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ body.to, BigInt(body.amount) ] });
+    return { transactionRequest: { to: body.token, data, value: '0' }, chain: body.chain };
+  }
+
+  @Post('fund-plan')
+  fundPlan(@Body() body: { targetChain: string; safeAddress: `0x${string}`; fromChain: string; fromToken: `0x${string}`; fromAmount: string; toToken?: string }) {
+    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body || {} as any;
+    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new Error('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
+    if (fromChain.toLowerCase() === targetChain.toLowerCase()) {
+      // Same-chain transfer plan (EOA-signed)
+      const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ safeAddress, BigInt(fromAmount) ] });
+      return {
+        kind: 'sameChainTransfer',
+        chain: fromChain,
+        to: fromToken,
+        transactionRequest: { to: fromToken, data, value: '0' },
+        hint: 'Sign with your EOA to move funds to your Smart Account on the same chain.',
+      };
+    }
+    // Cross-chain bridge intent (EOA-signed via provider)
+    return {
+      kind: 'bridgeIntent',
+      intent: {
+        type: 'bridge',
+        fromChain,
+        toChain: targetChain,
+        fromToken,
+        toToken: toToken ?? 'USDC',
+        fromAmount,
+        userAddress: safeAddress, // user signs from EOA, but destination is Safe
+        destinationAddress: safeAddress,
+        slippageBps: 50,
+      },
+      hint: 'Use provider comparison to get an executable bridge transaction. Destination is your Smart Account on the target chain.',
+    };
+  }
+
+  @Post('fund-quote')
+  async fundQuote(@Body() body: { targetChain: string; safeAddress: `0x${string}`; fromChain: string; fromToken: `0x${string}`; fromAmount: string; toToken?: string }) {
+    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body || ({} as any);
+    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new Error('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
+    if (fromChain.toLowerCase() === targetChain.toLowerCase()) {
+      // same-chain transfer quote is trivial (prepare/erc20-transfer already covers it)
+      const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ safeAddress, BigInt(fromAmount) ] });
+      return {
+        recommendation: { provider: 'same-chain-transfer', executable: true, reason: 'No bridge required' },
+        selected: { provider: 'same-chain-transfer', transactionRequest: { to: fromToken, data, value: '0' } },
+      };
+    }
+    const intent = {
+      type: 'bridge' as const,
+      fromChain,
+      toChain: targetChain,
+      fromToken,
+      toToken: toToken ?? 'USDC',
+      fromAmount,
+      userAddress: safeAddress,
+      destinationAddress: safeAddress,
+      slippageBps: 50,
+    };
+    const res = await this.txService.compareQuotes(intent);
+    const provider = res.recommendation?.provider;
+    let tx: any = undefined;
+    if (provider === 'onebalance') {
+      tx = res.onebalance.quote?.transactionRequest;
+    } else if (provider === 'lifi') {
+      tx = res.lifi.transactionRequest;
+    }
+    return { ...res, selected: tx ? { provider, transactionRequest: tx } : undefined };
+  }
+}

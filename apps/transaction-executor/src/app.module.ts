@@ -7,6 +7,7 @@ import { TransactionProcessor } from './transaction.processor';
 import { ExecutionService } from './execution/execution.service';
 import { SignerService } from './signer/signer.service';
 import { BundlerClient } from './clients/bundler.client';
+import { PaymasterClient } from './clients/paymaster.client';
 import { HealthService } from './health.service';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 
@@ -47,6 +48,7 @@ import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
     TransactionProcessor,
     SignerService,
     BundlerClient,
+    PaymasterClient,
     HealthService,
     {
       provide: ChainAbstractionClient,
