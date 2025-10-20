@@ -1,4 +1,6 @@
-import axios from 'axios';
+import axios, { AxiosInstance } from 'axios';
+import http from 'http';
+import https from 'https';
 import { IChainAbstractionClient } from './interface';
 import {
   GetAggregatedBalanceRequest,
@@ -29,6 +31,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
   private onebalanceApiBaseUrl = 'https://be.onebalance.io/api';
   private seiClient: SeiClient;
   private axelarBridge: AxelarBridgeClient;
+  private http: AxiosInstance;
 
   constructor(onebalanceApiKey: string) {
     if (!onebalanceApiKey) {
@@ -37,6 +40,12 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     this.onebalanceApiKey = onebalanceApiKey;
     this.seiClient = new SeiClient();
     this.axelarBridge = new AxelarBridgeClient();
+    const keepAlive = (name: string, def: number) => Number(process.env[name] ?? def);
+    this.http = axios.create({
+      httpAgent: new http.Agent({ keepAlive: true, maxSockets: keepAlive('HTTP_MAX_SOCKETS', 50) }),
+      httpsAgent: new https.Agent({ keepAlive: true, maxSockets: keepAlive('HTTPS_MAX_SOCKETS', 50) }),
+      timeout: Number(process.env.HTTP_CLIENT_TIMEOUT_MS ?? '12000'),
+    });
   }
 
   private isSei(chain: string): boolean {
@@ -50,11 +59,12 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     console.log('Fetching aggregated balance for', userAddresses);
 
     try {
-      const response = await axios.get(
+      const response = await this.http.get(
         `${this.onebalanceApiBaseUrl}/v3/balances/aggregated-balance`,
         {
           headers: { 'x-api-key': this.onebalanceApiKey },
           params: { account: userAddresses.join(',') },
+          timeout: Number(process.env.ONEBALANCE_TIMEOUT_MS ?? '10000'),
         },
       );
 
@@ -106,7 +116,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       if (dest && typeof dest === 'string') {
         url.searchParams.set('toAddress', dest);
       }
-      const res = await axios.get(url.toString());
+      const res = await this.http.get(url.toString(), { timeout: Number(process.env.LIFI_TIMEOUT_MS ?? '8000') });
       if (res.status !== 200) {
         return { supported: false, error: `LiFi quote failed (${res.status})` };
       }
@@ -168,11 +178,12 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
     }
 
     try {
-      const response = await axios.post(
+      const response = await this.http.post(
         `${this.onebalanceApiBaseUrl}/v3/quote`,
         requestBody,
         {
           headers: { 'x-api-key': this.onebalanceApiKey },
+          timeout: Number(process.env.ONEBALANCE_TIMEOUT_MS ?? '10000'),
         },
       );
 

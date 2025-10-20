@@ -1,4 +1,6 @@
 import { HttpModule } from '@nestjs/axios';
+import * as http from 'http';
+import * as https from 'https';
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
@@ -10,7 +12,18 @@ import { HealthService } from './health.service';
 @Module({
   imports: [
     ConfigModule.forRoot(),
-    HttpModule,
+    HttpModule.registerAsync({
+      useFactory: () => {
+        const max = Number(process.env.HTTP_MAX_SOCKETS ?? '50');
+        const timeout = Number(process.env.API_HTTP_TIMEOUT_MS ?? '12000');
+        return {
+          timeout,
+          maxRedirects: 0,
+          httpAgent: new http.Agent({ keepAlive: true, maxSockets: max }),
+          httpsAgent: new https.Agent({ keepAlive: true, maxSockets: max }),
+        } as any;
+      },
+    }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({

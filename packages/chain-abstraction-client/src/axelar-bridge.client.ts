@@ -62,6 +62,10 @@ export class AxelarBridgeClient {
 
     const destinationChain = env('AXELAR_SEI_CHAIN_NAME') ?? 'sei';
     const symbol = env('AXELAR_TOKEN_SYMBOL_USDC') ?? 'aUSDC';
+    const destinationAddress = (intent as any).destinationAddress as string | undefined;
+    if (!destinationAddress || typeof destinationAddress !== 'string') {
+      throw new Error('destinationAddress is required for Sei bridge intents.');
+    }
 
     // Build approval tx (approve gateway to spend fromToken)
     const approvalData = encodeFunctionData({
@@ -80,7 +84,7 @@ export class AxelarBridgeClient {
     const sendData = encodeFunctionData({
       abi: AXELAR_GATEWAY_ABI,
       functionName: 'sendToken',
-      args: [destinationChain, intent.userAddress, symbol, BigInt(intent.fromAmount)],
+      args: [destinationChain, destinationAddress, symbol, BigInt(intent.fromAmount)],
     });
 
     const transactionRequest = {

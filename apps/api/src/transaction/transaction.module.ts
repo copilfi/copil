@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
-import { TransactionLog, TRANSACTION_QUEUE } from '@copil/database';
+import { TransactionLog, TRANSACTION_QUEUE, TokenMetadata } from '@copil/database';
 import { BullModule } from '@nestjs/bull';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
@@ -10,7 +10,7 @@ import { ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionLog]),
+    TypeOrmModule.forFeature([TransactionLog, TokenMetadata]),
     BullModule.registerQueue({
       name: TRANSACTION_QUEUE,
     }),

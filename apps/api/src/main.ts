@@ -1,10 +1,20 @@
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
+import { validateRequiredEnv } from './env.validation';
 
 async function bootstrap() {
+  // Fail-fast env validation for critical configuration
+  validateRequiredEnv();
   const app = await NestFactory.create(AppModule);
-  app.useGlobalPipes(new ValidationPipe());
+  // Stricter DTO validation across the app
+  app.useGlobalPipes(
+    new ValidationPipe({
+      transform: true,
+      whitelist: true,
+      forbidNonWhitelisted: true,
+    }),
+  );
 
   // Enable CORS for local web app and configurable origin
   const originsRaw = process.env.WEB_ORIGIN || 'http://localhost:3000';

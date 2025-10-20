@@ -2,8 +2,10 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { HealthService } from './health.service';
 import * as http from 'http';
+import { validateRequiredEnv } from './env.validation';
 
 async function bootstrap() {
+  validateRequiredEnv();
   const app = await NestFactory.createApplicationContext(AppModule);
   // Health server
   try {

@@ -1,6 +1,7 @@
-import { Controller, Post, Body, UseGuards, Get, Query, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, Query, Request, Headers } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
+import { ServiceTokenGuard } from '../auth/service-token.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
@@ -16,6 +17,7 @@ export class TransactionController {
   ) {}
 
   @Post('quote')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
   getQuote(@Body() getQuoteDto: GetQuoteDto) {
     return this.transactionService.getQuote(getQuoteDto.intent);
   }
@@ -40,8 +42,11 @@ export class TransactionController {
       { key: 'AXELAR_SEI_CHAIN_NAME', value: process.env.AXELAR_SEI_CHAIN_NAME ?? 'sei' },
       { key: 'AXELAR_TOKEN_SYMBOL_USDC', value: process.env.AXELAR_TOKEN_SYMBOL_USDC ?? 'aUSDC' },
     ];
-    const ready = globals.find(g => g.key === 'SEI_BRIDGE_ENABLED')?.value === 'true' && perChain.some((p) => p.present);
-    return { ready, perChain, globals };
+    const problems: string[] = [];
+    if (process.env.SEI_BRIDGE_ENABLED !== 'true') problems.push('SEI_BRIDGE_ENABLED must be true.');
+    if (!perChain.some((p) => p.present)) problems.push('At least one AXELAR_GATEWAY_ADDRESS_<CHAIN> must be set.');
+    const ready = problems.length === 0;
+    return { ready, perChain, globals, problems };
   }
 
   @Get('chains')
@@ -73,14 +78,32 @@ export class TransactionController {
   }
 
   @Post('execute')
+  @Throttle({ default: { limit: 10, ttl: 60000 } })
   executeAdHocTransaction(
     @Request() req: AuthRequest,
     @Body() executeDto: ExecuteTransactionDto,
+    @Headers('idempotency-key') idemKey?: string,
   ) {
+    const idempotencyKey = executeDto.idempotencyKey || idemKey || undefined;
     return this.transactionService.createAdHocTransactionJob(
       req.user.id,
       executeDto.sessionKeyId,
       executeDto.intent,
+      idempotencyKey,
+    );
+  }
+
+  // Internal execution endpoint for Strategy Evaluator (service-to-service)
+  @UseGuards(ServiceTokenGuard)
+  @Post('execute/internal')
+  async executeInternal(
+    @Body() body: { userId: number; sessionKeyId: number; intent: GetQuoteDto['intent']; idempotencyKey?: string },
+  ) {
+    return this.transactionService.createAdHocTransactionJob(
+      body.userId,
+      body.sessionKeyId,
+      body.intent,
+      body.idempotencyKey,
     );
   }
 

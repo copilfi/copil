@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions } from '@copil/database';
-import { Repository } from 'typeorm';
+import { Repository, MoreThan } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ExecutionResult, TransactionJobData } from './types';
 import { SignerService } from '../signer/signer.service';
@@ -72,6 +72,15 @@ export class ExecutionService {
 
       if (result.status === 'success') {
         this.logger.log(`Job for ${jobDescription} action completed successfully.`);
+        try {
+          if (job.sessionKeyId) {
+            const sk = await this.sessionKeyRepository.findOne({ where: { id: job.sessionKeyId } });
+            if (sk) {
+              // Touch record to bump updatedAt; usage telemetry fields can be added via migration later
+              await this.sessionKeyRepository.save(sk);
+            }
+          }
+        } catch {}
       } else {
         this.logger.error(
           `Job for ${jobDescription} action failed. ${result.description ?? 'No details provided.'}`,
@@ -245,6 +254,43 @@ export class ExecutionService {
             valid: false,
             reason: `Session key ${sessionKey.id} does not allow the requested chain(s).`,
           };
+        }
+      }
+    }
+
+    // Windowed spend limits: sum of successful executions within windowSec + current intent must not exceed cap
+    if (permissions?.spendLimits?.length && (job.intent.type === 'swap' || job.intent.type === 'bridge')) {
+      const token = (job.intent as any)?.fromToken as string | undefined;
+      const amountStr = (job.intent as any)?.fromAmount as string | undefined;
+      if (token && amountStr) {
+        const limit = permissions.spendLimits.find((l) => l.token.toLowerCase() === token.toLowerCase());
+        if (limit && typeof limit.windowSec === 'number' && limit.windowSec > 0) {
+          const since = new Date(Date.now() - limit.windowSec * 1000);
+          const logs = await this.transactionLogRepository.find({
+            where: { userId: job.userId, status: 'success', createdAt: MoreThan(since) },
+            order: { createdAt: 'DESC' },
+          });
+          let spent = 0n;
+          for (const l of logs) {
+            const intent = (l.details as any)?.intent;
+            const t = intent?.fromToken as string | undefined;
+            const a = intent?.fromAmount as string | undefined;
+            if (t && a && t.toLowerCase() === token.toLowerCase()) {
+              try { spent += BigInt(a); } catch { /* ignore malformed */ }
+            }
+          }
+          try {
+            const nextTotal = spent + BigInt(amountStr);
+            const cap = BigInt(limit.maxAmount);
+            if (nextTotal > cap) {
+              return {
+                valid: false,
+                reason: `Session key ${sessionKey.id} exceeds windowed spend limit for token ${token}. Used: ${spent.toString()}, new: ${amountStr}, cap: ${limit.maxAmount}`,
+              };
+            }
+          } catch {
+            return { valid: false, reason: 'Invalid amount or spend limit while enforcing windowed policy.' };
+          }
         }
       }
     }

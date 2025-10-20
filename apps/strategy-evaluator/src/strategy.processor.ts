@@ -26,6 +26,7 @@ export class StrategyProcessor {
     private readonly tokenPriceRepository: Repository<TokenPrice>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
+    @InjectQueue(STRATEGY_QUEUE) private readonly strategyQueue: any,
   ) {
     this.apiServiceUrl = this.configService.get<string>('API_SERVICE_URL', 'http://localhost:4311');
   }
@@ -33,6 +34,16 @@ export class StrategyProcessor {
   @Process('*') // Process all job types in this queue
   async handleStrategy(job: Job<{ strategyId: number }>) {
     this.logger.debug(`Processing job: ${job.id}, name: ${job.name}`);
+
+    // Concurrency guard: if there is another active job for the same strategy, skip
+    try {
+      const activeJobs: any[] = await this.strategyQueue.getJobs(['active'], 0, 500);
+      const hasOtherActive = activeJobs.some((j) => j?.id !== job.id && j?.data?.strategyId === job.data.strategyId);
+      if (hasOtherActive) {
+        this.logger.warn(`Strategy ${job.data.strategyId} already has an active job. Skipping overlapping execution.`);
+        return;
+      }
+    } catch {}
     const strategy = await this.strategyRepository.findOne({ where: { id: job.data.strategyId } });
 
     if (!strategy || !strategy.isActive) {
@@ -58,7 +69,7 @@ export class StrategyProcessor {
       }
 
       this.logger.log(`Trigger met for strategy ${strategy.name} (${strategy.id}). Triggering execution.`);
-      await this.triggerExecution(strategy, definition);
+      await this.triggerExecution(strategy, definition, job.id as string);
 
       if (!definition.repeat) {
         strategy.isActive = false;
@@ -96,20 +107,40 @@ export class StrategyProcessor {
       : latestPrice.priceUsd <= definition.trigger.priceTarget;
   }
 
-  private async triggerExecution(strategy: Strategy, definition: StrategyDefinition) {
-    const payload = {
-      intent: definition.intent,
-      sessionKeyId: definition.sessionKeyId,
-    };
+  private async triggerExecution(strategy: Strategy, definition: StrategyDefinition, jobId: string) {
+      const payload = {
+        userId: strategy.userId,
+        intent: definition.intent,
+        sessionKeyId: definition.sessionKeyId,
+        idempotencyKey: `strategy:${strategy.id}:job:${jobId}`,
+      } as const;
 
     try {
       this.logger.log(`Calling API service to execute transaction for strategy ${strategy.id}`);
-      const endpoint = `${this.apiServiceUrl}/transaction/execute`;
+      const endpoint = `${this.apiServiceUrl}/transaction/execute/internal`;
       // We don't need to pass the user ID, as the API service will resolve it from the session key
       // or we might need a service account token for this internal call.
       // For now, we assume the endpoint is protected and requires some auth.
       // This is a placeholder for the actual authenticated call.
-      await firstValueFrom(this.httpService.post(endpoint, payload));
+      const headers: Record<string, string> = {};
+      const token = this.configService.get<string>('INTERNAL_API_TOKEN');
+      if (token) headers['x-service-token'] = token;
+      // Basic retry with exponential backoff
+      const attempts = Number(this.configService.get<string>('EVALUATOR_EXECUTE_MAX_RETRIES') ?? '3');
+      const baseDelay = Number(this.configService.get<string>('EVALUATOR_EXECUTE_BACKOFF_MS') ?? '500');
+      let lastErr: any;
+      for (let i = 0; i < attempts; i++) {
+        try {
+          await firstValueFrom(this.httpService.post(endpoint, payload, { headers }));
+          lastErr = null;
+          break;
+        } catch (e) {
+          lastErr = e;
+          const delay = baseDelay * Math.pow(2, i);
+          await new Promise((r) => setTimeout(r, delay));
+        }
+      }
+      if (lastErr) throw lastErr;
       this.logger.log(`Successfully triggered execution for strategy ${strategy.id}`);
     } catch (error) {
       let errorMessage = 'Unknown error';

@@ -21,6 +21,8 @@ import { SmartAccountController } from './smart-account/smart-account.controller
 import { SmartAccountOrchestratorService } from './smart-account/smart-account.service';
 import { OnboardingController } from './onboarding/onboarding.controller';
 import { OnboardingService } from './onboarding/onboarding.service';
+import { APP_INTERCEPTOR } from '@nestjs/core';
+import { ObservabilityInterceptor } from './common/observability.interceptor';
 
 @Module({
   imports: [
@@ -70,6 +72,7 @@ import { OnboardingService } from './onboarding/onboarding.service';
     SmartAccountOrchestratorService,
     OnboardingService,
     { provide: APP_GUARD, useClass: ThrottlerGuard },
+    { provide: APP_INTERCEPTOR, useClass: ObservabilityInterceptor },
   ],
 })
 export class AppModule {}

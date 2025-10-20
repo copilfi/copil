@@ -3,12 +3,14 @@ import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
 
 import { AuthRequest } from './auth-request.interface';
+import { Throttle } from '@nestjs/throttler';
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('login')
+  @Throttle({ default: { limit: 15, ttl: 60000 } })
   async login(@Body() body: { privyDid: string, email: string, walletAddress?: string }) {
     const user = await this.authService.findOrCreateUser(body.privyDid, body.email, body.walletAddress);
     return this.authService.login(user);
