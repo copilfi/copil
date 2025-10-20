@@ -5,6 +5,7 @@ import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
+import { Throttle } from '@nestjs/throttler';
 
 @UseGuards(JwtAuthGuard)
 @Controller('transaction')
@@ -20,6 +21,7 @@ export class TransactionController {
   }
 
   @Post('quote/providers')
+  @Throttle(30, 60)
   async compareQuotes(@Body() getQuoteDto: GetQuoteDto) {
     const intent = getQuoteDto.intent;
     return this.transactionService.compareQuotes(intent);

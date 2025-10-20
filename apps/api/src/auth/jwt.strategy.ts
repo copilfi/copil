@@ -145,6 +145,10 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     if (!privyDid) {
       throw new Error('Invalid token payload: missing subject.');
     }
+    const nowSec = Math.floor(Date.now() / 1000);
+    if (typeof (payload as any)?.nbf === 'number' && nowSec < (payload as any).nbf) {
+      throw new Error('Token not yet valid.');
+    }
     const email: string = typeof payload?.email === 'string' ? payload.email : 'user@privy.local';
     const user = await this.authService.findOrCreateUser(privyDid, email);
     return { id: user.id, privyDid: user.privyDid, email: user.email };

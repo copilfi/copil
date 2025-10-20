@@ -1,5 +1,7 @@
 import { BullModule } from '@nestjs/bull';
 import { Module } from '@nestjs/common';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { AppController } from './app.controller';
@@ -24,6 +26,13 @@ import { OnboardingService } from './onboarding/onboarding.service';
   imports: [
     ConfigModule.forRoot({
       isGlobal: true, // Make ConfigService available throughout the app
+    }),
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      inject: [ConfigService],
+      useFactory: (config: ConfigService) => ({
+        throttlers: [{ ttl: parseInt(config.get<string>('RATE_LIMIT_TTL') || '60', 10), limit: parseInt(config.get<string>('RATE_LIMIT_LIMIT') || '60', 10) }],
+      }),
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
@@ -62,6 +71,12 @@ import { OnboardingService } from './onboarding/onboarding.service';
     }),
   ],
   controllers: [AppController, HealthController, PolicyController, SmartAccountController, OnboardingController],
-  providers: [AppService, PolicyService, SmartAccountOrchestratorService, OnboardingService],
+  providers: [
+    AppService,
+    PolicyService,
+    SmartAccountOrchestratorService,
+    OnboardingService,
+    { provide: APP_GUARD, useClass: ThrottlerGuard },
+  ],
 })
 export class AppModule {}

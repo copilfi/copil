@@ -7,9 +7,14 @@ async function bootstrap() {
   app.useGlobalPipes(new ValidationPipe());
 
   // Enable CORS for local web app and configurable origin
-  const origin = process.env.WEB_ORIGIN || 'http://localhost:3000';
+  const originsRaw = process.env.WEB_ORIGIN || 'http://localhost:3000';
+  const allowedOrigins = originsRaw.split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
-    origin,
+    origin: (reqOrigin, callback) => {
+      if (!reqOrigin) return callback(null, true); // non-browser
+      if (allowedOrigins.includes(reqOrigin)) return callback(null, true);
+      return callback(new Error('CORS origin not allowed'), false);
+    },
     credentials: true,
   });
 

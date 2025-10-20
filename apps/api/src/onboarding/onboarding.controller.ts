@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, Query, Request, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Body, Query, Request, UseGuards, BadRequestException } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { OnboardingService } from './onboarding.service';
@@ -7,6 +7,8 @@ import { encodeFunctionData } from 'viem';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { Wallet } from '@copil/database';
+import { FundPlanDto, FundQuoteDto, PrepareNativeDto, PrepareErc20Dto } from './dto/onboarding.dto';
+import { Throttle } from '@nestjs/throttler';
 
 const ERC20_ABI = [
   { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'value', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
@@ -39,24 +41,26 @@ export class OnboardingController {
   }
 
   @Post('prepare/native-transfer')
-  prepareNativeTransfer(@Body() body: { chain: string; to: `0x${string}`; valueWei: string }) {
-    if (!body?.to || !body?.valueWei) throw new Error('to and valueWei are required');
+  @Throttle(20, 60)
+  prepareNativeTransfer(@Body() body: PrepareNativeDto) {
     return { transactionRequest: { to: body.to, value: body.valueWei, data: '0x' }, chain: body.chain };
   }
 
   @Post('prepare/erc20-transfer')
-  prepareErc20Transfer(@Body() body: { chain: string; token: `0x${string}`; to: `0x${string}`; amount: string }) {
-    if (!body?.token || !body?.to || !body?.amount) throw new Error('token, to and amount are required');
+  @Throttle(20, 60)
+  prepareErc20Transfer(@Body() body: PrepareErc20Dto) {
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ body.to, BigInt(body.amount) ] });
     return { transactionRequest: { to: body.token, data, value: '0' }, chain: body.chain };
   }
 
   @Post('fund-plan')
-  async fundPlan(@Request() req: AuthRequest, @Body() body: { targetChain: string; safeAddress: `0x${string}`; fromChain: string; fromToken: `0x${string}`; fromAmount: string; toToken?: string }) {
-    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body || {} as any;
-    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new Error('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
+  @Post('fund-plan')
+  @Throttle(20, 60)
+  async fundPlan(@Request() req: AuthRequest, @Body() body: FundPlanDto) {
+    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body;
+    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new BadRequestException('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
     const srcWallet = await this.walletRepo.findOne({ where: { userId: req.user.id, chain: fromChain.toLowerCase() } });
-    if (!srcWallet) throw new Error(`No EOA wallet found for chain ${fromChain}. Add a wallet first.`);
+    if (!srcWallet) throw new BadRequestException(`No EOA wallet found for chain ${fromChain}. Add a wallet first.`);
     if (fromChain.toLowerCase() === targetChain.toLowerCase()) {
       // Same-chain transfer plan (EOA-signed)
       const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ safeAddress, BigInt(fromAmount) ] });
@@ -87,11 +91,13 @@ export class OnboardingController {
   }
 
   @Post('fund-quote')
-  async fundQuote(@Request() req: AuthRequest, @Body() body: { targetChain: string; safeAddress: `0x${string}`; fromChain: string; fromToken: `0x${string}`; fromAmount: string; toToken?: string }) {
-    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body || ({} as any);
-    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new Error('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
+  @Post('fund-quote')
+  @Throttle(20, 60)
+  async fundQuote(@Request() req: AuthRequest, @Body() body: FundQuoteDto) {
+    const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body;
+    if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new BadRequestException('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
     const srcWallet = await this.walletRepo.findOne({ where: { userId: req.user.id, chain: fromChain.toLowerCase() } });
-    if (!srcWallet) throw new Error(`No EOA wallet found for chain ${fromChain}. Add a wallet first.`);
+    if (!srcWallet) throw new BadRequestException(`No EOA wallet found for chain ${fromChain}. Add a wallet first.`);
     if (fromChain.toLowerCase() === targetChain.toLowerCase()) {
       // same-chain transfer quote is trivial (prepare/erc20-transfer already covers it)
       const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ safeAddress, BigInt(fromAmount) ] });
