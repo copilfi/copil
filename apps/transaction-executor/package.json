@@ -21,6 +21,7 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@copil/chain-abstraction-client": "0.1.0",
     "@copil/database": "1.0.0",
     "@nestjs/bull": "^11.0.4",
     "@nestjs/common": "^11.0.1",
@@ -35,7 +36,8 @@
     "typeorm": "^0.3.27",
     "viem": "^2.38.2",
     "permissionless": "^0.2.57",
-    "@alchemy/aa-core": "^3.19.0"
+    "@alchemy/aa-core": "^3.19.0",
+    "@solana/web3.js": "^1.92.3"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3.2.0",

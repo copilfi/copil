@@ -8,6 +8,8 @@ import { SmartAccountService as AddressService } from '../auth/smart-account.ser
 import { ConfigService } from '@nestjs/config';
 import { createPublicClient, http } from 'viem';
 
+const EOA_ONLY_CHAINS = ['hyperliquid', 'solana'];
+
 @Injectable()
 export class SmartAccountOrchestratorService {
   constructor(
@@ -24,17 +26,28 @@ export class SmartAccountOrchestratorService {
   async ensureWallet(userId: number, chain: string): Promise<Wallet> {
     const existing = await this.walletRepository.findOne({ where: { userId, chain } });
     if (existing) return existing;
-    // Try to derive EOA from any wallet of the user
+
     const anyWallet = await this.walletRepository.findOne({ where: { userId } });
     if (!anyWallet || !anyWallet.address) {
-      throw new NotFoundException('No EOA wallet found for user; cannot derive Smart Account address.');
+      throw new NotFoundException('No EOA wallet found for user; cannot derive addresses.');
     }
+
+    if (EOA_ONLY_CHAINS.includes(chain.toLowerCase())) {
+      const created = this.walletRepository.create({ userId, chain, address: anyWallet.address, type: 'eoa' });
+      return this.walletRepository.save(created);
+    }
+
+    // Default to smart account for other chains
     const smart = await this.addressService.getSmartAccountAddress(anyWallet.address as `0x${string}`, chain);
-    const created = this.walletRepository.create({ userId, chain, address: anyWallet.address, smartAccountAddress: smart });
+    const created = this.walletRepository.create({ userId, chain, address: anyWallet.address, smartAccountAddress: smart, type: 'smart-account' });
     return this.walletRepository.save(created);
   }
 
   async deploy(userId: number, sessionKeyId: number, chain: string) {
+    if (EOA_ONLY_CHAINS.includes(chain.toLowerCase())) {
+      throw new BadRequestException(`Cannot deploy a smart account on an EOA-only chain: ${chain}`);
+    }
+
     const wallet = await this.ensureWallet(userId, chain);
     if (!wallet.smartAccountAddress) {
       throw new BadRequestException('Smart Account address not available.');

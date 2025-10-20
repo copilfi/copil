@@ -16,9 +16,22 @@ export class Wallet {
   @Column({ type: 'text', nullable: true })
   smartAccountAddress?: string; // This will be the ERC-4337 address
 
-  @Column({ type: 'text' })
-  chain!: string; // e.g., 'ethereum', 'base', 'sei'
+    @Column({ type: 'text' })
 
-  @ManyToOne(() => User, (user) => user.wallets)
-  user!: User;
-}
+    chain!: string; // e.g., 'ethereum', 'base', 'sei'
+
+  
+
+    @Column({ type: 'varchar', default: 'smart-account' })
+
+    type!: 'smart-account' | 'eoa';
+
+  
+
+    @ManyToOne(() => User, (user) => user.wallets)
+
+    user!: User;
+
+  }
+
+  

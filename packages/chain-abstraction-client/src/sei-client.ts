@@ -1,38 +1,13 @@
-import { createPublicClient, http, defineChain, PublicClient, encodeFunctionData } from 'viem';
+import { createPublicClient, http, PublicClient, encodeFunctionData } from 'viem';
 import { GetQuoteResponse, TransactionIntent, Quote, AssetBalance } from './types';
 import { dragonswapRouterAbi } from './abis/dragonswap-router.abi';
+import { seiChain } from './chains';
 
 // A simple logger, in a real app this would be a proper NestJS logger injected.
 const logger = {
     log: (...args: any[]) => console.log('[SeiClient]', ...args),
     error: (...args: any[]) => console.error('[SeiClient]', ...args),
 };
-
-// As per the research, define the Sei network for viem
-export const seiChain = defineChain({
-  id: 1329,
-  name: 'Sei Network',
-  network: 'sei',
-  nativeCurrency: {
-    decimals: 18,
-    name: 'Sei',
-    symbol: 'SEI',
-  },
-  rpcUrls: {
-    default: {
-      http: ['https://evm-rpc.sei-apis.com'],
-    },
-    public: {
-      http: ['https://evm-rpc.sei-apis.com'],
-    },
-  },
-  blockExplorers: {
-    default: {
-      name: 'SeiTrace',
-      url: 'https://seitrace.com',
-    },
-  },
-});
 
 const DRAGONSWAP_ROUTER_ADDRESS = '0x11da6463d6cb5a03411dbf5ab6f6bc3997ac7428';
 

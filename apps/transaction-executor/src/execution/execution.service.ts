@@ -1,6 +1,6 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions } from '@copil/database';
+import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions, Wallet } from '@copil/database';
 import { Repository, MoreThan } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ExecutionResult, TransactionJobData } from './types';
@@ -26,6 +26,8 @@ export class ExecutionService {
     private readonly transactionLogRepository: Repository<TransactionLog>,
     @InjectRepository(SessionKey)
     private readonly sessionKeyRepository: Repository<SessionKey>,
+    @InjectRepository(Wallet)
+    private readonly walletRepository: Repository<Wallet>,
     private readonly signerService: SignerService,
     private readonly chainAbstractionClient: ChainAbstractionClient, // Injected the new client
   ) {}
@@ -110,6 +112,12 @@ export class ExecutionService {
       return { status: 'failed', description: 'No transactionRequest found in the job payload from the quote.' };
     }
 
+    const chainName = (job.intent as any)?.fromChain ?? (job.metadata as any)?.chain;
+    const wallet = await this.walletRepository.findOne({ where: { userId: job.userId, chain: chainName } });
+    if (!wallet) {
+      throw new NotFoundException(`Wallet for user ${job.userId} on chain ${chainName} not found.`);
+    }
+
     // Enforce session key on-chain-like policy at app layer (defense-in-depth)
     const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: job.sessionKeyId! } });
     const perms = sessionKey?.permissions as SessionKeyPermissions | undefined;
@@ -150,13 +158,14 @@ export class ExecutionService {
       }
     }
 
-    const chainName = (job.intent as any)?.fromChain ?? (job.metadata as any)?.chain;
     // Optional approval step first
     if (quote.approvalTransactionRequest) {
+      // EOA wallets may also need approvals for token spending
       const approveRes = await this.signerService.signAndSend({
         userId: job.userId,
         sessionKeyId: job.sessionKeyId!,
         transaction: quote.approvalTransactionRequest,
+        wallet: wallet, // Pass wallet context
         metadata: { intent: job.intent, quoteId: quote.id, purpose: 'approval', chain: chainName },
       });
       if (approveRes.status !== 'success') {
@@ -172,6 +181,7 @@ export class ExecutionService {
       userId: job.userId,
       sessionKeyId: job.sessionKeyId!,
       transaction: quote.transactionRequest,
+      wallet: wallet, // Pass wallet context
       metadata: { intent: job.intent, quoteId: quote.id, chain: chainName },
     });
 
