@@ -1,0 +1,68 @@
+# Environment Configuration (Backend)
+
+This document lists required and optional env vars per service. Services fail fast when critical variables are missing.
+
+## Common (API, Evaluator, Executor, Data Ingestor)
+- `DB_HOST`, `DB_PORT`, `DB_USERNAME`, `DB_PASSWORD`, `DB_DATABASE` (required)
+- `REDIS_HOST`, `REDIS_PORT` (required for API/Evaluator/Executor)
+
+## API (apps/api)
+- `JWT_SECRET` (required unless Privy is configured)
+- `PRIVY_APP_ID` and either `PRIVY_PUBLIC_KEY_PEM` or `PRIVY_JWKS_ENDPOINT` (required if `JWT_SECRET` is not provided)
+- `ONEBALANCE_API_KEY` (required)
+- `WEB_ORIGIN` (comma-separated CORS allowlist; default: `http://localhost:3000`)
+- `RATE_LIMIT_TTL`, `RATE_LIMIT_LIMIT` (optional; Throttler)
+- `QUOTE_CACHE_TTL_MS` (optional; default: `15000`)
+- `ONEBALANCE_TIMEOUT_MS` (optional; default: `10000`)
+- `LIFI_TIMEOUT_MS` (optional; default: `8000`)
+- `TX_MAX_ACTIVE_JOBS_PER_USER` (optional; default: `3`)
+- `PORTFOLIO_CACHE_TTL_MS` (optional; default: `15000`)
+- `INTERNAL_API_TOKEN` (optional; used by Strategy Evaluator for `/transaction/execute/internal`)
+- `CHAT_ENABLED` (optional; default: `false`). When `true`, one of `OPENAI_API_KEY` or `GROQ_API_KEY` must be set.
+- `OPENAI_API_KEY` or `GROQ_API_KEY` (required only when `CHAT_ENABLED=true`).
+- `RPC_URL_<CHAIN>` (recommended; used by smart-account utilities and readiness reporting)
+
+### Sei Bridge (Axelar)
+- `SEI_BRIDGE_ENABLED=true` (enable bridge path)
+- `AXELAR_GATEWAY_ADDRESS_<CHAIN>` (e.g., ETHEREUM, BASE, ARBITRUM, LINEA; at least one required)
+- `AXELAR_SEI_CHAIN_NAME` (default: `sei`)
+- `AXELAR_TOKEN_SYMBOL_USDC` (default: `aUSDC`)
+
+## Transaction Executor (apps/transaction-executor)
+- `ONEBALANCE_API_KEY` (required)
+- `PIMLICO_API_KEY` (required for 4337 bundling)
+- `PAYMASTER_ENABLED` (optional; default: `false`)
+- `PIMLICO_PAYMASTER_API_KEY` (optional; falls back to `PIMLICO_API_KEY`)
+- `SESSION_KEY_<ID>_PRIVATE_KEY` or `SESSION_KEY_PRIVATE_KEY` (required for signing)
+- `RPC_URL_<CHAIN>` (required per executing chain)
+
+## Strategy Evaluator (apps/strategy-evaluator)
+- `API_SERVICE_URL` (default: `http://localhost:4311`)
+- `INTERNAL_API_TOKEN` (required; must match API for `/transaction/execute/internal`)
+- `EVALUATOR_EXECUTE_MAX_RETRIES` (default: `3`)
+- `EVALUATOR_EXECUTE_BACKOFF_MS` (default: `500`)
+- `HTTP_MAX_SOCKETS`, `HTTPS_MAX_SOCKETS`, `API_HTTP_TIMEOUT_MS` (optional)
+
+## Data Ingestor (apps/data-ingestor)
+- `DEX_SCREENER_API_URL` (optional; default: `https://api.dexscreener.com/latest/dex`)
+- `DEX_SCREENER_TIMEOUT_MS` (optional; default: `8000`)
+- `INGEST_CHAINS` (optional; default: `ethereum,base,arbitrum`)
+
+## HTTP Client (shared)
+- `HTTP_MAX_SOCKETS`, `HTTPS_MAX_SOCKETS` (optional; default: `50`)
+- `HTTP_CLIENT_TIMEOUT_MS` (optional; default: `12000`)
+
+## RPC URL Suggestions
+Set per-chain RPC URLs via `RPC_URL_<CHAIN>` for backend and `NEXT_PUBLIC_RPC_URL_<CHAIN>` for frontend.
+
+- Ethereum: `RPC_URL_ETHEREUM=https://eth-mainnet.g.alchemy.com/v2/<key>` or `https://mainnet.infura.io/v3/<key>`
+- Base: `RPC_URL_BASE=https://base-mainnet.g.alchemy.com/v2/<key>` or `https://mainnet.base.org`
+- Arbitrum: `RPC_URL_ARBITRUM=https://arb-mainnet.g.alchemy.com/v2/<key>` or `https://arb1.arbitrum.io/rpc`
+- Linea: `RPC_URL_LINEA=https://linea-mainnet.infura.io/v3/<key>` or provider equivalent
+- Optimism: `RPC_URL_OPTIMISM=https://optimism-mainnet.infura.io/v3/<key>` or Alchemy
+- Polygon: `RPC_URL_POLYGON=https://polygon-mainnet.g.alchemy.com/v2/<key>` or `https://polygon-rpc.com`
+- BSC: `RPC_URL_BSC=https://bsc-dataseed.binance.org`
+- Avalanche: `RPC_URL_AVALANCHE=https://api.avax.network/ext/bc/C/rpc`
+- Sei (EVM): `RPC_URL_SEI=https://evm-rpc.sei-apis.com`
+
+Note: Hyperevm is currently not supported for execution (4337/Safe deployments and bundler availability uncertain). Treat as unsupported until official infra (Safe deployments, bundler, stable RPC) is confirmed.

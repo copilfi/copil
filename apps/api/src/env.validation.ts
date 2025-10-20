@@ -20,10 +20,15 @@ export function validateRequiredEnv() {
   if (!process.env.ONEBALANCE_API_KEY) {
     missing.push('ONEBALANCE_API_KEY');
   }
+  // Chat (optional; only required when CHAT_ENABLED=true)
+  if (process.env.CHAT_ENABLED === 'true') {
+    if (!process.env.OPENAI_API_KEY && !process.env.GROQ_API_KEY) {
+      missing.push('OPENAI_API_KEY or GROQ_API_KEY (when CHAT_ENABLED=true)');
+    }
+  }
 
   if (missing.length > 0) {
     const list = missing.join(', ');
     throw new Error(`Missing required environment variables: ${list}`);
   }
 }
-

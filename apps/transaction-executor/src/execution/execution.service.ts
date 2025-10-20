@@ -198,6 +198,9 @@ export class ExecutionService {
     newLog.description = description;
     newLog.status = status;
     newLog.chain = chain; // Can be undefined for custom intents
+    try {
+      (newLog as any).details = { intent: job.intent, ...(job as any).metadata };
+    } catch {}
 
     if (job.strategyId) {
       newLog.strategyId = job.strategyId;

@@ -2,11 +2,13 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { validateRequiredEnv } from './env.validation';
+import { HttpErrorFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
   // Fail-fast env validation for critical configuration
   validateRequiredEnv();
   const app = await NestFactory.create(AppModule);
+  app.enableShutdownHooks();
   // Stricter DTO validation across the app
   app.useGlobalPipes(
     new ValidationPipe({
@@ -15,6 +17,7 @@ async function bootstrap() {
       forbidNonWhitelisted: true,
     }),
   );
+  app.useGlobalFilters(new HttpErrorFilter());
 
   // Enable CORS for local web app and configurable origin
   const originsRaw = process.env.WEB_ORIGIN || 'http://localhost:3000';
@@ -33,4 +36,14 @@ async function bootstrap() {
   // eslint-disable-next-line no-console
   console.log(`API listening on http://localhost:${port}`);
 }
+// Basic process-level guards
+process.on('uncaughtException', (err) => {
+  // eslint-disable-next-line no-console
+  console.error('Uncaught exception:', err);
+});
+process.on('unhandledRejection', (reason) => {
+  // eslint-disable-next-line no-console
+  console.error('Unhandled rejection:', reason);
+});
+
 bootstrap();

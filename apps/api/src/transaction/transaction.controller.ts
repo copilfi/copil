@@ -1,7 +1,6 @@
 import { Controller, Post, Body, UseGuards, Get, Query, Request, Headers } from '@nestjs/common';
 import { TransactionService } from './transaction.service';
 import { JwtAuthGuard } from '../auth/jwt-auth.guard';
-import { ServiceTokenGuard } from '../auth/service-token.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
@@ -65,7 +64,6 @@ export class TransactionController {
       { name: 'polygon', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('polygon') },
       { name: 'bsc', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('bsc') },
       { name: 'avalanche', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('avalanche') },
-      { name: 'hyperevm', capabilities: ['swap', 'bridge'], provider: 'OneBalance', ready: bundlerOk && rpc('hyperevm') },
       { name: 'sei', capabilities: ['swap', 'bridge'], provider: 'Sei (swap), Axelar (bridge)', ready: rpc('sei') },
     ];
 
@@ -93,19 +91,6 @@ export class TransactionController {
     );
   }
 
-  // Internal execution endpoint for Strategy Evaluator (service-to-service)
-  @UseGuards(ServiceTokenGuard)
-  @Post('execute/internal')
-  async executeInternal(
-    @Body() body: { userId: number; sessionKeyId: number; intent: GetQuoteDto['intent']; idempotencyKey?: string },
-  ) {
-    return this.transactionService.createAdHocTransactionJob(
-      body.userId,
-      body.sessionKeyId,
-      body.intent,
-      body.idempotencyKey,
-    );
-  }
 
   @Get('logs')
   getLogs(@Request() req: AuthRequest, @Query('limit') limit?: string) {

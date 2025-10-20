@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { http, createPublicClient, Chain, concat, encodeFunctionData, defineChain } from 'viem';
+import { http, createPublicClient, Chain, concat, encodeFunctionData } from 'viem';
 import { mainnet, base, arbitrum, linea, optimism, polygon, bsc, avalanche } from 'viem/chains';
 import { getSenderAddress } from 'permissionless/actions';
 import { entryPoint06Address } from 'viem/account-abstraction';
@@ -8,14 +8,6 @@ import {
   getSafeSingletonDeployment,
   getProxyFactoryDeployment,
 } from '@safe-global/safe-deployments';
-
-const hyperEvm: Chain = defineChain({
-  id: 999,
-  name: 'HyperEVM',
-  network: 'hyperevm',
-  nativeCurrency: { name: 'ETH', symbol: 'ETH', decimals: 18 },
-  rpcUrls: { default: { http: ['https://rpc.hyper.invalid'] } },
-});
 
 const chainMap: Record<string, Chain> = {
   ethereum: mainnet,
@@ -26,7 +18,6 @@ const chainMap: Record<string, Chain> = {
   polygon,
   bsc,
   avalanche,
-  hyperevm: hyperEvm,
 };
 
 @Injectable()

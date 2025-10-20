@@ -2,6 +2,7 @@ import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
+import { TransactionInternalController } from './transaction.internal.controller';
 import { TransactionLog, TRANSACTION_QUEUE, TokenMetadata } from '@copil/database';
 import { BullModule } from '@nestjs/bull';
 import { PortfolioModule } from '../portfolio/portfolio.module';
@@ -16,7 +17,7 @@ import { ConfigService } from '@nestjs/config';
     }),
     PortfolioModule, // Import PortfolioModule to use ChainAbstractionClient
   ],
-  controllers: [TransactionController],
+  controllers: [TransactionController, TransactionInternalController],
   providers: [
     TransactionService,
     {

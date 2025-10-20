@@ -58,11 +58,11 @@ export class SeiClient {
         symbol: 'SEI',
         name: 'Sei',
         amount: nativeBalance.toString(),
-        amountUsd: '0', // TODO: Implement price fetching
+        amountUsd: '0',
       };
 
-      // TODO: Implement fetching of fungible token (CW20/ERC20) balances
-      // This would involve using this.client.readContract for each token.
+      // Note: Fungible token (CW20/ERC20) bakiye okuması gerektiğinde
+      // bu.client.readContract ile uygun ERC-20 `balanceOf` çağrıları eklenebilir.
 
       return [nativeAsset];
     } catch (error) {
@@ -126,11 +126,7 @@ export class SeiClient {
     }
   }
 
-  async getBridgeQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
-    logger.log('Getting Sei bridge quote for intent:', intent);
-    // Placeholder implementation to preserve non-custodial guarantees and clear UX.
-    // Bridging to/from Sei will be implemented via Axelar gateway contracts as per ADR-003.
-    // Until then, we fail fast with a clear message so upstream API can respond appropriately.
-    throw new Error('Sei bridge quote not implemented yet. See ADR-003 for rollout plan.');
+  async getBridgeQuote(_intent: TransactionIntent): Promise<GetQuoteResponse> {
+    throw new Error('Use AxelarBridgeClient for Sei bridge quotes.');
   }
 }

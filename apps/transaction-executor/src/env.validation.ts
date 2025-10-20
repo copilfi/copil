@@ -7,8 +7,8 @@ export function validateRequiredEnv() {
     if (!process.env[k]) missing.push(k);
   }
   if (!process.env.ONEBALANCE_API_KEY) missing.push('ONEBALANCE_API_KEY');
+  if (!process.env.PIMLICO_API_KEY) missing.push('PIMLICO_API_KEY');
   if (missing.length > 0) {
     throw new Error(`Missing required environment variables: ${missing.join(', ')}`);
   }
 }
-

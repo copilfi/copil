@@ -55,7 +55,8 @@ import { ObservabilityInterceptor } from './common/observability.interceptor';
       url: `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`,
     }),
     AuthModule,
-    ChatModule,
+    // Chat module is optional; enable with CHAT_ENABLED=true
+    ...(process.env.CHAT_ENABLED === 'true' ? [ChatModule] : []),
     PortfolioModule,
     TransactionModule,
     AutomationsModule,
