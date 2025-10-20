@@ -1,9 +1,9 @@
 import { ConflictException, NotFoundException } from '@nestjs/common';
 import { SessionKeysService } from './session-keys.service';
 import { SessionKey } from '@copil/database';
-import { Repository } from 'typeorm';
+import { Repository, ObjectLiteral } from 'typeorm';
 
-type RepositoryMock<T> = {
+type RepositoryMock<T extends ObjectLiteral> = {
   [K in keyof Repository<T>]?: jest.Mock;
 } & {
   findOne: jest.Mock;
@@ -12,7 +12,7 @@ type RepositoryMock<T> = {
   save: jest.Mock;
 };
 
-function createRepositoryMock<T>(): RepositoryMock<T> {
+function createRepositoryMock<T extends ObjectLiteral>(): RepositoryMock<T> {
   return {
     findOne: jest.fn(),
     find: jest.fn(),
@@ -24,12 +24,22 @@ function createRepositoryMock<T>(): RepositoryMock<T> {
 describe('SessionKeysService', () => {
   let repo: RepositoryMock<SessionKey>;
   let service: SessionKeysService;
+  let mockOrchestrator: any;
+  let mockConfigService: any;
 
   beforeEach(() => {
     repo = createRepositoryMock<SessionKey>();
     repo.create.mockImplementation((entity) => entity as SessionKey);
     repo.save.mockImplementation(async (entity) => entity as SessionKey);
-    service = new SessionKeysService(repo as unknown as Repository<SessionKey>);
+    
+    mockOrchestrator = {} as any;
+    mockConfigService = { get: jest.fn() } as any;
+    
+    service = new SessionKeysService(
+      repo as unknown as Repository<SessionKey>,
+      mockOrchestrator,
+      mockConfigService
+    );
   });
 
   it('throws when creating a duplicate session key', async () => {
