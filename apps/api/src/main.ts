@@ -10,7 +10,7 @@ async function bootstrap() {
   const originsRaw = process.env.WEB_ORIGIN || 'http://localhost:3000';
   const allowedOrigins = originsRaw.split(',').map((o) => o.trim()).filter(Boolean);
   app.enableCors({
-    origin: (reqOrigin, callback) => {
+    origin: (reqOrigin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
       if (!reqOrigin) return callback(null, true); // non-browser
       if (allowedOrigins.includes(reqOrigin)) return callback(null, true);
       return callback(new Error('CORS origin not allowed'), false);

@@ -41,21 +41,20 @@ export class OnboardingController {
   }
 
   @Post('prepare/native-transfer')
-  @Throttle(20, 60)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   prepareNativeTransfer(@Body() body: PrepareNativeDto) {
     return { transactionRequest: { to: body.to, value: body.valueWei, data: '0x' }, chain: body.chain };
   }
 
   @Post('prepare/erc20-transfer')
-  @Throttle(20, 60)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   prepareErc20Transfer(@Body() body: PrepareErc20Dto) {
     const data = encodeFunctionData({ abi: ERC20_ABI, functionName: 'transfer', args: [ body.to, BigInt(body.amount) ] });
     return { transactionRequest: { to: body.token, data, value: '0' }, chain: body.chain };
   }
 
   @Post('fund-plan')
-  @Post('fund-plan')
-  @Throttle(20, 60)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   async fundPlan(@Request() req: AuthRequest, @Body() body: FundPlanDto) {
     const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body;
     if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new BadRequestException('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');
@@ -91,8 +90,7 @@ export class OnboardingController {
   }
 
   @Post('fund-quote')
-  @Post('fund-quote')
-  @Throttle(20, 60)
+  @Throttle({ default: { limit: 20, ttl: 60000 } })
   async fundQuote(@Request() req: AuthRequest, @Body() body: FundQuoteDto) {
     const { targetChain, safeAddress, fromChain, fromToken, fromAmount, toToken } = body;
     if (!targetChain || !safeAddress || !fromChain || !fromToken || !fromAmount) throw new BadRequestException('targetChain, safeAddress, fromChain, fromToken, fromAmount are required');

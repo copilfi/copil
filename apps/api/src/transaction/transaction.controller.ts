@@ -21,7 +21,7 @@ export class TransactionController {
   }
 
   @Post('quote/providers')
-  @Throttle(30, 60)
+  @Throttle({ default: { limit: 30, ttl: 60000 } })
   async compareQuotes(@Body() getQuoteDto: GetQuoteDto) {
     const intent = getQuoteDto.intent;
     return this.transactionService.compareQuotes(intent);

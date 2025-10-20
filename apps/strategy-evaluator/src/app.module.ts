@@ -3,7 +3,7 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Strategy, TokenPrice, Wallet, STRATEGY_QUEUE } from '@copil/database';
+import { Strategy, TokenPrice, Wallet, User, TransactionLog, SessionKey, TokenMetadata, STRATEGY_QUEUE } from '@copil/database';
 import { StrategyProcessor } from './strategy.processor';
 import { HealthService } from './health.service';
 
@@ -20,21 +20,14 @@ import { HealthService } from './health.service';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [Strategy, TokenPrice, Wallet],
+        entities: [User, Strategy, TokenPrice, Wallet, TransactionLog, SessionKey, TokenMetadata],
         synchronize: false,
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Strategy, TokenPrice, Wallet]),
-    BullModule.forRootAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        redis: {
-          host: configService.get<string>('REDIS_HOST'),
-          port: configService.get<number>('REDIS_PORT'),
-        },
-      }),
-      inject: [ConfigService],
+    TypeOrmModule.forFeature([User, Strategy, TokenPrice, Wallet]),
+    BullModule.forRoot({
+      url: `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`,
     }),
     BullModule.registerQueue({ name: STRATEGY_QUEUE }),
   ],
