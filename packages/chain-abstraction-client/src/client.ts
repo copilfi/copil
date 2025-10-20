@@ -54,7 +54,7 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
         `${this.onebalanceApiBaseUrl}/v3/balances/aggregated-balance`,
         {
           headers: { 'x-api-key': this.onebalanceApiKey },
-          params: { accounts: userAddresses.join(',') },
+          params: { account: userAddresses.join(',') },
         },
       );
 

@@ -33,11 +33,9 @@ export class PortfolioService {
         `Failed to fetch aggregated balance for user ${userId}`,
         error,
       );
-      // In case of an error from the abstraction layer, return a structured error.
-      return {
-        error:
-          error instanceof Error ? error.message : 'Failed to fetch portfolio from provider.',
-      };
+      // In case of an error from the abstraction layer, return empty array
+      // Frontend expects an array
+      return [];
     }
   }
 }
