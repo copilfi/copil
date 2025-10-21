@@ -1,4 +1,4 @@
-export type SessionActionType = 'swap' | 'bridge' | 'custom';
+export type SessionActionType = 'swap' | 'bridge' | 'custom' | 'transfer';
 
 export interface SessionSpendLimit {
   token: string; // ERC-20 address or special 'native'

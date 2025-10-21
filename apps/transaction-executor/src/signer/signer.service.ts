@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, NotImplementedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { http, createPublicClient, parseEther, Chain, createWalletClient, Hex } from 'viem';
 import { privateKeyToAccount } from 'viem/accounts';
@@ -7,6 +7,7 @@ import { entryPoint06Address } from 'viem/account-abstraction';
 import { createSmartAccountClient } from 'permissionless/clients';
 import { toSafeSmartAccount } from 'permissionless/accounts';
 import * as solana from '@solana/web3.js';
+import bs58 from 'bs58';
 import { BundlerClient } from '../clients/bundler.client';
 import { PaymasterClient } from '../clients/paymaster.client';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -121,40 +122,41 @@ export class SignerService {
 
   private async signAndSendSolana(request: SignAndSendRequest): Promise<SignAndSendResult> {
     this.logger.log('Executing an EOA transaction on Solana');
-    const { sessionKeyId, transaction } = request;
+    const { sessionKeyId } = request;
     const chainName = SOLANA_CHAIN_NAME;
+    const quote = (request.metadata as any)?.quote;
 
-    const sessionKey = this.getSessionKeyBytes(sessionKeyId); // Expecting byte array for Solana
+    const sessionKey = this.getSessionKeyBytes(sessionKeyId);
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found or invalid.` };
     }
 
-    try {
-      const connection = new solana.Connection(this.getRpcUrl(chainName), 'confirmed');
-      const signer = solana.Keypair.fromSecretKey(sessionKey);
+    if (quote?.serializedTx) {
+      // Handle Jupiter swap transaction
+      try {
+        const connection = new solana.Connection(this.getRpcUrl(chainName), 'confirmed');
+        const signer = solana.Keypair.fromSecretKey(sessionKey);
 
-      const tx = new solana.Transaction();
-      
-      // This is a simplified example for a native SOL transfer.
-      // For SPL tokens or swaps, this logic would need to be much more complex,
-      // decoding the intent from the `chain-abstraction-client` quote.
-      tx.add(
-        solana.SystemProgram.transfer({
-          fromPubkey: signer.publicKey,
-          toPubkey: new solana.PublicKey(transaction.to),
-          lamports: solana.LAMPORTS_PER_SOL * parseFloat(transaction.value || '0'),
-        }),
-      );
-      
-      const txHash = await solana.sendAndConfirmTransaction(connection, tx, [signer]);
-      
-      this.logger.log(`Solana EOA transaction successful with hash: ${txHash}`);
-      return { status: 'success', txHash, description: `Solana EOA transaction successfully sent.` };
+        const transaction = solana.Transaction.from(Buffer.from(quote.serializedTx, 'base64'));
+        
+        // The transaction from Jupiter is already mostly constructed.
+        // We just need to sign it.
+        transaction.sign(signer);
 
-    } catch (error) {
-      const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Solana EOA transaction failed: ${message}`, error);
-      return { status: 'failed', description: `Solana EOA transaction failed: ${message}` };
+        const txHash = await connection.sendRawTransaction(transaction.serialize());
+        await connection.confirmTransaction(txHash);
+
+        this.logger.log(`Solana swap transaction successful with hash: ${txHash}`);
+        return { status: 'success', txHash, description: `Solana swap transaction successfully sent.` };
+
+      } catch (error) {
+        const message = error instanceof Error ? error.message : 'Unknown error';
+        this.logger.error(`Solana swap transaction failed: ${message}`, error);
+        return { status: 'failed', description: `Solana swap transaction failed: ${message}` };
+      }
+    } else {
+        // Fallback or error for non-swap intents if needed, for now we only support swaps via Jupiter
+        return { status: 'failed', description: 'Only Solana swaps via Jupiter are currently supported.' };
     }
   }
 
@@ -240,16 +242,31 @@ export class SignerService {
   } 
   
   private getSessionKeyBytes(sessionKeyId: number): Uint8Array | undefined {
-    const key = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY_BYTES`);
-    if (key) {
+    // 1. Try to get the key as a JSON byte array
+    const keyBytes = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY_BYTES`);
+    if (keyBytes) {
         try {
-            return Uint8Array.from(JSON.parse(key));
+            this.logger.log('Found _BYTES session key for Solana');
+            return Uint8Array.from(JSON.parse(keyBytes));
         } catch (e) {
             this.logger.error('Failed to parse SESSION_KEY_..._PRIVATE_KEY_BYTES');
             return undefined;
         }
     }
-    // Add fallback for base58 string for Solana, etc.
+
+    // 2. Fallback to a Base58 encoded string
+    const keyB58 = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY_B58`);
+    if (keyB58) {
+        try {
+            this.logger.log('Found _B58 session key for Solana');
+            return bs58.decode(keyB58);
+        } catch (e) {
+            this.logger.error('Failed to decode Base58 private key for Solana');
+            return undefined;
+        }
+    }
+
+    this.logger.warn(`No valid _BYTES or _B58 private key found for session key ID ${sessionKeyId}`);
     return undefined;
   }
 

@@ -5,6 +5,7 @@ export * from './entities/transaction-log.entity';
 export * from './entities/token-price.entity';
 export * from './entities/session-key.entity';
 export * from './entities/token-metadata.entity';
+export * from './entities/token-sentiment.entity';
 export * from './types/transaction-job';
 export * from './types/strategy-definition';
 export * from './constants/queues';

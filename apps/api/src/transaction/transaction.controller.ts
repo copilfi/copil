@@ -4,6 +4,7 @@ import { JwtAuthGuard } from '../auth/jwt-auth.guard';
 import { AuthRequest } from '../auth/auth-request.interface';
 import { ExecuteTransactionDto } from './dto/execute-transaction.dto';
 import { GetQuoteDto } from './dto/get-quote.dto';
+import { PrepareTransferDto } from './dto/prepare-transfer.dto';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 import { Throttle } from '@nestjs/throttler';
 
@@ -14,6 +15,20 @@ export class TransactionController {
     private readonly transactionService: TransactionService,
     private readonly chainClient: ChainAbstractionClient,
   ) {}
+
+  @Post('prepare/transfer')
+  @Throttle({ default: { limit: 60, ttl: 60000 } })
+  prepareTransfer(@Body() dto: PrepareTransferDto, @Request() req: AuthRequest) {
+    const intent: any = {
+      type: 'transfer',
+      chain: dto.chain,
+      tokenAddress: dto.tokenAddress,
+      fromAddress: dto.fromAddress,
+      toAddress: dto.toAddress,
+      amount: dto.amount,
+    };
+    return this.chainClient.prepareTransfer(intent);
+  }
 
   @Post('quote')
   @Throttle({ default: { limit: 60, ttl: 60000 } })

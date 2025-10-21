@@ -8,29 +8,31 @@ import {
   GetQuoteRequest,
   GetQuoteResponse,
   TransactionIntent,
+  Quote,
 } from './types';
 import { GetAggregatedBalanceResponseSchema, GetQuoteResponseSchema } from './schemas';
 import { SeiClient } from './sei-client';
 import { AxelarBridgeClient } from './axelar-bridge.client';
+import { JupiterClient } from './jupiter.client';
+import { getAssociatedTokenAddress, createTransferInstruction } from '@solana/spl-token';
+import { Connection, PublicKey, Transaction, SystemProgram } from '@solana/web3.js';
+import { encodeFunctionData } from 'viem';
 import { z } from 'zod';
 
-const SUPPORTED_ONEBALANCE_CHAINS = [
-  'ethereum',
-  'arbitrum',
-  'base',
-  'linea',
-  'avalanche',
-  'hyperevm',
-  'solana',
-];
+
+const ERC20_ABI_SLIM = [
+  { type: 'function', name: 'transfer', stateMutability: 'nonpayable', inputs: [ { name: 'to', type: 'address' }, { name: 'amount', type: 'uint256' } ], outputs: [ { name: '', type: 'bool' } ] },
+] as const;
 
 const SEI_CHAIN = 'sei';
+const SOLANA_CHAIN = 'solana';
 
 export class ChainAbstractionClient implements IChainAbstractionClient {
   private onebalanceApiKey: string;
   private onebalanceApiBaseUrl = 'https://be.onebalance.io/api';
   private seiClient: SeiClient;
   private axelarBridge: AxelarBridgeClient;
+  private jupiterClient: JupiterClient;
   private http: AxiosInstance;
 
   constructor(onebalanceApiKey: string) {
@@ -46,10 +48,24 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       httpsAgent: new https.Agent({ keepAlive: true, maxSockets: keepAlive('HTTPS_MAX_SOCKETS', 50) }),
       timeout: Number(process.env.HTTP_CLIENT_TIMEOUT_MS ?? '12000'),
     });
+    this.jupiterClient = new JupiterClient(this.http);
   }
 
   private isSei(chain: string): boolean {
     return chain.toLowerCase() === SEI_CHAIN;
+  }
+
+  private isSolana(chain: string): boolean {
+    return chain.toLowerCase() === SOLANA_CHAIN;
+  }
+
+  private getRpcUrl(chain: string): string {
+    const key = `RPC_URL_${chain.toUpperCase()}`;
+    const url = process.env[key] ?? process.env.RPC_URL;
+    if (!url) {
+      throw new Error(`RPC URL for chain ${chain} not configured.`);
+    }
+    return url;
   }
 
   async getAggregatedBalance(
@@ -68,7 +84,6 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
         },
       );
 
-      // Validate and parse the response
       const validatedData = GetAggregatedBalanceResponseSchema.parse(response.data);
       return validatedData;
     } catch (error) {
@@ -80,119 +95,193 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
   async getQuote(request: GetQuoteRequest): Promise<GetQuoteResponse> {
     const { intent } = request;
 
-    if (intent.type !== 'swap' && intent.type !== 'bridge') {
-      throw new Error(`Unsupported intent type for getQuote: ${intent.type}`);
-    }
-
-    if (this.isSei(intent.fromChain) || this.isSei(intent.toChain)) {
-      if (intent.type === 'swap') {
+    if (intent.type === 'swap') {
+      if (this.isSolana(intent.fromChain)) {
+        return this.getJupiterSwapQuote(intent);
+      } else if (this.isSei(intent.fromChain)) {
         return this.seiClient.getSwapQuote(intent);
+      } else {
+        return this.getOneBalanceQuote(intent);
       }
-      // Bridge path involving Sei via Axelar gateway
-      return this.axelarBridge.getSeiBridgeQuote(intent);
+    } else if (intent.type === 'bridge') {
+      if (this.isSei(intent.fromChain) || this.isSei(intent.toChain)) {
+        return this.axelarBridge.getSeiBridgeQuote(intent);
+      } else if (!this.isSolana(intent.fromChain) && !this.isSolana(intent.toChain)) {
+        return this.getLiFiBridgeQuote(intent);
+      }
+      return this.getOneBalanceQuote(intent);
+    } else {
+        throw new Error(`Unsupported intent type for getQuote: ${intent.type}`);
     }
-    // Non-Sei paths use OneBalance
-    return this.getOneBalanceQuote(intent);
   }
 
-  // Experimental: Get a Li.Fi quote for comparison (does not affect execution flow)
-  async getLiFiQuoteForIntent(intent: TransactionIntent): Promise<{ supported: boolean; raw?: any; error?: string; transactionRequest?: any }> {
+  async prepareTransfer(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    if (intent.type !== 'transfer') {
+      throw new Error('Invalid intent type for prepareTransfer');
+    }
+    if (this.isSolana(intent.chain)) {
+      return this.prepareSolanaTransfer(intent);
+    } else {
+      return this.prepareEvmTransfer(intent);
+    }
+  }
+
+  private async getJupiterSwapQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    if (intent.type !== 'swap') throw new Error('Invalid intent type');
+    const { serializedTx, error } = await this.jupiterClient.getSwapTransaction(intent, intent.userAddress);
+    if (error || !serializedTx) {
+        throw new Error(`Failed to get Solana swap quote: ${error}`);
+    }
+    const quote: Quote = {
+        id: `jup-${Date.now()}`,
+        fromAmount: intent.fromAmount,
+        toAmount: '0', 
+        serializedTx: serializedTx,
+        transactionRequest: null,
+    };
+    return { quote };
+  }
+
+  private async getLiFiBridgeQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    console.log('Getting LI.FI bridge quote for intent:', intent);
+    if (intent.type !== 'bridge') throw new Error('Invalid intent type for LI.FI bridge');
+
     try {
-      if (intent.type !== 'swap' && intent.type !== 'bridge') {
-        return { supported: false, error: 'LiFi comparator supports only swap/bridge intents' };
-      }
       const url = new URL('https://li.quest/v1/quote');
-      const fromChain = this.mapChainNameToId(intent.fromChain);
-      const toChain = this.mapChainNameToId(intent.toChain);
-      if (!fromChain || !toChain) {
-        return { supported: false, error: 'Unsupported chain mapping for LiFi' };
-      }
-      url.searchParams.set('fromChain', String(fromChain));
-      url.searchParams.set('toChain', String(toChain));
+      url.searchParams.set('fromChain', this.mapChainNameToId(intent.fromChain)?.toString() ?? '');
+      url.searchParams.set('toChain', this.mapChainNameToId(intent.toChain)?.toString() ?? '');
       url.searchParams.set('fromToken', intent.fromToken);
       url.searchParams.set('toToken', intent.toToken);
       url.searchParams.set('fromAmount', intent.fromAmount);
-      const dest = (intent as any).destinationAddress as string | undefined;
-      if (dest && typeof dest === 'string') {
-        url.searchParams.set('toAddress', dest);
-      }
-      const res = await this.http.get(url.toString(), { timeout: Number(process.env.LIFI_TIMEOUT_MS ?? '8000') });
-      if (res.status !== 200) {
-        return { supported: false, error: `LiFi quote failed (${res.status})` };
-      }
-      const tx = this.extractTransactionRequest(res.data);
-      return { supported: true, raw: res.data, transactionRequest: tx };
-    } catch (e) {
-      return { supported: false, error: (e as Error).message };
-    }
-  }
+      url.searchParams.set('fromAddress', intent.userAddress);
 
-  private extractTransactionRequest(quote: any): any | undefined {
-    const isTx = (tx: any) => tx && typeof tx.to === 'string' && tx.to.startsWith('0x') && typeof tx.data === 'string' && tx.data.startsWith('0x');
-    const tryTx = quote?.transactionRequest ?? quote?.estimate?.approval?.transactionRequest;
-    if (isTx(tryTx)) return tryTx;
-    const steps = Array.isArray(quote?.steps) ? quote.steps : [];
-    for (const step of steps) {
-      if (isTx(step?.transactionRequest)) return step.transactionRequest;
+      const res = await this.http.get(url.toString(), { timeout: Number(process.env.LIFI_TIMEOUT_MS ?? '10000') });
+
+      if (res.status !== 200 || !res.data.transactionRequest) {
+        throw new Error(`Li.Fi quote response did not include a transactionRequest. Route may be too complex.`);
+      }
+
+      const quote: Quote = {
+        id: res.data.id,
+        fromAmount: res.data.estimate.fromAmount,
+        toAmount: res.data.estimate.toAmount,
+        gasCostUsd: res.data.estimate.gasCosts.find((g: any) => g.type === 'source')?.amountUSD,
+        transactionRequest: res.data.transactionRequest,
+      };
+
+      return { quote };
+
+    } catch (e) {
+      const error = e as Error;
+      console.error('Error getting or validating quote from LI.FI:', error);
+      throw new Error(`Failed to get LI.FI quote: ${error.message}`);
     }
-    return undefined;
   }
 
   private mapChainNameToId(name: string): number | undefined {
     const map: Record<string, number> = {
-      ethereum: 1,
-      base: 8453,
-      arbitrum: 42161,
-      linea: 59144,
-      optimism: 10,
-      polygon: 137,
-      bsc: 56,
-      avalanche: 43114,
+      ethereum: 1, base: 8453, arbitrum: 42161, linea: 59144, optimism: 10, polygon: 137, bsc: 56, avalanche: 43114,
     };
     return map[name.toLowerCase()];
   }
 
-  private async getOneBalanceQuote(
-    intent: TransactionIntent,
-  ): Promise<GetQuoteResponse> {
+  private async getOneBalanceQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
     console.log('Getting OneBalance quote for intent:', intent);
-
     if (intent.type !== 'swap' && intent.type !== 'bridge') {
       throw new Error(`Unsupported intent type for OneBalance quote: ${intent.type}`);
     }
 
-    // Construct the request body for the OneBalance API
     const requestBody: any = {
       accounts: [{ address: intent.userAddress }],
-      source: {
-        asset: intent.fromToken,
-        amount: intent.fromAmount,
-      },
-      destination: {
-        asset: intent.toToken,
-      },
-      slippageTolerance: typeof (intent as any).slippageBps === 'number' ? (intent as any).slippageBps : 50, // basis points
+      source: { asset: intent.fromToken, amount: intent.fromAmount },
+      destination: { asset: intent.toToken },
+      slippageTolerance: typeof (intent as any).slippageBps === 'number' ? (intent as any).slippageBps : 50,
     };
-    if ((intent as any).destinationAddress && typeof (intent as any).destinationAddress === 'string') {
+    if ((intent as any).destinationAddress) {
       requestBody.destination.address = (intent as any).destinationAddress;
+    }
+
+    const feeBps = Number(process.env.ONEBALANCE_FEE_BPS);
+    const feeRecipient = process.env.ONEBALANCE_FEE_RECIPIENT;
+    if (feeBps > 0 && feeRecipient) {
+      requestBody.integratorFee = { feeRecipient: feeRecipient, feeBps: feeBps };
+      console.log(`Added integrator fee: ${feeBps} bps to ${feeRecipient}`);
     }
 
     try {
       const response = await this.http.post(
         `${this.onebalanceApiBaseUrl}/v3/quote`,
         requestBody,
-        {
-          headers: { 'x-api-key': this.onebalanceApiKey },
-          timeout: Number(process.env.ONEBALANCE_TIMEOUT_MS ?? '10000'),
-        },
+        { headers: { 'x-api-key': this.onebalanceApiKey }, timeout: Number(process.env.ONEBALANCE_TIMEOUT_MS ?? '10000') },
       );
 
-      // Validate and parse the response
       const validatedData = GetQuoteResponseSchema.parse(response.data);
       return validatedData;
     } catch (error) {
       console.error('Error getting or validating quote from OneBalance:', error);
       throw new Error('Failed to get quote.');
     }
+  }
+
+  private async prepareEvmTransfer(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    if (intent.type !== 'transfer') throw new Error('Invalid intent');
+
+    const data = encodeFunctionData({
+      abi: ERC20_ABI_SLIM,
+      functionName: 'transfer',
+      args: [intent.toAddress as `0x${string}`, BigInt(intent.amount)],
+    });
+
+    const quote: Quote = {
+      id: `transfer-${Date.now()}`,
+      fromAmount: intent.amount,
+      toAmount: intent.amount,
+      transactionRequest: { to: intent.tokenAddress as `0x${string}`, data, value: '0' },
+    };
+    return { quote };
+  }
+
+  private async prepareSolanaTransfer(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    if (intent.type !== 'transfer') throw new Error('Invalid intent');
+
+    const connection = new Connection(this.getRpcUrl(intent.chain), 'confirmed');
+    const fromPubkey = new PublicKey(intent.fromAddress);
+    const toPubkey = new PublicKey(intent.toAddress);
+    const tokenMintPubkey = new PublicKey(intent.tokenAddress);
+
+    if (intent.tokenAddress.toLowerCase() === 'native') {
+        const lamports = BigInt(intent.amount);
+        const transaction = new Transaction().add(SystemProgram.transfer({ fromPubkey, toPubkey, lamports }));
+        const quote: Quote = {
+            id: `sol-transfer-${Date.now()}`,
+            fromAmount: intent.amount,
+            toAmount: intent.amount,
+            serializedTx: transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64'),
+            transactionRequest: null,
+        };
+        return { quote };
+    }
+
+    const fromAta = await getAssociatedTokenAddress(tokenMintPubkey, fromPubkey);
+    const toAta = await getAssociatedTokenAddress(tokenMintPubkey, toPubkey);
+
+    const instructions = [createTransferInstruction(fromAta, toAta, fromPubkey, BigInt(intent.amount))];
+
+    const transaction = new Transaction().add(...instructions);
+    transaction.feePayer = fromPubkey;
+    const { blockhash } = await connection.getLatestBlockhash();
+    transaction.recentBlockhash = blockhash;
+
+    const serializedTx = transaction.serialize({ requireAllSignatures: false, verifySignatures: false }).toString('base64');
+
+    const quote: Quote = {
+      id: `spl-transfer-${Date.now()}`,
+      fromAmount: intent.amount,
+      toAmount: intent.amount,
+      serializedTx: serializedTx,
+      transactionRequest: null,
+    };
+
+    return { quote };
   }
 }

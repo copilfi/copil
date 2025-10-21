@@ -29,6 +29,7 @@ export interface Quote {
   gasCostUsd?: string; // Made optional
   transactionRequest: any; // The raw request for signing
   approvalTransactionRequest?: any; // Optional approval tx before main tx
+  serializedTx?: string; // For non-EVM chains like Solana, the base64-encoded transaction
 }
 
 export interface GetQuoteResponse {

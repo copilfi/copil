@@ -11,6 +11,14 @@ export type TransactionIntent =
       destinationAddress?: string; // optional alternative receiver for aggregated flows (e.g., Safe on destination)
     }
   | {
+      type: 'transfer';
+      chain: string;
+      tokenAddress: string;
+      fromAddress: string;
+      toAddress: string;
+      amount: string;
+    }
+  | {
       type: 'custom';
       name: string;
       parameters: Record<string, unknown>;

@@ -30,9 +30,12 @@
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.27"
+    "typeorm": "^0.3.27",
+    "twitter-api-v2": "^1.16.0",
+    "sentiment": "5.0.2"
   },
   "devDependencies": {
+    "@types/sentiment": "^5.0.0",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",

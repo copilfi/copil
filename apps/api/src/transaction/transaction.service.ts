@@ -106,23 +106,39 @@ export class TransactionService {
     });
   }
 
-  async compareQuotes(intent: TransactionIntent): Promise<{
-    onebalance: { supported: boolean; quote?: any; error?: string };
-    lifi: { supported: boolean; raw?: any; error?: string; transactionRequest?: any };
-    recommendation?: { provider: string; executable: boolean; reason: string; estToAmount?: string };
-    explain?: string;
-  }> {
-    const ob = await this.getQuote(intent)
-      .then((q) => ({ supported: true, quote: q }))
-      .catch((e) => ({ supported: false, error: (e as Error).message }));
+    async compareQuotes(intent: TransactionIntent): Promise<{
 
-    const lifiCacheKey = this.buildCacheKey('lifi', intent);
-    const lifiCached = this.readCache(lifiCacheKey, parseInt(this.configService.get<string>('QUOTE_CACHE_TTL_MS') || '15000', 10));
-    const lifi = lifiCached ?? (await this.chainAbstractionClient.getLiFiQuoteForIntent(intent).catch((e) => ({ supported: false, error: (e as Error).message })));
-    if (!lifiCached) this.writeCache(lifiCacheKey, lifi);
-    const rec = this.makeRecommendation(ob, lifi);
-    return { onebalance: ob, lifi, recommendation: rec.recommendation, explain: rec.explain };
-  }
+      onebalance: { supported: boolean; quote?: any; error?: string };
+
+      lifi: { supported: boolean; raw?: any; error?: string; transactionRequest?: any };
+
+      recommendation?: { provider: string; executable: boolean; reason: string; estToAmount?: string };
+
+      explain?: string;
+
+    }> {
+
+      // The primary getQuote now contains the provider-selection logic (incl. Li.Fi for bridges)
+
+      const ob = await this.getQuote(intent)
+
+        .then((q) => ({ supported: true, quote: q }))
+
+        .catch((e) => ({ supported: false, error: (e as Error).message }));
+
+  
+
+      // The direct Li.Fi comparison is deprecated as the logic is now in the abstraction client.
+
+      const lifi = { supported: false, error: 'Direct comparison deprecated; best route is already selected.' };
+
+  
+
+      const rec = this.makeRecommendation(ob, lifi);
+
+      return { onebalance: ob, lifi, recommendation: rec.recommendation, explain: rec.explain };
+
+    }
 
   private makeRecommendation(
     ob: { supported: boolean; quote?: any; error?: string },
@@ -273,20 +289,30 @@ export class TransactionService {
 
   private buildCacheKey(provider: 'onebalance' | 'lifi', intent: TransactionIntent): string {
     const { type } = intent;
-    if (type === 'custom') return `${provider}:custom:${intent.name}`;
-    const parts = [
-      provider,
-      type,
-      intent.fromChain,
-      intent.toChain,
-      intent.fromToken,
-      intent.toToken,
-      intent.fromAmount,
-      intent.userAddress,
-      (intent as any).destinationAddress ?? '',
-      String((intent as any).slippageBps ?? ''),
-    ];
-    return parts.join('|');
+    switch (type) {
+      case 'custom':
+        return `${provider}:custom:${intent.name}`;
+      case 'transfer': {
+        const parts = [ provider, type, intent.chain, intent.tokenAddress, intent.fromAddress, intent.toAddress, intent.amount ];
+        return parts.join('|');
+      }
+      case 'swap':
+      case 'bridge': {
+        const parts = [
+          provider,
+          type,
+          intent.fromChain,
+          intent.toChain,
+          intent.fromToken,
+          intent.toToken,
+          intent.fromAmount,
+          intent.userAddress,
+          intent.destinationAddress ?? '',
+          String(intent.slippageBps ?? ''),
+        ];
+        return parts.join('|');
+      }
+    }
   }
 
   private readCache<T = any>(key: string, ttlMs: number): T | null {
@@ -304,11 +330,9 @@ export class TransactionService {
   }
 
   private async sanitizeIntent(intent: TransactionIntent): Promise<TransactionIntent> {
-    if (intent.type === 'custom') return intent;
     const normalizeToken = async (chain: string, token: string): Promise<string> => {
       if (typeof token !== 'string') return token as any;
       if (/^0x[0-9a-fA-F]{40}$/.test(token)) return token.toLowerCase();
-      // If token looks like 0x* but wrong case, try lowering when metadata exists
       if (token.startsWith('0x') && token.length === 42) {
         const lower = token.toLowerCase();
         try {
@@ -318,10 +342,25 @@ export class TransactionService {
       }
       return token;
     };
-    const fromToken = await normalizeToken(intent.fromChain, intent.fromToken);
-    const toToken = await normalizeToken(intent.toChain, intent.toToken);
-    const slippage = (intent as any).slippageBps;
-    const slippageClamped = typeof slippage === 'number' ? Math.max(1, Math.min(slippage, 1000)) : undefined;
-    return { ...intent, fromToken, toToken, ...(slippageClamped ? { slippageBps: slippageClamped } : {}) } as any;
+
+    switch (intent.type) {
+      case 'custom':
+        return intent;
+      case 'transfer':
+        return {
+          ...intent,
+          tokenAddress: await normalizeToken(intent.chain, intent.tokenAddress),
+          fromAddress: await normalizeToken(intent.chain, intent.fromAddress),
+          toAddress: await normalizeToken(intent.chain, intent.toAddress),
+        };
+      case 'swap':
+      case 'bridge': {
+        const fromToken = await normalizeToken(intent.fromChain, intent.fromToken);
+        const toToken = await normalizeToken(intent.toChain, intent.toToken);
+        const slippage = intent.slippageBps;
+        const slippageClamped = typeof slippage === 'number' ? Math.max(1, Math.min(slippage, 1000)) : undefined;
+        return { ...intent, fromToken, toToken, ...(slippageClamped ? { slippageBps: slippageClamped } : {}) };
+      }
+    }
   }
 }
