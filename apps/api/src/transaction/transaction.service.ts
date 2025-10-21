@@ -38,6 +38,11 @@ export class TransactionService {
     if (cached) return cached;
     // Sanitize/normalize incoming intent fields
     intent = await this.sanitizeIntent(intent);
+
+    // Hyperliquid intents do not use quote providers; they are executed directly by the executor
+    if (intent.type === 'open_position' || intent.type === 'close_position') {
+      throw new BadRequestException('Hyperliquid intents do not require a quote. Enqueue directly for execution.');
+    }
     // Validate chain support before attempting to quote to avoid non-executable routes
     this.ensureChainsSupported(intent);
     const quoteResponse = await this.chainAbstractionClient.getQuote({ intent });
@@ -90,6 +95,14 @@ export class TransactionService {
             `For Sei bridges, the EVM side must be one of: ${Array.from(evmExecutable).join(', ')}.`,
           );
         }
+      }
+      return;
+    }
+
+    // Hyperliquid intents are executed directly (no quote)
+    if (intent.type === 'open_position' || intent.type === 'close_position') {
+      if ((intent as any).chain?.toLowerCase() !== 'hyperliquid') {
+        throw new BadRequestException(`Unsupported chain for Hyperliquid intent: ${(intent as any).chain}`);
       }
       return;
     }
@@ -190,7 +203,7 @@ export class TransactionService {
         return existing.data as TransactionJobData;
       }
     }
-    let finalIntent = { ...(await this.sanitizeIntent(intent)) };
+    let finalIntent = { ...(await this.sanitizeIntent(intent)) } as TransactionIntent;
 
     // Handle percentage-based amounts if needed
     if (finalIntent.type === 'swap' || finalIntent.type === 'bridge') {
@@ -212,15 +225,16 @@ export class TransactionService {
       }
     }
 
-    // First, get a quote for the intended transaction
-    const quote = await this.getQuote(finalIntent);
+    // For Hyperliquid intents, we do not fetch a quote — executor will construct and send the order
+    const needsQuote = !(finalIntent.type === 'open_position' || finalIntent.type === 'close_position');
+    const quote = needsQuote ? await this.getQuote(finalIntent) : null;
 
     const jobData: TransactionJobData = {
       strategyId: null, // Explicitly set strategyId to null for ad-hoc jobs
       userId,
       sessionKeyId,
       intent: finalIntent,
-      quote, // Pass the entire quote object to the executor
+      quote, // null for Hyperliquid; executor branch will handle
       metadata: {
         source: 'ad-hoc',
         enqueuedAt: new Date().toISOString(),
@@ -312,6 +326,10 @@ export class TransactionService {
         ];
         return parts.join('|');
       }
+      case 'open_position':
+        return `${provider}:hl:open:${intent.market}:${intent.side}:${intent.size}:${intent.leverage}:${String(intent.slippage ?? '')}`;
+      case 'close_position':
+        return `${provider}:hl:close:${intent.market}`;
     }
   }
 
@@ -360,6 +378,19 @@ export class TransactionService {
         const slippage = intent.slippageBps;
         const slippageClamped = typeof slippage === 'number' ? Math.max(1, Math.min(slippage, 1000)) : undefined;
         return { ...intent, fromToken, toToken, ...(slippageClamped ? { slippageBps: slippageClamped } : {}) };
+      }
+      case 'open_position': {
+        // Normalize chain/market casing and clamp leverage to reasonable bounds
+        const chain = intent.chain.toLowerCase() as 'hyperliquid';
+        const market = typeof intent.market === 'string' ? intent.market.toUpperCase() : intent.market;
+        const lev = Math.max(1, Math.min(intent.leverage, 50));
+        const slip = typeof intent.slippage === 'number' ? Math.max(0, Math.min(intent.slippage, 5)) : undefined;
+        return { ...intent, chain, market, leverage: lev, ...(slip !== undefined ? { slippage: slip } : {}) } as any;
+      }
+      case 'close_position': {
+        const chain = intent.chain.toLowerCase() as 'hyperliquid';
+        const market = typeof intent.market === 'string' ? intent.market.toUpperCase() : intent.market;
+        return { ...intent, chain, market } as any;
       }
     }
   }

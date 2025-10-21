@@ -36,6 +36,33 @@ This document lists required and optional env vars per service. Services fail fa
 - `SESSION_KEY_<ID>_PRIVATE_KEY` or `SESSION_KEY_PRIVATE_KEY` (required for signing)
 - `RPC_URL_<CHAIN>` (required per executing chain)
 
+### Hyperliquid (Perpetuals)
+- Uses Hyperliquid HTTP API for trading; no on-chain RPC is required to place orders.
+- Ensure a session key private key is set for the executing user (`SESSION_KEY_<ID>_PRIVATE_KEY`).
+- RPC `RPC_URL_HYPERLIQUID` is only needed if you later sign raw EVM txs on Hyperliquid’s Hyperevm; current flow uses the exchange API directly.
+
+Optional convenience (approvals/fees):
+- `HL_AGENT_ADDRESS` and `HL_AGENT_NAME` — Approve agent to sign on behalf of the master account.
+- `HL_BUILDER_ADDRESS` and `HL_MAX_FEE_RATE` — Approve builder fee rate once (e.g., `0.01%`).
+Tuning:
+- `HL_DEFAULT_SLIPPAGE` (decimal; default `0.003`) — IOC limit price buffer around mid.
+- `HL_MICRO_BUFFER_MIN_BPS` (default `5`) and `HL_MICRO_BUFFER_MAX_BPS` (default `20`) — bounds for dynamic micro‑buffer from L2 spread.
+- `HL_SPREAD_MULTIPLIER` (default `0.5`) — multiply L2 spread to derive micro‑buffer.
+- `HL_LEVERAGE_MODE` (`cross` | `isolated`, default `cross`) — leverage mode for `updateLeverage`.
+- `HL_MARKET_ALIASES` — JSON map for symbol aliases (e.g., `{"eth-perp":"ETH"}`).
+- `HL_SPREAD_TO_SLIPPAGE_MULT` (default `1`) — converts L2 spread to additional slippage when no explicit slippage is provided.
+- `HL_SLIPPAGE_MIN_BPS` / `HL_SLIPPAGE_MAX_BPS` — bounds for adaptive slippage.
+
+Chunking/TWAP (optional):
+- `HL_CHUNK_ENABLED` (default `false`) — enable simple chunked orders.
+- `HL_CHUNK_MAX_ORDERS` (default `3`) — max number of chunks.
+- `HL_CHUNK_TARGET_USD` (default `0`) — target USD per chunk (overrides `HL_CHUNK_MAX_ORDERS` if > 0).
+- `HL_CHUNK_SLEEP_MS` (default `100`) — delay between chunks (ms).
+
+Session key policy extensions (optional):
+- `permissions.hlAllowedMarkets`: array of allowed symbols (e.g., `["ETH","BTC"]`).
+- `permissions.hlMaxUsdPerTrade`: number cap for `open_position.size`.
+
 ## Strategy Evaluator (apps/strategy-evaluator)
 - `API_SERVICE_URL` (default: `http://localhost:4311`)
 - `INTERNAL_API_TOKEN` (required; must match API for `/transaction/execute/internal`)

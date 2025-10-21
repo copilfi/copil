@@ -91,19 +91,37 @@ class CreateTransactionTool extends StructuredTool {
     sessionKeyId: z
       .number()
       .describe('The session key ID required to authorize the transaction.'),
-    intent: z.object({
-        type: z.enum(['swap', 'bridge', 'custom']).describe("The type of transaction."),
-        fromChain: z.string().describe("The source chain name (e.g., 'ethereum')."),
-        fromToken: z.string().describe("The source token symbol or address (e.g., 'ETH', '0x...')."),
-        fromAmount: z.string().describe("The amount of the source token to send (in native units)."),
-        toChain: z.string().describe("The destination chain name (e.g., 'base')."),
-        toToken: z.string().describe("The destination token symbol or address."),
-        userAddress: z.string().describe("The user's wallet address performing the transaction."),
-        slippageBps: z.number().optional().describe('Optional slippage tolerance in basis points (e.g., 50 = 0.5%)'),
-        name: z.string().optional(),
-        parameters: z.record(z.string(), z.unknown()).optional(),
-      })
-      .describe("The user's intent for the transaction"),
+    intent: z.discriminatedUnion('type', [
+      z.object({
+        type: z.enum(['swap', 'bridge']).describe('EVM or cross-chain transaction.'),
+        fromChain: z.string(),
+        toChain: z.string(),
+        fromToken: z.string(),
+        toToken: z.string(),
+        fromAmount: z.string(),
+        userAddress: z.string(),
+        slippageBps: z.number().optional(),
+      }),
+      z.object({
+        type: z.literal('custom'),
+        name: z.string(),
+        parameters: z.record(z.string(), z.unknown()).optional().default({}),
+      }),
+      z.object({
+        type: z.literal('open_position'),
+        chain: z.literal('hyperliquid'),
+        market: z.string().describe("Market symbol, e.g. 'BTC', 'ETH'."),
+        side: z.enum(['long', 'short']),
+        size: z.string().describe('Notional size in USD (as string).'),
+        leverage: z.number().describe('Leverage multiplier (e.g., 3).'),
+        slippage: z.number().optional().describe('Optional slippage as decimal (e.g., 0.003 for 0.3%).'),
+      }),
+      z.object({
+        type: z.literal('close_position'),
+        chain: z.literal('hyperliquid'),
+        market: z.string().describe("Market symbol, e.g. 'BTC', 'ETH'."),
+      }),
+    ]).describe("The user's intent for the transaction"),
   });
 
   constructor(
@@ -121,10 +139,15 @@ class CreateTransactionTool extends StructuredTool {
         sessionKeyId,
         intent as TransactionIntent, // Cast to the correct type
       );
-      
-      const quote = result.quote as any;
       const jobIntent = result.intent as any;
-      return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote.toAmount} of ${jobIntent.toToken}.`;
+      if (jobIntent.type === 'open_position') {
+        return `Hyperliquid order queued: Open ${jobIntent.side} ${jobIntent.size} USD ${jobIntent.market} x${jobIntent.leverage}.`;
+      }
+      if (jobIntent.type === 'close_position') {
+        return `Hyperliquid order queued: Close position on ${jobIntent.market}.`;
+      }
+      const quote = result.quote as any;
+      return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote?.toAmount ?? 'n/a'} of ${jobIntent.toToken}.`;
     } catch (error) {
       return `Error creating transaction: ${
         error instanceof Error ? error.message : 'Unknown error'
@@ -166,16 +189,15 @@ export class ChatService {
         You have access to the following tools:
         - get_portfolio: Use this to check the user's token balances across all their wallets.
         - compare_quotes: Use this to retrieve quotes from multiple providers (OneBalance primary, Li.Fi as reference) and present options to the user.
-        - create_transaction: Use this to perform any action that moves funds, like swapping or bridging tokens.
+        - create_transaction: Use this to perform any action that moves funds (EVM swaps/bridges) or to place Hyperliquid perpetual orders (open/close position).
 
-        IMPORTANT: Before using 'create_transaction', you MUST follow these steps:
+        IMPORTANT: Before using 'create_transaction', follow these steps:
         1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
-        2. Determine all the parameters for the 'intent' object. Include optional 'slippageBps' if the user provided it.
-        3. Call 'compare_quotes' with that intent and present the results clearly. If a provider returns a non-executable or custodial flow, note that it will not be used.
-        4. Present the plan and the preferred route to the user in a clear, human-readable format.
-        5. Ask for their explicit confirmation to proceed.
-        6. After confirmation, ask for the sessionKeyId to use for the transaction.
-        7. Only after you have confirmation AND the sessionKeyId, call 'create_transaction'.`,
+        2. Determine all the parameters for the 'intent' object.
+           - For EVM (swap/bridge): include optional 'slippageBps' if provided. Call 'compare_quotes' and present options, then ask for confirmation.
+           - For Hyperliquid (open_position/close_position): skip 'compare_quotes'. Present the order plan (market, side, size/leverage or close), then ask for confirmation.
+        3. After confirmation, ask for the sessionKeyId to use.
+        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction'.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],

@@ -107,12 +107,35 @@ export class ExecutionService {
   }
 
   private async executeTransaction(job: TransactionJobData): Promise<ExecutionResult> {
-    const { quote } = job as any;
-    if (!quote?.transactionRequest) {
-      return { status: 'failed', description: 'No transactionRequest found in the job payload from the quote.' };
+    const { intent, userId, sessionKeyId } = job;
+
+    // Hyperliquid intents are executed directly by the signer service without a quote
+    if (intent.type === 'open_position' || intent.type === 'close_position') {
+      const wallet = await this.walletRepository.findOne({ where: { userId, chain: 'hyperliquid' } });
+      if (!wallet) throw new NotFoundException('Hyperliquid wallet not found for user.');
+      
+      return this.signerService.signAndSend({
+        userId,
+        sessionKeyId,
+        wallet,
+        metadata: { intent },
+      });
     }
 
-    const chainName = (job.intent as any)?.fromChain ?? (job.metadata as any)?.chain;
+    const { quote } = job as any;
+    if (!quote?.transactionRequest && !quote?.serializedTx) {
+      return { status: 'failed', description: 'No transactionRequest or serializedTx found in the job payload from the quote.' };
+    }
+
+    let chainName: string;
+    if (intent.type === 'swap' || intent.type === 'bridge') {
+      chainName = intent.fromChain;
+    } else if (intent.type === 'transfer') {
+      chainName = intent.chain;
+    } else {
+      chainName = (job.metadata as any)?.chain;
+    }
+
     const wallet = await this.walletRepository.findOne({ where: { userId: job.userId, chain: chainName } });
     if (!wallet) {
       throw new NotFoundException(`Wallet for user ${job.userId} on chain ${chainName} not found.`);
@@ -180,9 +203,9 @@ export class ExecutionService {
     const signerResult = await this.signerService.signAndSend({
       userId: job.userId,
       sessionKeyId: job.sessionKeyId!,
-      transaction: quote.transactionRequest,
+      transaction: quote.transactionRequest, // This will be null for Solana, handled by signerService
       wallet: wallet, // Pass wallet context
-      metadata: { intent: job.intent, quoteId: quote.id, chain: chainName },
+      metadata: { intent: job.intent, quote: quote }, // Pass full quote for Solana
     });
 
     return {
@@ -192,6 +215,7 @@ export class ExecutionService {
       metadata: { quoteId: quote.id, intent: job.intent },
     };
   }
+  // ... (recordLog, validateSessionKey, etc. remain the same)
 
   private async recordLog(
     job: TransactionJobData,
@@ -201,6 +225,10 @@ export class ExecutionService {
     let chain: string | undefined;
     if (job.intent.type === 'swap' || job.intent.type === 'bridge') {
       chain = job.intent.fromChain;
+    } else if (job.intent.type === 'transfer') {
+      chain = job.intent.chain;
+    } else if (job.intent.type === 'open_position' || job.intent.type === 'close_position') {
+      chain = (job.intent as any).chain ?? 'hyperliquid';
     }
 
     const newLog = new TransactionLog();

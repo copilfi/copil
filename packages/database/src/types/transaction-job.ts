@@ -19,6 +19,20 @@ export type TransactionIntent =
       amount: string;
     }
   | {
+      type: 'open_position';
+      chain: 'hyperliquid';
+      market: string; // e.g. 'ETH'
+      side: 'long' | 'short';
+      size: string; // in USD value
+      leverage: number;
+      slippage?: number; // optional slippage
+    }
+  | {
+      type: 'close_position';
+      chain: 'hyperliquid';
+      market: string; // e.g. 'ETH'
+    }
+  | {
       type: 'custom';
       name: string;
       parameters: Record<string, unknown>;

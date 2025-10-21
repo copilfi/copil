@@ -85,8 +85,8 @@ function parseIntent(raw: unknown): TransactionIntent {
 
   switch (type) {
     case 'swap':
-    case 'bridge': // Treat swap and bridge similarly as per new TransactionIntent
-      return {
+    case 'bridge': { // Treat swap and bridge similarly as per new TransactionIntent
+      const intent: any = {
         type: type as 'swap' | 'bridge',
         fromChain: ensureString(raw.fromChain, 'intent.fromChain'),
         toChain: ensureString(raw.toChain, 'intent.toChain'),
@@ -95,6 +95,15 @@ function parseIntent(raw: unknown): TransactionIntent {
         fromAmount: ensureString(raw.fromAmount, 'intent.fromAmount'),
         userAddress: ensureString(raw.userAddress, 'intent.userAddress'),
       };
+      // Optional percentage-based amount
+      if (Object.prototype.hasOwnProperty.call(raw, 'amountInIsPercentage')) {
+        const v = (raw as any).amountInIsPercentage;
+        if (v === true || v === 'true' || v === 1 || v === '1') {
+          intent.amountInIsPercentage = true;
+        }
+      }
+      return intent as TransactionIntent;
+    }
     case 'custom':
       return {
         type: 'custom',
