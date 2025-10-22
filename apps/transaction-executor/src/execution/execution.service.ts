@@ -205,7 +205,7 @@ export class ExecutionService {
       sessionKeyId: job.sessionKeyId!,
       transaction: quote.transactionRequest, // This will be null for Solana, handled by signerService
       wallet: wallet, // Pass wallet context
-      metadata: { intent: job.intent, quote: quote }, // Pass full quote for Solana
+      metadata: { intent: job.intent, quote: quote, chain: chainName }, // include chain for EOA/Sol
     });
 
     return {

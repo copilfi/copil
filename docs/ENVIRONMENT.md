@@ -59,6 +59,7 @@ Chunking/TWAP (optional):
 - `HL_CHUNK_MAX_ORDERS` (default `3`) — max number of chunks.
 - `HL_CHUNK_TARGET_USD` (default `0`) — target USD per chunk (overrides `HL_CHUNK_MAX_ORDERS` if > 0).
 - `HL_CHUNK_SLEEP_MS` (default `100`) — delay between chunks (ms).
+- `HL_CHUNK_REFRESH_L2` (default `true`) — refresh mid/L2 top-of-book before each chunk to adapt price in volatile markets.
 
 Session key policy extensions (optional):
 - `permissions.hlAllowedMarkets`: array of allowed symbols (e.g., `["ETH","BTC"]`).

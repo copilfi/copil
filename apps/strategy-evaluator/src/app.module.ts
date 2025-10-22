@@ -8,6 +8,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Strategy, TokenPrice, Wallet, User, TransactionLog, SessionKey, TokenMetadata, STRATEGY_QUEUE } from '@copil/database';
 import { StrategyProcessor } from './strategy.processor';
 import { HealthService } from './health.service';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -44,6 +45,7 @@ import { HealthService } from './health.service';
     }),
     BullModule.registerQueue({ name: STRATEGY_QUEUE }),
   ],
+  controllers: [HealthController],
   providers: [StrategyProcessor, HealthService],
 })
 export class AppModule {}
