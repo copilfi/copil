@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PortfolioService } from '../portfolio/portfolio.service';
 import { TransactionService } from '../transaction/transaction.service';
+import { AutomationsService } from '../automations/automations.service';
 import { ChatOpenAI } from '@langchain/openai';
 import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
 import { pull } from 'langchain/hub';
@@ -156,12 +157,83 @@ class CreateTransactionTool extends StructuredTool {
   }
 }
 
+class CreateAutomationTool extends StructuredTool {
+  name = 'create_automation';
+  description = 'Creates a price-triggered automation strategy that runs without further approval.';
+  schema = z.object({
+    name: z.string().min(3).max(80),
+    trigger: z.object({
+      type: z.literal('price'),
+      chain: z.string(),
+      tokenAddress: z.string(),
+      priceTarget: z.number(),
+      comparator: z.enum(['gte', 'lte']).optional(),
+    }),
+    intent: z.discriminatedUnion('type', [
+      z.object({
+        type: z.enum(['swap', 'bridge']),
+        fromChain: z.string(),
+        toChain: z.string(),
+        fromToken: z.string(),
+        toToken: z.string(),
+        fromAmount: z.string(),
+        userAddress: z.string(),
+        slippageBps: z.number().optional(),
+        amountInIsPercentage: z.boolean().optional(),
+      }),
+      z.object({
+        type: z.literal('open_position'),
+        chain: z.literal('hyperliquid'),
+        market: z.string(),
+        side: z.enum(['long', 'short']),
+        size: z.string(),
+        leverage: z.number(),
+        slippage: z.number().optional(),
+      }),
+      z.object({
+        type: z.literal('close_position'),
+        chain: z.literal('hyperliquid'),
+        market: z.string(),
+      }),
+    ]),
+    sessionKeyId: z.number().describe('Session key used to sign the automation executions.'),
+    repeat: z.boolean().optional().default(true),
+    schedule: z.string().optional().describe('Cron pattern. If omitted, condition-based poll runs every minute.'),
+    isActive: z.boolean().optional().default(true),
+  });
+
+  constructor(private readonly automations: AutomationsService, private readonly userId: number) {
+    super();
+  }
+
+  async _call(input: z.infer<typeof this.schema>) {
+    try {
+      const dto = {
+        name: input.name,
+        definition: {
+          trigger: input.trigger,
+          intent: input.intent,
+          sessionKeyId: input.sessionKeyId,
+          repeat: input.repeat,
+        },
+        schedule: input.schedule,
+        isActive: input.isActive,
+      } as any;
+      const created = await this.automations.create(dto, this.userId);
+      return `Automation created with id=${created.id}, name="${created.name}", active=${created.isActive}.`;
+    } catch (error) {
+      return `Error creating automation: ${error instanceof Error ? error.message : 'Unknown error'}`;
+    }
+  }
+}
+
 @Injectable()
 export class ChatService {
   constructor(
     private readonly configService: ConfigService,
     private readonly portfolioService: PortfolioService,
     private readonly transactionService: TransactionService,
+    private readonly automationsService: AutomationsService,
   ) {}
 
   async invokeAgent(
@@ -173,6 +245,7 @@ export class ChatService {
       new GetPortfolioTool(this.portfolioService, user.id),
       new CompareQuotesTool(this.transactionService),
       new CreateTransactionTool(this.transactionService, user.id),
+      new CreateAutomationTool(this.automationsService, user.id),
     ];
 
     const llm = new ChatOpenAI({
@@ -190,14 +263,15 @@ export class ChatService {
         - get_portfolio: Use this to check the user's token balances across all their wallets.
         - compare_quotes: Use this to retrieve quotes from multiple providers (OneBalance primary, Li.Fi as reference) and present options to the user.
         - create_transaction: Use this to perform any action that moves funds (EVM swaps/bridges) or to place Hyperliquid perpetual orders (open/close position).
+        - create_automation: Use this to create a price-triggered automation strategy (EVM swap/bridge or Hyperliquid open/close). It will run without further approvals using the provided sessionKeyId.
 
-        IMPORTANT: Before using 'create_transaction', follow these steps:
+        IMPORTANT: Before using 'create_transaction' or 'create_automation', follow these steps:
         1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
         2. Determine all the parameters for the 'intent' object.
            - For EVM (swap/bridge): include optional 'slippageBps' if provided. Call 'compare_quotes' and present options, then ask for confirmation.
            - For Hyperliquid (open_position/close_position): skip 'compare_quotes'. Present the order plan (market, side, size/leverage or close), then ask for confirmation.
         3. After confirmation, ask for the sessionKeyId to use.
-        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction'.`,
+        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction' (for immediate execution) or 'create_automation' (for price-triggered execution).`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],

@@ -13,5 +13,6 @@ import { Strategy, SessionKey, STRATEGY_QUEUE, TRANSACTION_QUEUE } from '@copil/
   ],
   controllers: [AutomationsController],
   providers: [AutomationsService],
+  exports: [AutomationsService],
 })
 export class AutomationsModule {}

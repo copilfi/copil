@@ -8,6 +8,7 @@ import { BullModule } from '@nestjs/bull';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 import { ConfigService } from '@nestjs/config';
+import { SolanaService } from '../solana/solana.service';
 
 @Module({
   imports: [
@@ -20,6 +21,7 @@ import { ConfigService } from '@nestjs/config';
   controllers: [TransactionController, TransactionInternalController],
   providers: [
     TransactionService,
+    SolanaService,
     {
       provide: ChainAbstractionClient,
       useFactory: (configService: ConfigService) => {

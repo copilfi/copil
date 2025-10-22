@@ -143,7 +143,7 @@ export class SignerService {
         await this.ensureAgentAndBuilder(exch);
         const chunked = this.isChunkingEnabled();
         if (chunked) {
-          const res = await this.executeChunkedOrders(exch, asset.id, isBuy, px, qty, asset.szDecimals, true /*reduceOnly*/);
+          const res = await this.executeChunkedOrders(exch, symbol, asset.id, isBuy, px, qty, asset.szDecimals, true /*reduceOnly*/);
           this.recordHlMetric(symbol, Date.now() - t0, res.status === 'success', res.description);
           return res;
         } else {
@@ -191,7 +191,7 @@ export class SignerService {
       const chunked = this.isChunkingEnabled();
       let result: SignAndSendResult;
       if (chunked) {
-        result = await this.executeChunkedOrders(exch, asset.id, isBuy, px, qty, asset.szDecimals, false);
+        result = await this.executeChunkedOrders(exch, symbol, asset.id, isBuy, px, qty, asset.szDecimals, false);
       } else {
         result = await this.placeOrder(exch, asset.id, isBuy, px, qty, asset.szDecimals, false);
       }
@@ -448,6 +448,7 @@ export class SignerService {
 
   private async executeChunkedOrders(
     exch: ExchangeClient,
+    symbol: string,
     assetId: number,
     isBuy: boolean,
     px: number,
@@ -466,7 +467,23 @@ export class SignerService {
     let remaining = totalQty;
     for (let i = 0; i < chunks; i++) {
       const q = i === chunks - 1 ? remaining : qtyPer;
-      const res = await this.placeOrder(exch, assetId, isBuy, px, q, szDecimals, reduceOnly);
+      let price = px;
+      const refresh = (this.configService.get<string>('HL_CHUNK_REFRESH_L2') ?? 'true') === 'true';
+      if (refresh) {
+        try {
+          const transport = new HttpTransport();
+          const info = new InfoClient({ transport });
+          const mids = await this.retry(async () => await info.allMids());
+          const midPxStr = mids[symbol];
+          if (midPxStr) {
+            const mid = Number(midPxStr);
+            const tob = await this.getTopOfBook(info, symbol);
+            const slip = this.computeAdaptiveSlippage(tob?.bid ?? null, tob?.ask ?? null, undefined);
+            price = this.chooseIocPrice(mid, tob?.bid ?? null, tob?.ask ?? null, slip, isBuy);
+          }
+        } catch {}
+      }
+      const res = await this.placeOrder(exch, assetId, isBuy, price, q, szDecimals, reduceOnly);
       if (res.status !== 'success') return res;
       remaining -= q;
       if (sleepMs > 0 && i < chunks - 1) await new Promise((r) => setTimeout(r, sleepMs));
@@ -512,6 +529,20 @@ export class SignerService {
     const nextAvg = prev.avgLatencyMs + (latencyMs - prev.avgLatencyMs) / nextTotal;
     this.hlMetrics.perSymbol.set(key, { total: nextTotal, success: nextSuccess, failed: nextFailed, avgLatencyMs: nextAvg });
     this.logger.debug(`HL metrics [${key}]: total=${nextTotal} ok=${nextSuccess} fail=${nextFailed} p95~n/a avg=${nextAvg.toFixed(1)}ms`);
+  }
+
+  getHyperliquidMetrics() {
+    const perSymbol: Record<string, { total: number; success: number; failed: number; avgLatencyMs: number }> = {};
+    for (const [k, v] of this.hlMetrics.perSymbol.entries()) {
+      perSymbol[k] = v;
+    }
+    return {
+      total: this.hlMetrics.total,
+      success: this.hlMetrics.success,
+      failed: this.hlMetrics.failed,
+      lastError: this.hlMetrics.lastError ?? null,
+      perSymbol,
+    };
   }
 
   private async signAndSendEoa(request: SignAndSendRequest): Promise<SignAndSendResult> {

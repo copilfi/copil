@@ -110,6 +110,28 @@ function parseIntent(raw: unknown): TransactionIntent {
         name: ensureString(raw.name, 'intent.name'),
         parameters: isPlainObject(raw.parameters) ? raw.parameters : {},
       };
+    case 'open_position': {
+      const chain = ensureString(raw.chain, 'intent.chain').toLowerCase();
+      if (chain !== 'hyperliquid') throw new BadRequestException('open_position currently supported only for hyperliquid');
+      return {
+        type: 'open_position',
+        chain: 'hyperliquid',
+        market: ensureString(raw.market, 'intent.market'),
+        side: ensureString(raw.side, 'intent.side') === 'short' ? 'short' : 'long',
+        size: ensureString(raw.size, 'intent.size'),
+        leverage: ensureNumber(raw.leverage, 'intent.leverage'),
+        ...(raw.slippage !== undefined ? { slippage: ensureNumber(raw.slippage, 'intent.slippage') } : {}),
+      };
+    }
+    case 'close_position': {
+      const chain = ensureString(raw.chain, 'intent.chain').toLowerCase();
+      if (chain !== 'hyperliquid') throw new BadRequestException('close_position currently supported only for hyperliquid');
+      return {
+        type: 'close_position',
+        chain: 'hyperliquid',
+        market: ensureString(raw.market, 'intent.market'),
+      };
+    }
     default:
       throw new BadRequestException(`Unsupported intent type "${type}"`);
   }

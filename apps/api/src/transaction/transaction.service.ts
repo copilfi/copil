@@ -12,6 +12,7 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
 import { ChainAbstractionClient, AssetBalance } from '@copil/chain-abstraction-client';
 import { PortfolioService } from '../portfolio/portfolio.service';
+import { SolanaService } from '../solana/solana.service';
 import { ConfigService } from '@nestjs/config';
 
 @Injectable()
@@ -29,6 +30,7 @@ export class TransactionService {
     private readonly chainAbstractionClient: ChainAbstractionClient,
     private readonly portfolioService: PortfolioService, // Injected PortfolioService
     private readonly configService: ConfigService,
+    private readonly solanaService: SolanaService,
   ) {}
 
   async getQuote(intent: TransactionIntent) {
@@ -42,6 +44,21 @@ export class TransactionService {
     // Hyperliquid intents do not use quote providers; they are executed directly by the executor
     if (intent.type === 'open_position' || intent.type === 'close_position') {
       throw new BadRequestException('Hyperliquid intents do not require a quote. Enqueue directly for execution.');
+    }
+
+    // Solana swaps prepare a serialized transaction for local signing
+    if (intent.type === 'swap' && intent.fromChain?.toLowerCase?.() === 'solana') {
+      const inputMint = (intent as any).fromToken as string;
+      const outputMint = (intent as any).toToken as string;
+      const amount = (intent as any).fromAmount as string;
+      const userPublicKey = (intent as any).userAddress as string;
+      if (!inputMint || !outputMint || !amount || !userPublicKey) {
+        throw new BadRequestException('Solana swap requires fromToken, toToken, fromAmount, and userAddress (public key).');
+      }
+      const slippageBps = (intent as any).slippageBps as number | undefined;
+      const prepared = await this.solanaService.prepareSwap({ inputMint, outputMint, amount, userPublicKey, slippageBps });
+      this.writeCache(cacheKey, prepared);
+      return prepared;
     }
     // Validate chain support before attempting to quote to avoid non-executable routes
     this.ensureChainsSupported(intent);
@@ -63,6 +80,7 @@ export class TransactionService {
   private ensureChainsSupported(intent: TransactionIntent) {
     const evmExecutable = new Set(['ethereum', 'base', 'arbitrum', 'linea', 'optimism', 'polygon', 'bsc', 'avalanche', 'hyperevm']);
     const isSei = (c?: string) => (c ?? '').toLowerCase() === 'sei';
+    const isSol = (c?: string) => (c ?? '').toLowerCase() === 'solana';
 
     const from = (intent as any).fromChain?.toLowerCase?.() as string | undefined;
     const to = (intent as any).toChain?.toLowerCase?.() as string | undefined;
@@ -70,9 +88,10 @@ export class TransactionService {
     // swap intents must execute on the source chain
     if (intent.type === 'swap') {
       if (isSei(from)) return; // Sei swap handled by Sei client
+      if (isSol(from)) return; // Solana swap handled by Solana prepared tx
       if (!from || !evmExecutable.has(from)) {
         throw new BadRequestException(
-          `Unsupported source chain for execution: ${from ?? 'unknown'}. Supported: ${Array.from(evmExecutable).join(', ')}, plus 'sei' (native).`,
+          `Unsupported source chain for execution: ${from ?? 'unknown'}. Supported: ${Array.from(evmExecutable).join(', ')}, plus 'sei' (native), 'solana' (prepared).`,
         );
       }
       return;

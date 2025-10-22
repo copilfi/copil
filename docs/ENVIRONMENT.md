@@ -21,6 +21,7 @@ This document lists required and optional env vars per service. Services fail fa
 - `CHAT_ENABLED` (optional; default: `false`). When `true`, one of `OPENAI_API_KEY` or `GROQ_API_KEY` must be set.
 - `OPENAI_API_KEY` or `GROQ_API_KEY` (required only when `CHAT_ENABLED=true`).
 - `RPC_URL_<CHAIN>` (recommended; used by smart-account utilities and readiness reporting)
+ - `JUPITER_API_URL` (optional; default: `https://quote-api.jup.ag`) — Solana prepared swap API base.
 
 ### Sei Bridge (Axelar)
 - `SEI_BRIDGE_ENABLED=true` (enable bridge path)
@@ -74,6 +75,11 @@ Session key policy extensions (optional):
 - `DEX_SCREENER_API_URL` (optional; default: `https://api.dexscreener.com/latest/dex`)
 - `DEX_SCREENER_TIMEOUT_MS` (optional; default: `8000`)
 - `INGEST_CHAINS` (optional; default: `ethereum,base,arbitrum`)
+- `HL_INGEST_ENABLED` (optional; default: `true`) — enable Hyperliquid mid price ingestion.
+- `HL_INGEST_SYMBOLS` (optional; default: `BTC,ETH`) — comma-separated HL symbols to ingest (saved as chain=`hyperliquid`, address=`<SYMBOL>`).
+- `SOL_INGEST_ENABLED` (optional; default: `true`) — enable Solana price ingestion via Jupiter.
+- `SOL_INGEST_MINTS` (optional; default: empty) — comma-separated list of `mint[:symbol]` pairs (e.g., `So111...:SOL,EPjF...:USDC`).
+- `JUPITER_PRICE_API_URL` (optional; default: `https://price.jup.ag/v4/price`) — Solana price endpoint.
 
 ## HTTP Client (shared)
 - `HTTP_MAX_SOCKETS`, `HTTPS_MAX_SOCKETS` (optional; default: `50`)

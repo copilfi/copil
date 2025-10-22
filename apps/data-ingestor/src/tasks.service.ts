@@ -3,8 +3,10 @@ import { Cron, CronExpression } from '@nestjs/schedule';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenPrice, TokenSentiment } from '@copil/database';
+import { InfoClient, HttpTransport } from '@nktkas/hyperliquid';
 import { DexScreenerService } from './dexscreener.service';
 import { TwitterService } from './twitter.service';
+import axios from 'axios';
 
 @Injectable()
 export class TasksService {
@@ -47,6 +49,84 @@ export class TasksService {
       }
     }
     this.logger.log('Finished fetching token data.');
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleHyperliquidPriceCron() {
+    try {
+      const enabled = (process.env.HL_INGEST_ENABLED ?? 'true') === 'true';
+      if (!enabled) return;
+      const symbols = (process.env.HL_INGEST_SYMBOLS ?? 'BTC,ETH')
+        .split(',')
+        .map((s) => s.trim().toUpperCase())
+        .filter(Boolean);
+      if (!symbols.length) return;
+      const transport = new HttpTransport();
+      const info = new InfoClient({ transport });
+      const mids = await info.allMids();
+      let saved = 0;
+      for (const sym of symbols) {
+        const px = mids[sym];
+        if (!px) continue;
+        const price = parseFloat(px);
+        if (!Number.isFinite(price)) continue;
+        const rec = this.tokenPriceRepository.create({
+          chain: 'hyperliquid',
+          address: sym,
+          symbol: sym,
+          priceUsd: price,
+        });
+        await this.tokenPriceRepository.save(rec);
+        saved++;
+      }
+      if (saved > 0) this.logger.log(`Saved ${saved} Hyperliquid mid prices.`);
+    } catch (e) {
+      this.logger.warn(`Hyperliquid price ingest failed: ${(e as Error).message}`);
+    }
+  }
+
+  @Cron(CronExpression.EVERY_MINUTE)
+  async handleSolanaPriceCron() {
+    try {
+      const enabled = (process.env.SOL_INGEST_ENABLED ?? 'true') === 'true';
+      if (!enabled) return;
+      const raw = process.env.SOL_INGEST_MINTS ?? '';
+      const mintPairs = raw
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .map((item) => {
+          const [mint, sym] = item.split(':').map((p) => p.trim());
+          return { mint, symbol: sym || undefined } as { mint: string; symbol?: string };
+        });
+      if (!mintPairs.length) return;
+
+      const ids = mintPairs.map((m) => m.mint).join(',');
+      const base = process.env.JUPITER_PRICE_API_URL || 'https://price.jup.ag/v4/price';
+      const url = `${base}?ids=${encodeURIComponent(ids)}`;
+      const timeout = Number(process.env.DEX_SCREENER_TIMEOUT_MS ?? '8000');
+      const res = await axios.get(url, { timeout });
+      const data = res.data?.data ?? {};
+
+      let saved = 0;
+      for (const mp of mintPairs) {
+        const rec = data[mp.mint];
+        const price = rec?.price as number | undefined;
+        if (!price || !Number.isFinite(price)) continue;
+        const symbol = mp.symbol || rec?.symbol || (rec?.id as string) || mp.mint.substring(0, 6);
+        const row = this.tokenPriceRepository.create({
+          chain: 'solana',
+          address: mp.mint,
+          symbol: String(symbol),
+          priceUsd: Number(price),
+        });
+        await this.tokenPriceRepository.save(row);
+        saved++;
+      }
+      if (saved > 0) this.logger.log(`Saved ${saved} Solana prices from Jupiter.`);
+    } catch (e) {
+      this.logger.warn(`Solana price ingest failed: ${(e as Error).message}`);
+    }
   }
 
   @Cron(CronExpression.EVERY_10_MINUTES)
