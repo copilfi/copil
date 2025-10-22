@@ -55,12 +55,17 @@ export class TransactionController {
       { key: 'SEI_BRIDGE_ENABLED', value: process.env.SEI_BRIDGE_ENABLED ?? null },
       { key: 'AXELAR_SEI_CHAIN_NAME', value: process.env.AXELAR_SEI_CHAIN_NAME ?? 'sei' },
       { key: 'AXELAR_TOKEN_SYMBOL_USDC', value: process.env.AXELAR_TOKEN_SYMBOL_USDC ?? 'aUSDC' },
+      { key: 'AXELAR_ESTIMATED_FEE_BPS', value: process.env.AXELAR_ESTIMATED_FEE_BPS ?? '35' },
     ];
     const problems: string[] = [];
     if (process.env.SEI_BRIDGE_ENABLED !== 'true') problems.push('SEI_BRIDGE_ENABLED must be true.');
     if (!perChain.some((p) => p.present)) problems.push('At least one AXELAR_GATEWAY_ADDRESS_<CHAIN> must be set.');
     const ready = problems.length === 0;
-    return { ready, perChain, globals, problems };
+    const notes = [
+      'toAmount for Axelar bridge is an estimate. Actual amount depends on bridge fees and execution.',
+      'Configure AXELAR_ESTIMATED_FEE_BPS to adjust estimation (default 35 bps).',
+    ];
+    return { ready, perChain, globals, problems, notes };
   }
 
   @Get('chains')

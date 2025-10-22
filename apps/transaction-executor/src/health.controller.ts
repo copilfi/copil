@@ -16,6 +16,16 @@ export class HealthController {
     return this.signer.getHyperliquidMetrics();
   }
 
+  @Get('metrics/evm')
+  getEvmMetrics() {
+    return this.signer.getEvmMetrics();
+  }
+
+  @Get('metrics/solana')
+  getSolanaMetrics() {
+    return this.signer.getSolanaMetrics();
+  }
+
   @Get('health/readiness')
   readiness() {
     const keys = [

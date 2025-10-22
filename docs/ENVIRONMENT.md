@@ -28,6 +28,7 @@ This document lists required and optional env vars per service. Services fail fa
 - `AXELAR_GATEWAY_ADDRESS_<CHAIN>` (e.g., ETHEREUM, BASE, ARBITRUM, LINEA; at least one required)
 - `AXELAR_SEI_CHAIN_NAME` (default: `sei`)
 - `AXELAR_TOKEN_SYMBOL_USDC` (default: `aUSDC`)
+- `AXELAR_ESTIMATED_FEE_BPS` (optional; default: `35`) — Estimated bridge fee in basis points used to compute a conservative `toAmount` for quotes. Actual delivered amount may differ.
 
 ## Transaction Executor (apps/transaction-executor)
 - `ONEBALANCE_API_KEY` (required)
@@ -88,15 +89,3 @@ Session key policy extensions (optional):
 
 ## RPC URL Suggestions
 Set per-chain RPC URLs via `RPC_URL_<CHAIN>` for backend and `NEXT_PUBLIC_RPC_URL_<CHAIN>` for frontend.
-
-- Ethereum: `RPC_URL_ETHEREUM=https://eth-mainnet.g.alchemy.com/v2/<key>` or `https://mainnet.infura.io/v3/<key>`
-- Base: `RPC_URL_BASE=https://base-mainnet.g.alchemy.com/v2/<key>` or `https://mainnet.base.org`
-- Arbitrum: `RPC_URL_ARBITRUM=https://arb-mainnet.g.alchemy.com/v2/<key>` or `https://arb1.arbitrum.io/rpc`
-- Linea: `RPC_URL_LINEA=https://linea-mainnet.infura.io/v3/<key>` or provider equivalent
-- Optimism: `RPC_URL_OPTIMISM=https://optimism-mainnet.infura.io/v3/<key>` or Alchemy
-- Polygon: `RPC_URL_POLYGON=https://polygon-mainnet.g.alchemy.com/v2/<key>` or `https://polygon-rpc.com`
-- BSC: `RPC_URL_BSC=https://bsc-dataseed.binance.org`
-- Avalanche: `RPC_URL_AVALANCHE=https://api.avax.network/ext/bc/C/rpc`
-- Sei (EVM): `RPC_URL_SEI=https://evm-rpc.sei-apis.com`
-
-Note: Hyperevm is currently not supported for execution (4337/Safe deployments and bundler availability uncertain). Treat as unsupported until official infra (Safe deployments, bundler, stable RPC) is confirmed.

@@ -55,6 +55,18 @@ export class SignerService {
     perSymbol: Map<string, { total: number; success: number; failed: number; avgLatencyMs: number }>
   } = { total: 0, success: 0, failed: 0, perSymbol: new Map() };
 
+  // Simple EVM/Solana metrics for observability
+  private evmMetrics: { total: number; success: number; failed: number; lastError?: string } = {
+    total: 0,
+    success: 0,
+    failed: 0,
+  };
+  private solMetrics: { total: number; success: number; failed: number; lastError?: string } = {
+    total: 0,
+    success: 0,
+    failed: 0,
+  };
+
   constructor(
     private readonly configService: ConfigService,
     private readonly bundlerClient: BundlerClient,
@@ -545,6 +557,26 @@ export class SignerService {
     };
   }
 
+  private recordEvmMetric(ok: boolean, lastError?: string) {
+    this.evmMetrics.total += 1;
+    if (ok) this.evmMetrics.success += 1; else this.evmMetrics.failed += 1;
+    if (!ok && lastError) this.evmMetrics.lastError = lastError;
+  }
+
+  private recordSolMetric(ok: boolean, lastError?: string) {
+    this.solMetrics.total += 1;
+    if (ok) this.solMetrics.success += 1; else this.solMetrics.failed += 1;
+    if (!ok && lastError) this.solMetrics.lastError = lastError;
+  }
+
+  getEvmMetrics() {
+    return { ...this.evmMetrics };
+  }
+
+  getSolanaMetrics() {
+    return { ...this.solMetrics };
+  }
+
   private async signAndSendEoa(request: SignAndSendRequest): Promise<SignAndSendResult> {
     const chainName = (request.metadata?.chain as string)?.toLowerCase();
     if (!chainName) {
@@ -598,11 +630,13 @@ export class SignerService {
       });
 
       this.logger.log(`${chainName} EOA transaction successful with hash: ${txHash}`);
+      this.recordEvmMetric(true);
       return { status: 'success', txHash, description: `${chainName} EOA transaction successfully sent.` };
 
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`${chainName} EOA transaction failed: ${message}`, error);
+      this.recordEvmMetric(false, message);
       return { status: 'failed', description: `${chainName} EOA transaction failed: ${message}` };
     }
   }
@@ -634,15 +668,18 @@ export class SignerService {
         await connection.confirmTransaction(txHash);
 
         this.logger.log(`Solana swap transaction successful with hash: ${txHash}`);
+        this.recordSolMetric(true);
         return { status: 'success', txHash, description: `Solana swap transaction successfully sent.` };
 
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         this.logger.error(`Solana swap transaction failed: ${message}`, error);
+        this.recordSolMetric(false, message);
         return { status: 'failed', description: `Solana swap transaction failed: ${message}` };
       }
     } else {
         // Fallback or error for non-swap intents if needed, for now we only support swaps via Jupiter
+        this.recordSolMetric(false, 'Only Solana swaps via Jupiter are currently supported.');
         return { status: 'failed', description: 'Only Solana swaps via Jupiter are currently supported.' };
     }
   }

@@ -93,10 +93,17 @@ export class AxelarBridgeClient {
       value: '0',
     };
 
+    // Provide a conservative toAmount estimate using a configurable fee bps.
+    // This is an estimate only; actual delivered amount depends on bridge fees and execution.
+    const feeBps = Math.max(0, Number(process.env.AXELAR_ESTIMATED_FEE_BPS ?? '35'));
+    const amtIn = BigInt(intent.fromAmount);
+    const feeAmt = (amtIn * BigInt(feeBps)) / 10000n;
+    const estToAmount = (amtIn - feeAmt).toString();
+
     const quote: Quote = {
       id: `axelar-${Date.now()}`,
       fromAmount: intent.fromAmount,
-      toAmount: intent.fromAmount, // Placeholder: exact toAmount on destination chain will differ; refine once fee calc is added
+      toAmount: estToAmount,
       transactionRequest,
       approvalTransactionRequest,
     } as any;

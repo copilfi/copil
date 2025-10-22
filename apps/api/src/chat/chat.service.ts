@@ -92,6 +92,9 @@ class CreateTransactionTool extends StructuredTool {
     sessionKeyId: z
       .number()
       .describe('The session key ID required to authorize the transaction.'),
+    confirmed: z
+      .boolean()
+      .describe('Must be true to proceed. Set after explicit user confirmation.'),
     intent: z.discriminatedUnion('type', [
       z.object({
         type: z.enum(['swap', 'bridge']).describe('EVM or cross-chain transaction.'),
@@ -132,8 +135,11 @@ class CreateTransactionTool extends StructuredTool {
     super();
   }
 
-  async _call({ sessionKeyId, intent }: z.infer<typeof this.schema>) {
+  async _call({ sessionKeyId, intent, confirmed }: z.infer<typeof this.schema>) {
     try {
+      if (!confirmed) {
+        return 'This action moves funds. Please ask the user to confirm and call the tool again with confirmed=true.';
+      }
       // The service now handles getting the quote and enqueuing the job
       const result = await this.transactionService.createAdHocTransactionJob(
         this.userId,
@@ -271,7 +277,8 @@ export class ChatService {
            - For EVM (swap/bridge): include optional 'slippageBps' if provided. Call 'compare_quotes' and present options, then ask for confirmation.
            - For Hyperliquid (open_position/close_position): skip 'compare_quotes'. Present the order plan (market, side, size/leverage or close), then ask for confirmation.
         3. After confirmation, ask for the sessionKeyId to use.
-        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction' (for immediate execution) or 'create_automation' (for price-triggered execution).`,
+        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction' (for immediate execution) or 'create_automation' (for price-triggered execution).
+           When calling 'create_transaction', you MUST set confirmed=true.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],
