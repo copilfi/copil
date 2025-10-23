@@ -23,6 +23,7 @@ import { OnboardingController } from './onboarding/onboarding.controller';
 import { OnboardingService } from './onboarding/onboarding.service';
 import { APP_INTERCEPTOR } from '@nestjs/core';
 import { ObservabilityInterceptor } from './common/observability.interceptor';
+import { MarketModule } from './market/market.module';
 
 @Module({
   imports: [
@@ -61,6 +62,7 @@ import { ObservabilityInterceptor } from './common/observability.interceptor';
     TransactionModule,
     AutomationsModule,
     SessionKeysModule,
+    MarketModule,
     TypeOrmModule.forFeature([Wallet, TransactionLog]),
     BullModule.registerQueue(
       { name: 'transaction-queue' },

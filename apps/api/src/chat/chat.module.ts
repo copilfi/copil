@@ -4,9 +4,10 @@ import { ChatController } from './chat.controller';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { TransactionModule } from '../transaction/transaction.module';
 import { AutomationsModule } from '../automations/automations.module';
+import { MarketModule } from '../market/market.module';
 
 @Module({
-  imports: [PortfolioModule, TransactionModule, AutomationsModule],
+  imports: [PortfolioModule, TransactionModule, AutomationsModule, MarketModule],
   controllers: [ChatController],
   providers: [ChatService],
 })

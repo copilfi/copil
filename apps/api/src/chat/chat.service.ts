@@ -14,6 +14,7 @@ import {
 import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
 import { TransactionIntent } from '@copil/database';
+import { MarketService } from '../market/market.service';
 
 class CompareQuotesTool extends StructuredTool {
   name = 'compare_quotes';
@@ -233,6 +234,55 @@ class CreateAutomationTool extends StructuredTool {
   }
 }
 
+// Tool: get_trending_tokens(chain?, limit?)
+class GetTrendingTokensTool extends StructuredTool {
+  name = 'get_trending_tokens';
+  description = 'Returns a recent list of trending tokens for a chain (approximate, based on latest ingested TokenPrice records).';
+  schema = z.object({ chain: z.string().optional(), limit: z.number().int().min(1).max(50).optional() });
+
+  constructor(private readonly market: MarketService) { super(); }
+
+  async _call(input: z.infer<typeof this.schema>) {
+    try {
+      const out = await this.market.getTrending({ chain: input.chain, limit: input.limit });
+      return JSON.stringify(out);
+    } catch (e) {
+      return `Error fetching trending tokens: ${(e as Error).message}`;
+    }
+  }
+}
+
+// Tool: get_wallet_balance(chain, tokenOrAddress)
+class GetWalletBalanceTool extends StructuredTool {
+  name = 'get_wallet_balance';
+  description = 'Returns the user\'s balance for a given chain and token (address or symbol) from the aggregated portfolio.';
+  schema = z.object({ chain: z.string(), token: z.string().describe('ERC-20 address, native, or symbol') });
+
+  constructor(private readonly portfolio: PortfolioService, private readonly userId: number) { super(); }
+
+  private isAddress(s: string) { return /^0x[0-9a-fA-F]{40}$/.test(s); }
+
+  async _call({ chain, token }: z.infer<typeof this.schema>) {
+    try {
+      const balances = (await this.portfolio.getPortfolioForUser(this.userId)) as any[];
+      const lcChain = chain.toLowerCase();
+      const lcTok = token.toLowerCase();
+      const pick = balances.find((b: any) => {
+        const id = String(b.assetId || '').toLowerCase();
+        const sym = String(b.symbol || '').toLowerCase();
+        if (!id.includes(lcChain)) return false;
+        if (this.isAddress(token)) return id.includes(lcTok);
+        if (lcTok === 'native') return sym === 'eth' || sym === lcChain || sym === 'sei' || sym === 'sol';
+        return sym === lcTok;
+      });
+      if (!pick) return JSON.stringify({ amount: '0', amountUsd: '0', found: false });
+      return JSON.stringify({ amount: String(pick.amount), amountUsd: String(pick.amountUsd ?? '0'), symbol: pick.symbol, found: true });
+    } catch (e) {
+      return `Error fetching balance: ${(e as Error).message}`;
+    }
+  }
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -240,6 +290,7 @@ export class ChatService {
     private readonly portfolioService: PortfolioService,
     private readonly transactionService: TransactionService,
     private readonly automationsService: AutomationsService,
+    private readonly marketService: MarketService,
   ) {}
 
   async invokeAgent(
@@ -252,6 +303,8 @@ export class ChatService {
       new CompareQuotesTool(this.transactionService),
       new CreateTransactionTool(this.transactionService, user.id),
       new CreateAutomationTool(this.automationsService, user.id),
+      new GetTrendingTokensTool(this.marketService),
+      new GetWalletBalanceTool(this.portfolioService, user.id),
     ];
 
     const llm = new ChatOpenAI({
@@ -266,10 +319,12 @@ export class ChatService {
         `You are Copil, an AI DeFi assistant. Your goal is to help users by answering questions and executing transactions on their behalf.
 
         You have access to the following tools:
-        - get_portfolio: Use this to check the user's token balances across all their wallets.
-        - compare_quotes: Use this to retrieve quotes from multiple providers (OneBalance primary, Li.Fi as reference) and present options to the user.
-        - create_transaction: Use this to perform any action that moves funds (EVM swaps/bridges) or to place Hyperliquid perpetual orders (open/close position).
-        - create_automation: Use this to create a price-triggered automation strategy (EVM swap/bridge or Hyperliquid open/close). It will run without further approvals using the provided sessionKeyId.
+        - get_portfolio: Get user\'s aggregated balances across all wallets.
+        - get_trending_tokens: Fetch recent trending tokens for a chain (from ingested data).
+        - get_wallet_balance: Get user\'s balance for a specific chain/token (symbol or address).
+        - compare_quotes: Retrieve quotes from providers (OneBalance primary; Li.Fi reference for bridges) and present options.
+        - create_transaction: Perform actions that move funds (EVM swaps/bridges) or place Hyperliquid orders (open/close).
+        - create_automation: Create price-triggered automation strategies (EVM swap/bridge or Hyperliquid open/close) that run with a session key.
 
         IMPORTANT: Before using 'create_transaction' or 'create_automation', follow these steps:
         1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
