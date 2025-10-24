@@ -10,7 +10,14 @@ export interface PriceTriggerDefinition {
   comparator?: PriceComparator;
 }
 
-export type StrategyTriggerDefinition = PriceTriggerDefinition;
+export interface TrendTriggerDefinition {
+  type: 'trend';
+  chain: string;
+  tokenAddress: string;
+  top?: number; // consider as trending if within top N (default 10)
+}
+
+export type StrategyTriggerDefinition = PriceTriggerDefinition | TrendTriggerDefinition;
 
 export interface StrategyDefinition {
   trigger: StrategyTriggerDefinition;

@@ -169,13 +169,21 @@ class CreateAutomationTool extends StructuredTool {
   description = 'Creates a price-triggered automation strategy that runs without further approval.';
   schema = z.object({
     name: z.string().min(3).max(80),
-    trigger: z.object({
-      type: z.literal('price'),
-      chain: z.string(),
-      tokenAddress: z.string(),
-      priceTarget: z.number(),
-      comparator: z.enum(['gte', 'lte']).optional(),
-    }),
+    trigger: z.discriminatedUnion('type', [
+      z.object({
+        type: z.literal('price'),
+        chain: z.string(),
+        tokenAddress: z.string(),
+        priceTarget: z.number(),
+        comparator: z.enum(['gte', 'lte']).optional(),
+      }),
+      z.object({
+        type: z.literal('trend'),
+        chain: z.string(),
+        tokenAddress: z.string(),
+        top: z.number().int().min(1).max(50).optional(),
+      })
+    ]),
     intent: z.discriminatedUnion('type', [
       z.object({
         type: z.enum(['swap', 'bridge']),

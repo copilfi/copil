@@ -53,26 +53,35 @@ function parseTrigger(raw: unknown): StrategyTriggerDefinition {
 
   const type = ensureString(raw.type, 'trigger.type');
 
-  if (type !== 'price') {
-    throw new BadRequestException(`Unsupported trigger type "${type}"`);
-  }
-
-  let comparator: PriceComparator | undefined;
-  if (raw.comparator !== undefined) {
-    const comparatorValue = ensureString(raw.comparator, 'trigger.comparator').toLowerCase();
-    if (comparatorValue !== 'gte' && comparatorValue !== 'lte') {
-      throw new BadRequestException('trigger.comparator must be "gte" or "lte"');
+  if (type === 'price') {
+    let comparator: PriceComparator | undefined;
+    if (raw.comparator !== undefined) {
+      const comparatorValue = ensureString(raw.comparator, 'trigger.comparator').toLowerCase();
+      if (comparatorValue !== 'gte' && comparatorValue !== 'lte') {
+        throw new BadRequestException('trigger.comparator must be "gte" or "lte"');
+      }
+      comparator = comparatorValue as PriceComparator;
     }
-    comparator = comparatorValue as PriceComparator;
+    return {
+      type: 'price',
+      chain: ensureString(raw.chain, 'trigger.chain'),
+      tokenAddress: ensureString(raw.tokenAddress, 'trigger.tokenAddress'),
+      priceTarget: ensureNumber(raw.priceTarget, 'trigger.priceTarget'),
+      comparator,
+    } satisfies PriceTriggerDefinition;
   }
 
-  return {
-    type: 'price',
-    chain: ensureString(raw.chain, 'trigger.chain'),
-    tokenAddress: ensureString(raw.tokenAddress, 'trigger.tokenAddress'),
-    priceTarget: ensureNumber(raw.priceTarget, 'trigger.priceTarget'),
-    comparator,
-  } satisfies PriceTriggerDefinition;
+  if (type === 'trend') {
+    const topVal = raw.top !== undefined ? ensureNumber(raw.top, 'trigger.top') : 10;
+    return {
+      type: 'trend',
+      chain: ensureString(raw.chain, 'trigger.chain'),
+      tokenAddress: ensureString(raw.tokenAddress, 'trigger.tokenAddress'),
+      top: Math.max(1, Math.min(topVal, 50)),
+    } as any;
+  }
+
+  throw new BadRequestException(`Unsupported trigger type "${type}"`);
 }
 
 // Renamed from parseAction to parseIntent

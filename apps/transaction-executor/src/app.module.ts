@@ -10,6 +10,7 @@ import { BundlerClient } from './clients/bundler.client';
 import { PaymasterClient } from './clients/paymaster.client';
 import { HealthService } from './health.service';
 import { HealthController } from './health.controller';
+import { MetricsController } from './metrics.controller';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 
 @Module({
@@ -44,7 +45,7 @@ import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
       name: TRANSACTION_QUEUE,
     }),
   ],
-  controllers: [HealthController],
+  controllers: [HealthController, MetricsController],
   providers: [
     ExecutionService,
     TransactionProcessor,

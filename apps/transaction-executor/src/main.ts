@@ -2,6 +2,7 @@ import { Logger } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { HealthService } from './health.service';
+import { SignerService } from './signer/signer.service';
 import * as http from 'http';
 import { validateRequiredEnv } from './env.validation';
 
@@ -14,18 +15,37 @@ async function bootstrap() {
   // Lightweight health server
   try {
     const health = appContext.get(HealthService);
+    const signer = appContext.get(SignerService);
     const port = Number(process.env.TX_EXECUTOR_PORT ?? process.env.HEALTH_PORT ?? 3005);
     const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
         const status = await health.getStatus().catch(() => ({ ok: false }));
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify(status));
-      } else {
-        res.writeHead(404);
-        res.end();
+        return;
       }
+      if (req.method === 'GET' && req.url === '/metrics/evm') {
+        const data = signer.getEvmMetrics();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/metrics/solana') {
+        const data = signer.getSolanaMetrics();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+        return;
+      }
+      if (req.method === 'GET' && req.url === '/metrics/hyperliquid') {
+        const data = signer.getHyperliquidMetrics();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify(data));
+        return;
+      }
+      res.writeHead(404);
+      res.end();
     });
-    server.listen(port, () => logger.log(`Health server listening on :${port}`));
+    server.listen(port, () => logger.log(`Health/metrics server listening on :${port}`));
   } catch (e) {
     logger.warn(`Health server not started: ${(e as Error).message}`);
   }

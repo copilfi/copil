@@ -577,6 +577,16 @@ export class SignerService {
     return { ...this.solMetrics };
   }
 
+  getHyperliquidMetrics() {
+    return {
+      total: this.hlMetrics.total,
+      success: this.hlMetrics.success,
+      failed: this.hlMetrics.failed,
+      lastError: this.hlMetrics.lastError,
+      // Avoid leaking perSymbol details by default; could expose behind a debug flag
+    };
+  }
+
   private async signAndSendEoa(request: SignAndSendRequest): Promise<SignAndSendResult> {
     const chainName = (request.metadata?.chain as string)?.toLowerCase();
     if (!chainName) {
