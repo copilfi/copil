@@ -1,13 +1,15 @@
 import { Injectable } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { TokenPrice } from '@copil/database';
+import { TokenPrice, TokenSentiment } from '@copil/database';
 
 @Injectable()
 export class MarketService {
   constructor(
     @InjectRepository(TokenPrice)
     private readonly tokenPriceRepo: Repository<TokenPrice>,
+    @InjectRepository(TokenSentiment)
+    private readonly tokenSentimentRepo: Repository<TokenSentiment>,
   ) {}
 
   /**
@@ -32,5 +34,11 @@ export class MarketService {
     }
     return out;
   }
-}
 
+  async getTokenSentiment(symbol: string) {
+    const sym = symbol.toUpperCase();
+    const row = await this.tokenSentimentRepo.findOne({ where: { symbol: sym }, order: { timestamp: 'DESC' } });
+    if (!row) return { symbol: sym, found: false };
+    return { symbol: sym, found: true, sentimentScore: row.sentimentScore, tweetVolume: row.tweetVolume, timestamp: row.timestamp };
+  }
+}

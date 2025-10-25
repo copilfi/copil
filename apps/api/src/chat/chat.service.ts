@@ -13,9 +13,10 @@ import {
 } from '@langchain/core/prompts';
 import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { TransactionIntent, ChatMemory } from '@copil/database';
+import { TransactionIntent, ChatMemory, ChatEmbedding } from '@copil/database';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
+import { OpenAIEmbeddings } from '@langchain/openai';
 import { MarketService } from '../market/market.service';
 
 class CompareQuotesTool extends StructuredTool {
@@ -293,6 +294,24 @@ class GetWalletBalanceTool extends StructuredTool {
   }
 }
 
+// Tool: get_token_sentiment(symbol)
+class GetTokenSentimentTool extends StructuredTool {
+  name = 'get_token_sentiment';
+  description = 'Returns latest sentiment score and tweet volume for a given token symbol (from ingested Twitter data).';
+  schema = z.object({ symbol: z.string() });
+
+  constructor(private readonly market: MarketService) { super(); }
+
+  async _call({ symbol }: z.infer<typeof this.schema>) {
+    try {
+      const out = await this.market.getTokenSentiment(symbol);
+      return JSON.stringify(out);
+    } catch (e) {
+      return `Error fetching sentiment: ${(e as Error).message}`;
+    }
+  }
+}
+
 @Injectable()
 export class ChatService {
   constructor(
@@ -302,6 +321,7 @@ export class ChatService {
     private readonly automationsService: AutomationsService,
     private readonly marketService: MarketService,
     @InjectRepository(ChatMemory) private readonly memoryRepo: Repository<ChatMemory>,
+    @InjectRepository(ChatEmbedding) private readonly embRepo: Repository<ChatEmbedding>,
   ) {}
 
   async invokeAgent(
@@ -316,11 +336,13 @@ export class ChatService {
       new CreateAutomationTool(this.automationsService, user.id),
       new GetTrendingTokensTool(this.marketService),
       new GetWalletBalanceTool(this.portfolioService, user.id),
+      new GetTokenSentimentTool(this.marketService),
     ];
 
     const llm = this.buildLlm();
 
     const priorMemory = await this.loadMemory(user.id);
+    const recalls = await this.recallEmbeddings(user.id, input, 3).catch(() => [] as string[]);
 
     const prompt = ChatPromptTemplate.fromMessages([
       [
@@ -328,6 +350,9 @@ export class ChatService {
         `You are Copil, an AI DeFi assistant. Your goal is to help users by answering questions and executing transactions on their behalf.
 
         Long-term memory (summarized): ${priorMemory || '(empty)'}
+
+        Retrieved memory (semantic):
+        ${recalls.length ? recalls.map((r, i) => `#${i+1}: ${r}`).join('\n') : '(none)'}
 
         Tools available:
         - get_portfolio: Aggregated balances for all wallets.
@@ -378,11 +403,41 @@ export class ChatService {
 
     try {
       // Update memory with a concise summary
-      const newSummary = await this.summarizeMemory(llm, priorMemory || '', input, String((result as any)?.output ?? ''));
+      const outputText = String((result as any)?.output ?? '');
+      const newSummary = await this.summarizeMemory(llm, priorMemory || '', input, outputText);
       await this.saveMemory(user.id, newSummary);
+      await this.storeEmbedding(user.id, input).catch(() => void 0);
     } catch { /* best-effort */ }
 
     return result;
+  }
+
+  private async storeEmbedding(userId: number, text: string): Promise<void> {
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    if (!openaiKey) return; // embeddings only when OpenAI is available
+    const embedder = new OpenAIEmbeddings({ apiKey: openaiKey });
+    const vec = await embedder.embedQuery(text);
+    const rec = this.embRepo.create({ userId, content: text, embedding: vec });
+    await this.embRepo.save(rec);
+  }
+
+  private cosine(a: number[], b: number[]): number {
+    const n = Math.min(a.length, b.length);
+    let dot = 0, na = 0, nb = 0;
+    for (let i = 0; i < n; i++) { const x = a[i]; const y = b[i]; dot += x*y; na += x*x; nb += y*y; }
+    if (na === 0 || nb === 0) return 0;
+    return dot / (Math.sqrt(na) * Math.sqrt(nb));
+  }
+
+  private async recallEmbeddings(userId: number, query: string, k = 3): Promise<string[]> {
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+    if (!openaiKey) return [];
+    const embedder = new OpenAIEmbeddings({ apiKey: openaiKey });
+    const q = await embedder.embedQuery(query);
+    const recent = await this.embRepo.find({ where: { userId }, order: { createdAt: 'DESC' }, take: 200 });
+    const scored = recent.map(r => ({ content: r.content, score: this.cosine(q, r.embedding) }));
+    scored.sort((a,b) => b.score - a.score);
+    return scored.slice(0, k).filter(s => s.score > 0.2).map(s => s.content);
   }
 
   private buildLlm(): ChatOpenAI {

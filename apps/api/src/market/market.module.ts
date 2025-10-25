@@ -1,14 +1,13 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { TokenPrice } from '@copil/database';
+import { TokenPrice, TokenSentiment } from '@copil/database';
 import { MarketService } from './market.service';
 import { MarketController } from './market.controller';
 
 @Module({
-  imports: [TypeOrmModule.forFeature([TokenPrice])],
+  imports: [TypeOrmModule.forFeature([TokenPrice, TokenSentiment])],
   providers: [MarketService],
   controllers: [MarketController],
   exports: [MarketService],
 })
 export class MarketModule {}
-

@@ -32,6 +32,13 @@ export class HealthController {
       hasOpenAI: Boolean(process.env.OPENAI_API_KEY),
       hasGroq: Boolean(process.env.GROQ_API_KEY),
     };
+    const llmProvider = (() => {
+      const provider = (process.env.LLM_PROVIDER || '').toLowerCase();
+      const groq = Boolean(process.env.GROQ_API_KEY);
+      const openai = Boolean(process.env.OPENAI_API_KEY);
+      const selected = provider === 'groq' || (groq && !openai) ? 'groq' : (openai ? 'openai' : 'none');
+      return { selected, ok: selected !== 'none' } as const;
+    })();
     const solana = {
       jupiterApi: process.env.JUPITER_API_URL || 'https://quote-api.jup.ag',
     };
@@ -60,7 +67,7 @@ export class HealthController {
       'HL ingest enabled + symbol list set',
       'Solana price ingest (optional) configured',
     ];
-    return { ok: true, keys, rpc, chat, solana, hyperliquid: hl, solanaIngest: solIngest, rateLimit, webOrigins, rolloutChecklist };
+    return { ok: true, keys, rpc, chat, llm: llmProvider, solana, hyperliquid: hl, solanaIngest: solIngest, rateLimit, webOrigins, rolloutChecklist };
   }
 
   @Get('cors')

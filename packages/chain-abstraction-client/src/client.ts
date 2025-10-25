@@ -101,7 +101,16 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       } else if (this.isSei(intent.fromChain)) {
         return this.seiClient.getSwapQuote(intent);
       } else {
-        return this.getOneBalanceQuote(intent);
+        // EVM swap with fallback to Li.Fi when OneBalance is unavailable/non-executable upstream
+        try {
+          return await this.getOneBalanceQuote(intent);
+        } catch (e) {
+          // Try Li.Fi only for same-chain swaps (fromChain == toChain)
+          if ((intent.fromChain || '').toLowerCase() === (intent.toChain || '').toLowerCase()) {
+            return await this.getLiFiSwapQuote(intent);
+          }
+          throw e;
+        }
       }
     } else if (intent.type === 'bridge') {
       if (this.isSei(intent.fromChain) || this.isSei(intent.toChain)) {
@@ -175,6 +184,38 @@ export class ChainAbstractionClient implements IChainAbstractionClient {
       const error = e as Error;
       console.error('Error getting or validating quote from LI.FI:', error);
       throw new Error(`Failed to get LI.FI quote: ${error.message}`);
+    }
+  }
+
+  private async getLiFiSwapQuote(intent: TransactionIntent): Promise<GetQuoteResponse> {
+    console.log('Getting LI.FI swap quote for intent:', intent);
+    if (intent.type !== 'swap') throw new Error('Invalid intent type for LI.FI swap');
+    try {
+      const url = new URL('https://li.quest/v1/quote');
+      const chainId = this.mapChainNameToId(intent.fromChain)?.toString() ?? '';
+      url.searchParams.set('fromChain', chainId);
+      url.searchParams.set('toChain', chainId);
+      url.searchParams.set('fromToken', intent.fromToken);
+      url.searchParams.set('toToken', intent.toToken);
+      url.searchParams.set('fromAmount', intent.fromAmount);
+      url.searchParams.set('fromAddress', intent.userAddress);
+
+      const res = await this.http.get(url.toString(), { timeout: Number(process.env.LIFI_TIMEOUT_MS ?? '10000') });
+      if (res.status !== 200 || !res.data.transactionRequest) {
+        throw new Error(`Li.Fi swap quote did not include a transactionRequest.`);
+      }
+      const quote: Quote = {
+        id: res.data.id,
+        fromAmount: res.data.estimate.fromAmount,
+        toAmount: res.data.estimate.toAmount,
+        gasCostUsd: res.data.estimate.gasCosts.find((g: any) => g.type === 'source')?.amountUSD,
+        transactionRequest: res.data.transactionRequest,
+      };
+      return { quote };
+    } catch (e) {
+      const error = e as Error;
+      console.error('Error getting Li.Fi swap quote:', error);
+      throw new Error(`Failed to get Li.Fi swap quote: ${error.message}`);
     }
   }
 

@@ -7,10 +7,10 @@ import { TransactionModule } from '../transaction/transaction.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { MarketModule } from '../market/market.module';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { ChatMemory } from '@copil/database';
+import { ChatMemory, ChatEmbedding } from '@copil/database';
 
 @Module({
-  imports: [PortfolioModule, TransactionModule, AutomationsModule, MarketModule, TypeOrmModule.forFeature([ChatMemory])],
+  imports: [PortfolioModule, TransactionModule, AutomationsModule, MarketModule, TypeOrmModule.forFeature([ChatMemory, ChatEmbedding])],
   controllers: [ChatController, ChatMemoryController],
   providers: [ChatService],
 })
