@@ -14,7 +14,7 @@ import { TransactionModule } from './transaction/transaction.module';
 import { AutomationsModule } from './automations/automations.module';
 import { SessionKeysModule } from './session-keys/session-keys.module';
 
-import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata, STRATEGY_QUEUE } from '@copil/database';
+import { User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata, STRATEGY_QUEUE, ChatMemory } from '@copil/database';
 import { PolicyController } from './policy/policy.controller';
 import { PolicyService } from './policy/policy.service';
 import { SmartAccountController } from './smart-account/smart-account.controller';
@@ -46,7 +46,7 @@ import { MarketModule } from './market/market.module';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata],
+        entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata, ChatMemory],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false, // Disable auto-schema sync, we will use migrations
       }),

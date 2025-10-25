@@ -5,9 +5,11 @@ import { PortfolioModule } from '../portfolio/portfolio.module';
 import { TransactionModule } from '../transaction/transaction.module';
 import { AutomationsModule } from '../automations/automations.module';
 import { MarketModule } from '../market/market.module';
+import { TypeOrmModule } from '@nestjs/typeorm';
+import { ChatMemory } from '@copil/database';
 
 @Module({
-  imports: [PortfolioModule, TransactionModule, AutomationsModule, MarketModule],
+  imports: [PortfolioModule, TransactionModule, AutomationsModule, MarketModule, TypeOrmModule.forFeature([ChatMemory])],
   controllers: [ChatController],
   providers: [ChatService],
 })

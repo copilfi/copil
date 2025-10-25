@@ -13,7 +13,9 @@ import {
 } from '@langchain/core/prompts';
 import { StructuredTool } from '@langchain/core/tools';
 import { z } from 'zod';
-import { TransactionIntent } from '@copil/database';
+import { TransactionIntent, ChatMemory } from '@copil/database';
+import { InjectRepository } from '@nestjs/typeorm';
+import { Repository } from 'typeorm';
 import { MarketService } from '../market/market.service';
 
 class CompareQuotesTool extends StructuredTool {
@@ -299,6 +301,7 @@ export class ChatService {
     private readonly transactionService: TransactionService,
     private readonly automationsService: AutomationsService,
     private readonly marketService: MarketService,
+    @InjectRepository(ChatMemory) private readonly memoryRepo: Repository<ChatMemory>,
   ) {}
 
   async invokeAgent(
@@ -321,10 +324,14 @@ export class ChatService {
       apiKey: this.configService.get<string>('OPENAI_API_KEY'),
     });
 
+    const priorMemory = await this.loadMemory(user.id);
+
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
         `You are Copil, an AI DeFi assistant. Your goal is to help users by answering questions and executing transactions on their behalf.
+
+        Long-term memory (summarized): ${priorMemory || '(empty)'}
 
         You have access to the following tools:
         - get_portfolio: Get user\'s aggregated balances across all wallets.
@@ -364,6 +371,42 @@ export class ChatService {
       chat_history: chatHistory,
     });
 
+    try {
+      // Update memory with a concise summary
+      const newSummary = await this.summarizeMemory(llm, priorMemory || '', input, String((result as any)?.output ?? ''));
+      await this.saveMemory(user.id, newSummary);
+    } catch { /* best-effort */ }
+
     return result;
+  }
+
+  private async loadMemory(userId: number): Promise<string | null> {
+    try {
+      const rec = await this.memoryRepo.findOne({ where: { userId } });
+      return rec?.summary ?? null;
+    } catch { return null; }
+  }
+
+  private async saveMemory(userId: number, summary: string): Promise<void> {
+    if (!summary || !summary.trim()) return;
+    const existing = await this.memoryRepo.findOne({ where: { userId } });
+    if (existing) {
+      existing.summary = summary;
+      await this.memoryRepo.save(existing);
+      return;
+    }
+    const rec = this.memoryRepo.create({ userId, summary });
+    await this.memoryRepo.save(rec);
+  }
+
+  private async summarizeMemory(llm: ChatOpenAI, prior: string, lastUser: string, lastAssistant: string): Promise<string> {
+    const sys = 'Summarize the conversation into a concise, user-centric memory. Keep under 1200 characters. Focus on persistent preferences, holdings context, and intent patterns. Avoid transient chatter.';
+    const prompt = [
+      { role: 'system', content: sys },
+      { role: 'user', content: `Prior memory: ${prior || '(none)'}\n\nNew exchange:\nUser: ${lastUser}\nAssistant: ${lastAssistant}\n\nReturn only the updated memory text.` },
+    ] as any;
+    const res = await llm.invoke(prompt as any);
+    const text = (res as any)?.content || '';
+    return typeof text === 'string' ? text.trim() : JSON.stringify(text);
   }
 }
