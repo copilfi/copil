@@ -111,13 +111,14 @@ export class ExecutionService {
 
     // Hyperliquid intents are executed directly by the signer service without a quote
     if (intent.type === 'open_position' || intent.type === 'close_position') {
-      const wallet = await this.walletRepository.findOne({ where: { userId, chain: 'hyperliquid' } });
-      if (!wallet) throw new NotFoundException('Hyperliquid wallet not found for user.');
-      
+      const wallet = await this.walletRepository.findOne({ where: { userId, chain: 'hyperliquid' } })
+        .catch(() => null);
+      // Provide a lightweight fallback wallet; signer derives the actual HL address from session key
+      const fallback: any = wallet ?? { userId, chain: 'hyperliquid', address: '0x0000000000000000000000000000000000000000', type: 'eoa' };
       return this.signerService.signAndSend({
         userId,
         sessionKeyId,
-        wallet,
+        wallet: fallback,
         metadata: { intent },
       });
     }

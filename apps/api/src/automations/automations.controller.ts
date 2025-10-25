@@ -26,6 +26,11 @@ export class AutomationsController {
     return this.automationsService.findOne(+id, req.user.id);
   }
 
+  @Get(':id/diagnose')
+  diagnose(@Param('id') id: string, @Request() req: AuthRequest) {
+    return this.automationsService.diagnose(+id, req.user.id);
+  }
+
   @Patch(':id')
   update(@Param('id') id: string, @Body() updateStrategyDto: UpdateStrategyDto, @Request() req: AuthRequest) {
     return this.automationsService.update(+id, updateStrategyDto, req.user.id);

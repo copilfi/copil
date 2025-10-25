@@ -93,9 +93,7 @@ export class StrategyProcessor {
     });
 
     if (!latestPrice) {
-      this.logger.warn(
-        `No price data for ${definition.trigger.tokenAddress} on ${definition.trigger.chain}.`,
-      );
+      this.logger.warn(`Price trigger not met: no TokenPrice data for ${definition.trigger.tokenAddress} on ${definition.trigger.chain}.`);
       return false;
     }
 
@@ -104,9 +102,13 @@ export class StrategyProcessor {
     );
 
     const comparator = definition.trigger.comparator ?? 'gte';
-    return comparator === 'gte'
+    const met = comparator === 'gte'
       ? latestPrice.priceUsd >= definition.trigger.priceTarget
       : latestPrice.priceUsd <= definition.trigger.priceTarget;
+    if (!met) {
+      this.logger.debug(`Price trigger not met: latest=${latestPrice.priceUsd} comparator=${comparator} target=${definition.trigger.priceTarget}`);
+    }
+    return met;
   }
 
   private async evaluateTrendTrigger(definition: StrategyDefinition): Promise<boolean> {
@@ -126,8 +128,13 @@ export class StrategyProcessor {
       unique.push({ chain: r.chain, address: r.address });
       if (unique.length >= top) break;
     }
-    const inTop = unique.some((x) => x.chain.toLowerCase() === chain && x.address.toLowerCase() === token);
-    this.logger.debug(`Trend trigger check on ${chain} ${token}: inTop=${inTop} (top=${top})`);
+    const idx = unique.findIndex((x) => x.chain.toLowerCase() === chain && x.address.toLowerCase() === token);
+    const inTop = idx >= 0;
+    if (!inTop) {
+      this.logger.debug(`Trend trigger not met on ${chain} ${token}: not within top ${top}.`);
+    } else {
+      this.logger.debug(`Trend trigger met on ${chain} ${token}: rank=${idx + 1} within top ${top}.`);
+    }
     return inTop;
   }
 

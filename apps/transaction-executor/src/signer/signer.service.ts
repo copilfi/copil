@@ -101,6 +101,8 @@ export class SignerService {
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
     }
+    const sessionKeyAcct = privateKeyToAccount(sessionKey);
+    const traderAddr = sessionKeyAcct.address;
 
     // Per-user/symbol simple concurrency lock
     const symbolResolved = this.resolveMarketSymbol(String(intent.market));
@@ -136,7 +138,7 @@ export class SignerService {
 
       // Close vs Open logic
       if (intent.type === 'close_position') {
-        const pos = await this.getHyperliquidPosition(info, String(request.wallet.address));
+        const pos = await this.getHyperliquidPosition(info, traderAddr);
         const coinPos = pos.find((p) => p.coin.toUpperCase() === symbol);
         if (!coinPos) {
           return { status: 'failed', description: `No open position to close for ${symbol}` };
@@ -196,7 +198,7 @@ export class SignerService {
       const priceStr = this.formatDecimal(px, 6);
 
       // Available to trade guard (best-effort)
-      await this.guardAvailableToTrade(info, String(request.wallet.address), symbol, qty);
+      await this.guardAvailableToTrade(info, traderAddr, symbol, qty);
 
       await this.ensureAgentAndBuilder(exch);
 

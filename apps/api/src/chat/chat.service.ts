@@ -318,11 +318,7 @@ export class ChatService {
       new GetWalletBalanceTool(this.portfolioService, user.id),
     ];
 
-    const llm = new ChatOpenAI({
-      modelName: 'gpt-4o',
-      temperature: 0,
-      apiKey: this.configService.get<string>('OPENAI_API_KEY'),
-    });
+    const llm = this.buildLlm();
 
     const priorMemory = await this.loadMemory(user.id);
 
@@ -333,22 +329,31 @@ export class ChatService {
 
         Long-term memory (summarized): ${priorMemory || '(empty)'}
 
-        You have access to the following tools:
-        - get_portfolio: Get user\'s aggregated balances across all wallets.
-        - get_trending_tokens: Fetch recent trending tokens for a chain (from ingested data).
-        - get_wallet_balance: Get user\'s balance for a specific chain/token (symbol or address).
-        - compare_quotes: Retrieve quotes from providers (OneBalance primary; Li.Fi reference for bridges) and present options.
-        - create_transaction: Perform actions that move funds (EVM swaps/bridges) or place Hyperliquid orders (open/close).
-        - create_automation: Create price-triggered automation strategies (EVM swap/bridge or Hyperliquid open/close) that run with a session key.
+        Tools available:
+        - get_portfolio: Aggregated balances for all wallets.
+        - get_trending_tokens: Recent trending tokens by chain (from ingested data).
+        - get_wallet_balance: Balance for a specific chain/token.
+        - compare_quotes: Fetch and compare providers; prefer non-custodial executable routes.
+        - create_transaction: Execute actions that move funds (EVM swap/bridge) or Hyperliquid order (open/close).
+        - create_automation: Create price/trend-triggered automation using a session key.
 
-        IMPORTANT: Before using 'create_transaction' or 'create_automation', follow these steps:
-        1. Understand the user's request (e.g., "swap 1 ETH for USDC on Base").
-        2. Determine all the parameters for the 'intent' object.
-           - For EVM (swap/bridge): include optional 'slippageBps' if provided. Call 'compare_quotes' and present options, then ask for confirmation.
-           - For Hyperliquid (open_position/close_position): skip 'compare_quotes'. Present the order plan (market, side, size/leverage or close), then ask for confirmation.
-        3. After confirmation, ask for the sessionKeyId to use.
-        4. Only after you have confirmation AND the sessionKeyId, call 'create_transaction' (for immediate execution) or 'create_automation' (for price-triggered execution).
-           When calling 'create_transaction', you MUST set confirmed=true.`,
+        Policy:
+        - Never move funds without explicit confirmation and a sessionKeyId.
+        - For EVM swaps/bridges, compare quotes first; summarize tradeoffs (receive amount, readiness, constraints).
+        - For Hyperliquid, present a concise order plan (market, side, size, leverage/slippage if any) and ask for confirmation.
+
+        Mini examples:
+        - User: "Base'de 100 USDC'yi ETH'e çevir."
+          You: Use compare_quotes with intent, present summary, ask: "Onaylıyor musunuz? SessionKeyId?"
+        - User: "BTC long 500 USDT eşdeğeri x3 HL aç."
+          You: Present order plan (market BTC, long, size 500 USD, lev x3), then ask to confirm + sessionKeyId.
+
+        Execution steps:
+        1) Parse request → build intent.
+        2) If EVM swap/bridge → compare_quotes → present options.
+        3) Ask for explicit confirmation and sessionKeyId.
+        4) Call create_transaction with confirmed=true.
+        5) Summarize the result.`,
       ],
       new MessagesPlaceholder('chat_history'),
       ['human', '{input}'],
@@ -378,6 +383,25 @@ export class ChatService {
     } catch { /* best-effort */ }
 
     return result;
+  }
+
+  private buildLlm(): ChatOpenAI {
+    const provider = (this.configService.get<string>('LLM_PROVIDER') || '').toLowerCase();
+    const groqKey = this.configService.get<string>('GROQ_API_KEY');
+    const openaiKey = this.configService.get<string>('OPENAI_API_KEY');
+
+    const useGroq = provider === 'groq' || (!!groqKey && !openaiKey);
+    if (useGroq) {
+      const model = this.configService.get<string>('GROQ_MODEL') || 'llama-3.1-70b-versatile';
+      return new ChatOpenAI({
+        modelName: model,
+        temperature: 0,
+        apiKey: groqKey,
+        configuration: { baseURL: 'https://api.groq.com/openai/v1' } as any,
+      } as any);
+    }
+    const model = this.configService.get<string>('OPENAI_MODEL') || 'gpt-4o';
+    return new ChatOpenAI({ modelName: model, temperature: 0, apiKey: openaiKey });
   }
 
   private async loadMemory(userId: number): Promise<string | null> {

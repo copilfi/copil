@@ -13,6 +13,7 @@ import { UpdateStrategyDto } from './dto/update-strategy.dto';
 import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
 import { parseStrategyDefinition } from './strategy-definition.utils';
+import { TokenPrice } from '@copil/database';
 
 const DEFAULT_CONDITION_INTERVAL_MS = 60_000;
 
@@ -23,6 +24,8 @@ export class AutomationsService {
     private readonly strategyRepository: Repository<Strategy>,
     @InjectRepository(SessionKey)
     private readonly sessionKeyRepository: Repository<SessionKey>,
+    @InjectRepository(TokenPrice)
+    private readonly tokenPriceRepository: Repository<TokenPrice>,
     @InjectQueue(STRATEGY_QUEUE) private readonly strategyQueue: Queue<{ strategyId: number }>,
     @InjectQueue(TRANSACTION_QUEUE)
     private readonly transactionQueue: Queue<TransactionJobData>,
@@ -58,6 +61,44 @@ export class AutomationsService {
       }
     }
     return savedStrategy;
+  }
+
+  async diagnose(id: number, userId: number) {
+    const strategy = await this.findOne(id, userId);
+    const def = strategy.definition as any;
+    const trig = def?.trigger as any;
+    if (!trig || !trig.type) {
+      return { ok: false, reason: 'Trigger missing in definition.' };
+    }
+    if (trig.type === 'price') {
+      const latest = await this.tokenPriceRepository.findOne({ where: { chain: trig.chain, address: trig.tokenAddress }, order: { timestamp: 'DESC' } });
+      if (!latest) return { ok: false, type: 'price', reason: 'No TokenPrice data found for chain/token.', chain: trig.chain, tokenAddress: trig.tokenAddress };
+      const cmp: 'gte' | 'lte' = trig.comparator ?? 'gte';
+      const met = cmp === 'gte' ? Number(latest.priceUsd) >= Number(def.trigger.priceTarget) : Number(latest.priceUsd) <= Number(def.trigger.priceTarget);
+      const reason = met ? 'Condition met.' : `Condition not met: latest=${Number(latest.priceUsd)} ${cmp} target=${Number(def.trigger.priceTarget)} is false.`;
+      return { ok: true, type: 'price', met, comparator: cmp, latestPrice: Number(latest.priceUsd), target: Number(def.trigger.priceTarget), at: latest.timestamp, reason };
+    }
+    if (trig.type === 'trend') {
+      const top = Math.max(1, Math.min(Number(trig.top ?? 10), 50));
+      const chain = String(trig.chain).toLowerCase();
+      const addr = String(trig.tokenAddress).toLowerCase();
+      const rows = await this.tokenPriceRepository.find({ where: { chain }, order: { timestamp: 'DESC' }, take: Math.max(top * 10, 100) });
+      const seen = new Set<string>();
+      let rank = -1;
+      let pos = 0;
+      for (const r of rows) {
+        const key = `${r.chain.toLowerCase()}|${r.address.toLowerCase()}`;
+        if (seen.has(key)) continue;
+        seen.add(key);
+        pos += 1;
+        if (r.address.toLowerCase() === addr) { rank = pos; break; }
+        if (pos >= top) break;
+      }
+      const inTop = rank > 0 && rank <= top;
+      const reason = inTop ? `Token is within top ${top} (rank ${rank}).` : `Token is not within top ${top}.`;
+      return { ok: true, type: 'trend', top, inTop, rank: inTop ? rank : null, reason };
+    }
+    return { ok: false, reason: `Unsupported trigger type ${trig.type}` };
   }
 
   findAll(userId: number): Promise<Strategy[]> {
