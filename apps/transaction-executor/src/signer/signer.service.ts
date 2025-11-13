@@ -13,15 +13,16 @@ import { HttpTransport, ExchangeClient, InfoClient } from '@nktkas/hyperliquid';
 import { BundlerClient } from '../clients/bundler.client';
 import { PaymasterClient } from '../clients/paymaster.client';
 import { InjectRepository } from '@nestjs/typeorm';
+import { Inject } from '@nestjs/common';
 import { Wallet, SessionKey, SessionKeyPermissions } from '@copil/database';
 import { Repository } from 'typeorm';
 import { seiChain, hyperliquidChain } from '@copil/chain-abstraction-client';
-import { KeyManagementService } from '../../../api/src/common/key-management.service';
+import { IKeyManagementService } from '@copil/database';
 
 export interface SignAndSendRequest {
   userId: number;
-  sessionKeyId: number;
-  wallet: Wallet; // Pass the full wallet context
+  sessionKeyId: string;
+  wallet: Wallet | null; // Pass the full wallet context
   transaction?: {
     to: `0x${string}` | string; // Allow string for Solana
     data: `0x${string}`;
@@ -72,7 +73,8 @@ export class SignerService {
     private readonly configService: ConfigService,
     private readonly bundlerClient: BundlerClient,
     private readonly paymasterClient: PaymasterClient,
-    private readonly keyManagementService: KeyManagementService,
+    @Inject('IKeyManagementService')
+    private readonly keyManagementService: IKeyManagementService,
     @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(SessionKey)
@@ -83,6 +85,10 @@ export class SignerService {
    * Main dispatcher for signing transactions. It checks the wallet type and delegates to the appropriate method.
    */
   async signAndSend(request: SignAndSendRequest): Promise<SignAndSendResult> {
+    if (!request.wallet) {
+      return { status: 'failed', description: 'Wallet context is required.' };
+    }
+    
     const intent = request.metadata?.intent as any;
     if (intent?.type === 'open_position' || intent?.type === 'close_position') {
       return this.executeHyperliquidTrade(request);
@@ -276,8 +282,8 @@ export class SignerService {
       const bestAsk = asks?.length ? Number(asks[0].px) : null;
       return { bid: bestBid, ask: bestAsk };
     } catch (err) {
-      this.logger.error(`Failed to enforce Hyperliquid policy: ${(err as Error).message}`);
-      return { status: 'failed', description: 'Unable to verify session key policy.' };
+      this.logger.error(`Failed to get top of book: ${(err as Error).message}`);
+      return null;
     }
   }
 
@@ -331,9 +337,9 @@ export class SignerService {
     this.hlLocks.delete(key);
   }
 
-  private async enforceHlPolicy(sessionKeyId: number, intent: any, symbol: string): Promise<SignAndSendResult | null> {
+  private async enforceHlPolicy(sessionKeyId: string, intent: any, symbol: string): Promise<SignAndSendResult | null> {
     try {
-      const sk = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
+      const sk = await this.sessionKeyRepository.findOne({ where: { id: String(sessionKeyId) } });
       const perms = (sk?.permissions as SessionKeyPermissions | undefined) ?? undefined;
       if (!perms) {
         return { status: 'failed', description: 'Session key missing permissions for Hyperliquid trades.' };
@@ -588,16 +594,6 @@ export class SignerService {
     return { ...this.solMetrics };
   }
 
-  getHyperliquidMetrics() {
-    return {
-      total: this.hlMetrics.total,
-      success: this.hlMetrics.success,
-      failed: this.hlMetrics.failed,
-      lastError: this.hlMetrics.lastError,
-      // Avoid leaking perSymbol details by default; could expose behind a debug flag
-    };
-  }
-
   private async signAndSendEoa(request: SignAndSendRequest): Promise<SignAndSendResult> {
     const chainName = (request.metadata?.chain as string)?.toLowerCase();
     if (!chainName) {
@@ -638,7 +634,7 @@ export class SignerService {
     try {
       // Double-check session key permissions right before signing (TOCTOU prevention)
       if (sessionKeyId && request.metadata?.intent) {
-        const sk = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
+        const sk = await this.sessionKeyRepository.findOne({ where: { id: String(sessionKeyId) } });
         if (!sk || !sk.isActive) {
           return { status: 'failed', description: 'Session key is no longer active.' };
         }
@@ -789,14 +785,16 @@ export class SignerService {
     }
   }
 
-  private async getSessionKey(sessionKeyId: number): Promise<Hex | undefined> {
+  private async getSessionKey(sessionKeyId: string): Promise<Hex | undefined> {
     // Use KeyManagementService for secure key retrieval
-    return await this.keyManagementService.getSessionKey(sessionKeyId);
+    const result = await this.keyManagementService.getSessionKey(sessionKeyId);
+    return result;
   }
 
-  private async getSessionKeyBytes(sessionKeyId: number): Promise<Uint8Array | undefined> {
+  private async getSessionKeyBytes(sessionKeyId: string): Promise<Uint8Array | undefined> {
     // Use KeyManagementService for secure key retrieval (Solana)
-    return await this.keyManagementService.getSessionKeyBytes(sessionKeyId);
+    const result = await this.keyManagementService.getSessionKeyBytes(sessionKeyId);
+    return result || undefined;
   }
 
   private getRpcUrl(chain: string): string {

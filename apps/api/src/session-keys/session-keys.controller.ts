@@ -12,7 +12,7 @@ export class SessionKeysController {
 
   @Post()
   create(@Request() req: AuthRequest, @Body() dto: CreateSessionKeyDto) {
-    return this.sessionKeysService.create(req.user.id, dto);
+    return this.sessionKeysService.create(req.user.id, dto as any);
   }
 
   @Get()
@@ -22,6 +22,6 @@ export class SessionKeysController {
 
   @Patch(':id')
   update(@Param('id') id: string, @Request() req: AuthRequest, @Body() dto: UpdateSessionKeyDto) {
-    return this.sessionKeysService.update(Number(id), req.user.id, dto);
+    return this.sessionKeysService.update(id, req.user.id, dto);
   }
 }

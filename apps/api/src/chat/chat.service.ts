@@ -1,24 +1,67 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { PortfolioService } from '../portfolio/portfolio.service';
-import { TransactionService } from '../transaction/transaction.service';
-import { AutomationsService } from '../automations/automations.service';
-import { ChatOpenAI } from '@langchain/openai';
-import { AgentExecutor, createOpenAIToolsAgent } from 'langchain/agents';
-import { pull } from 'langchain/hub';
-import { AIMessage, HumanMessage } from '@langchain/core/messages';
-import {
-  ChatPromptTemplate,
-  MessagesPlaceholder,
-} from '@langchain/core/prompts';
-import { StructuredTool } from '@langchain/core/tools';
-import { z } from 'zod';
-import { TransactionIntent, ChatMemory, ChatEmbedding } from '@copil/database';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { OpenAIEmbeddings } from '@langchain/openai';
+import {
+  Entity,
+  PrimaryGeneratedColumn,
+  Column,
+  CreateDateColumn,
+} from 'typeorm';
+import { AutomationsService } from '../automations/automations.service';
+import { TransactionService } from '../transaction/transaction.service';
+import { PortfolioService } from '../portfolio/portfolio.service';
 import { MarketService } from '../market/market.service';
+import { HumanMessage, AIMessage } from '@langchain/core/messages';
+import { MessagesPlaceholder } from '@langchain/core/prompts';
+import { ChatOpenAI } from '@langchain/openai';
+import { AgentExecutor } from 'langchain/agents';
+import { StructuredTool } from '@langchain/core/tools';
+import { ChatPromptTemplate } from '@langchain/core/prompts';
+import { createOpenAIToolsAgent } from 'langchain/agents';
+import { OpenAIEmbeddings } from '@langchain/openai';
+import { z } from 'zod';
+import { TransactionIntent } from '@copil/database';
 import { PromptValidator } from './prompt-validator';
+import { AdvancedPromptValidator } from './advanced-prompt-validator';
+import { ConfigService } from '@nestjs/config';
+import { AssetBalance } from '@copil/chain-abstraction-client';
+
+// Mock entities for now
+@Entity()
+class ChatMemory {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column()
+  userId!: number;
+
+  @Column()
+  content!: string;
+
+  @Column()
+  summary!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
+
+@Entity()
+class ChatEmbedding {
+  @PrimaryGeneratedColumn('uuid')
+  id!: string;
+
+  @Column()
+  userId!: number;
+
+  @Column('json')
+  embedding!: number[];
+
+  @Column()
+  content!: string;
+
+  @CreateDateColumn()
+  createdAt!: Date;
+}
 
 class CompareQuotesTool extends StructuredTool {
   name = 'compare_quotes';
@@ -72,11 +115,14 @@ class GetPortfolioTool extends StructuredTool {
   description = "Get the user's aggregated token balances across all supported chains.";
   schema = z.object({}); // No parameters needed as user is inferred
 
-  constructor(private readonly portfolioService: PortfolioService, private readonly userId: number) {
+  constructor(
+    private readonly portfolioService: PortfolioService,
+    private readonly userId: number,
+  ) {
     super();
   }
 
-  async _call(_: z.infer<typeof this.schema>) {
+  async _call() {
     try {
       const portfolio = await this.portfolioService.getPortfolioForUser(this.userId);
       return JSON.stringify(portfolio);
@@ -99,38 +145,49 @@ class CreateTransactionTool extends StructuredTool {
       .describe('The session key ID required to authorize the transaction.'),
     confirmed: z
       .boolean()
-      .describe('Must be true to proceed. Set after explicit user confirmation.'),
+      .describe(
+        'Must be true to proceed. Set after explicit user confirmation.',
+      ),
     intent: z.discriminatedUnion('type', [
       z.object({
-        type: z.enum(['swap', 'bridge']).describe('EVM or cross-chain transaction.'),
+        type: z
+          .enum(['swap', 'bridge'])
+          .describe('EVM or cross-chain transaction.'),
         fromChain: z.string(),
         toChain: z.string(),
         fromToken: z.string(),
         toToken: z.string(),
         fromAmount: z.string(),
         userAddress: z.string(),
-        slippageBps: z.number().optional(),
+        slippage: z.number().optional(),
       }),
       z.object({
-        type: z.literal('custom'),
-        name: z.string(),
-        parameters: z.record(z.string(), z.unknown()).optional().default({}),
+        type: z.enum(['transfer']).describe('Simple transfer on a single chain.'),
+        chain: z.string(),
+        tokenAddress: z.string(),
+        fromAddress: z.string(),
+        toAddress: z.string(),
+        amount: z.string(),
       }),
       z.object({
-        type: z.literal('open_position'),
+        type: z.enum(['open_position']).describe('Hyperliquid perpetual position.'),
         chain: z.literal('hyperliquid'),
-        market: z.string().describe("Market symbol, e.g. 'BTC', 'ETH'."),
+        market: z.string(),
         side: z.enum(['long', 'short']),
-        size: z.string().describe('Notional size in USD (as string).'),
-        leverage: z.number().describe('Leverage multiplier (e.g., 3).'),
-        slippage: z.number().optional().describe('Optional slippage as decimal (e.g., 0.003 for 0.3%).'),
+        size: z.string(),
+        leverage: z.number(),
       }),
       z.object({
-        type: z.literal('close_position'),
+        type: z.enum(['close_position']).describe('Close Hyperliquid position.'),
         chain: z.literal('hyperliquid'),
-        market: z.string().describe("Market symbol, e.g. 'BTC', 'ETH'."),
+        market: z.string(),
       }),
-    ]).describe("The user's intent for the transaction"),
+      z.object({
+        type: z.enum(['custom']).describe('Custom transaction.'),
+        name: z.string(),
+        parameters: z.record(z.string(), z.unknown()),
+      }),
+    ]),
   });
 
   constructor(
@@ -140,18 +197,22 @@ class CreateTransactionTool extends StructuredTool {
     super();
   }
 
-  async _call({ sessionKeyId, intent, confirmed }: z.infer<typeof this.schema>) {
+  async _call({
+    sessionKeyId,
+    intent,
+    confirmed,
+  }: z.infer<typeof this.schema>) {
     try {
       if (!confirmed) {
         return 'This action moves funds. Please ask the user to confirm and call the tool again with confirmed=true.';
       }
-      // The service now handles getting the quote and enqueuing the job
-      const result = await this.transactionService.createAdHocTransactionJob(
+
+      const jobData = await this.transactionService.createAdHocTransactionJob(
         this.userId,
-        sessionKeyId,
-        intent as TransactionIntent, // Cast to the correct type
+        String(sessionKeyId), // Convert to string for UUID
+        intent as TransactionIntent,
       );
-      const jobIntent = result.intent;
+      const jobIntent = jobData.intent;
 
       // Type-safe checks using discriminated unions
       if (jobIntent.type === 'open_position') {
@@ -161,7 +222,7 @@ class CreateTransactionTool extends StructuredTool {
         return `Hyperliquid order queued: Close position on ${jobIntent.market}.`;
       }
       if (jobIntent.type === 'swap' || jobIntent.type === 'bridge') {
-        const quote = result.quote as { toAmount?: string };
+        const quote = jobData.quote as { toAmount?: string };
         return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote?.toAmount ?? 'n/a'} of ${jobIntent.toToken}.`;
       }
       return `Transaction successfully queued!`;
@@ -191,9 +252,21 @@ class CreateAutomationTool extends StructuredTool {
         chain: z.string(),
         tokenAddress: z.string(),
         top: z.number().int().min(1).max(50).optional(),
-      })
+        interval: z.string().optional(),
+        direction: z.enum(['up', 'down']),
+        threshold: z.number().optional(),
+      }),
+      z.object({
+        type: z.literal('time'),
+        schedule: z
+          .string()
+          .optional()
+          .describe(
+            'Cron pattern. If omitted, condition-based poll runs every minute.',
+          ),
+      }),
     ]),
-    intent: z.discriminatedUnion('type', [
+    action: z.discriminatedUnion('type', [
       z.object({
         type: z.enum(['swap', 'bridge']),
         fromChain: z.string(),
@@ -201,21 +274,25 @@ class CreateAutomationTool extends StructuredTool {
         fromToken: z.string(),
         toToken: z.string(),
         fromAmount: z.string(),
-        userAddress: z.string(),
-        slippageBps: z.number().optional(),
-        amountInIsPercentage: z.boolean().optional(),
+        slippage: z.number().optional(),
       }),
       z.object({
-        type: z.literal('open_position'),
+        type: z.enum(['transfer']),
+        chain: z.string(),
+        tokenAddress: z.string(),
+        toAddress: z.string(),
+        amount: z.string(),
+      }),
+      z.object({
+        type: z.enum(['open_position']),
         chain: z.literal('hyperliquid'),
         market: z.string(),
         side: z.enum(['long', 'short']),
         size: z.string(),
         leverage: z.number(),
-        slippage: z.number().optional(),
       }),
       z.object({
-        type: z.literal('close_position'),
+        type: z.enum(['close_position']),
         chain: z.literal('hyperliquid'),
         market: z.string(),
       }),
@@ -226,7 +303,11 @@ class CreateAutomationTool extends StructuredTool {
     isActive: z.boolean().optional().default(true),
   });
 
-  constructor(private readonly automations: AutomationsService, private readonly userId: number) {
+// ...
+  constructor(
+    private readonly automations: AutomationsService,
+    private readonly userId: number,
+  ) {
     super();
   }
 
@@ -236,7 +317,7 @@ class CreateAutomationTool extends StructuredTool {
         name: input.name,
         definition: {
           trigger: input.trigger,
-          intent: input.intent,
+          intent: input.action,
           sessionKeyId: input.sessionKeyId,
           repeat: input.repeat,
         },
@@ -255,9 +336,14 @@ class CreateAutomationTool extends StructuredTool {
 class GetTrendingTokensTool extends StructuredTool {
   name = 'get_trending_tokens';
   description = 'Returns a recent list of trending tokens for a chain (approximate, based on latest ingested TokenPrice records).';
-  schema = z.object({ chain: z.string().optional(), limit: z.number().int().min(1).max(50).optional() });
+  schema = z.object({
+    chain: z.string().optional(),
+    limit: z.number().int().min(1).max(50).optional(),
+  });
 
-  constructor(private readonly market: MarketService) { super(); }
+  constructor(private readonly market: MarketService) {
+    super();
+  }
 
   async _call(input: z.infer<typeof this.schema>) {
     try {
@@ -273,27 +359,65 @@ class GetTrendingTokensTool extends StructuredTool {
 class GetWalletBalanceTool extends StructuredTool {
   name = 'get_wallet_balance';
   description = 'Returns the user\'s balance for a given chain and token (address or symbol) from the aggregated portfolio.';
-  schema = z.object({ chain: z.string(), token: z.string().describe('ERC-20 address, native, or symbol') });
+  schema = z.object({
+    chain: z.string(),
+    token: z.string().describe('ERC-20 address, native, or symbol'),
+  });
 
-  constructor(private readonly portfolio: PortfolioService, private readonly userId: number) { super(); }
+  constructor(
+    private readonly portfolio: PortfolioService,
+    private readonly userId: number,
+  ) {
+    super();
+  }
 
-  private isAddress(s: string) { return /^0x[0-9a-fA-F]{40}$/.test(s); }
+  private isAddress(s: string) {
+    return /^0x[0-9a-fA-F]{40}$/.test(s);
+  }
 
   async _call({ chain, token }: z.infer<typeof this.schema>) {
     try {
-      const balances = (await this.portfolio.getPortfolioForUser(this.userId)) as any[];
+      const portfolio = (await this.portfolio.getPortfolioForUser(
+        this.userId,
+      )) as AssetBalance[];
       const lcChain = chain.toLowerCase();
-      const lcTok = token.toLowerCase();
-      const pick = balances.find((b: any) => {
-        const id = String(b.assetId || '').toLowerCase();
-        const sym = String(b.symbol || '').toLowerCase();
-        if (!id.includes(lcChain)) return false;
-        if (this.isAddress(token)) return id.includes(lcTok);
-        if (lcTok === 'native') return sym === 'eth' || sym === lcChain || sym === 'sei' || sym === 'sol';
-        return sym === lcTok;
+      const lcToken = token.toLowerCase();
+
+      const pick = portfolio.find((b: AssetBalance) => {
+        const sym = b.symbol?.toLowerCase() ?? '';
+        const aid = b.assetId.toLowerCase();
+        return (
+          aid.includes(lcToken) ||
+          aid.includes(lcChain) ||
+          sym.includes(lcToken)
+        );
       });
-      if (!pick) return JSON.stringify({ amount: '0', amountUsd: '0', found: false });
-      return JSON.stringify({ amount: String(pick.amount), amountUsd: String(pick.amountUsd ?? '0'), symbol: pick.symbol, found: true });
+
+      if (!pick) {
+        return JSON.stringify({ found: false, chain, token });
+      }
+
+      // Native tokens on their own chains
+      const sym = pick.symbol?.toLowerCase() ?? '';
+      if (
+        this.isAddress(token) ||
+        (sym === 'eth' || sym === lcChain || sym === 'sei' || sym === 'sol')
+      ) {
+        return JSON.stringify({
+          amount: String(pick.amount),
+          amountUsd: String(pick.amountUsd ?? '0'),
+          symbol: pick.symbol,
+          found: true,
+        });
+      }
+
+      // ERC-20 tokens
+      return JSON.stringify({
+        amount: String(pick.amount),
+        amountUsd: String(pick.amountUsd ?? '0'),
+        symbol: pick.symbol,
+        found: true,
+      });
     } catch (e) {
       return `Error fetching balance: ${(e as Error).message}`;
     }
@@ -320,7 +444,7 @@ class GetTokenSentimentTool extends StructuredTool {
 
 @Injectable()
 export class ChatService {
-  private readonly promptValidator: PromptValidator;
+  private readonly logger = new Logger(ChatService.name);
 
   constructor(
     private readonly configService: ConfigService,
@@ -328,25 +452,47 @@ export class ChatService {
     private readonly transactionService: TransactionService,
     private readonly automationsService: AutomationsService,
     private readonly marketService: MarketService,
+    private readonly promptValidator: PromptValidator,
+    private readonly advancedPromptValidator: AdvancedPromptValidator,
     @InjectRepository(ChatMemory) private readonly memoryRepo: Repository<ChatMemory>,
     @InjectRepository(ChatEmbedding) private readonly embRepo: Repository<ChatEmbedding>,
-  ) {
-    this.promptValidator = new PromptValidator();
-  }
+  ) {}
 
-  async invokeAgent(
+async invokeAgent(
     user: { id: number },
     input: string,
     chatHistory: (HumanMessage | AIMessage)[],
   ) {
-    // Validate input for prompt injection attempts
-    const validation = this.promptValidator.validateUserInput(input);
-    if (!validation.safe) {
-      throw new BadRequestException(validation.reason || 'Invalid input detected');
+    // Multi-layer validation for prompt injection attempts
+    const basicValidation = this.promptValidator.validateUserInput(input);
+    if (!basicValidation.safe) {
+      throw new BadRequestException(
+        basicValidation.reason || 'Invalid input detected',
+      );
+    }
+
+    // Advanced validation with risk scoring
+    const advancedValidation =
+      this.advancedPromptValidator.validateTransactionIntent(input);
+    if (!advancedValidation.safe) {
+      this.logger.warn(
+        `Advanced prompt injection detected (risk score: ${advancedValidation.riskScore}): ${advancedValidation.reason}`,
+      );
+      throw new BadRequestException(
+        advancedValidation.reason || 'Suspicious input detected',
+      );
+    }
+
+    // Additional validation for high-risk inputs
+    if (advancedValidation.riskScore > 30) {
+      this.logger.warn(
+        `High-risk input detected (score: ${advancedValidation.riskScore}) for user ${user.id}`,
+      );
+      // Could implement additional verification steps here
     }
 
     // Sanitize input before processing
-    const sanitizedInput = this.promptValidator.sanitizeInput(input);
+    const sanitizedInput = this.advancedPromptValidator.sanitizeInput(input);
 
     const tools = [
       new GetPortfolioTool(this.portfolioService, user.id),

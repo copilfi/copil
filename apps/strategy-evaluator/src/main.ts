@@ -10,7 +10,9 @@ async function bootstrap() {
   // Lightweight health server
   try {
     const health = app.get(HealthService);
-    const port = Number(process.env.STRATEGY_EVALUATOR_PORT ?? process.env.HEALTH_PORT ?? 3003);
+    const port = Number(
+      process.env.STRATEGY_EVALUATOR_PORT ?? process.env.HEALTH_PORT ?? 3003,
+    );
     const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
         const status = await health.getStatus().catch(() => ({ ok: false }));
@@ -22,7 +24,10 @@ async function bootstrap() {
       }
     });
     server.listen(port);
-  } catch {}
+  } catch (error) {
+    console.error('Failed to bootstrap application:', error);
+    process.exit(1);
+  }
 
   // Keep alive until SIGINT
   await new Promise((resolve) => process.on('SIGINT', resolve));

@@ -1,4 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import {
+  Injectable,
+  BadRequestException,
+  NotFoundException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { InjectQueue } from '@nestjs/bull';
 import { Repository } from 'typeorm';
@@ -43,7 +47,7 @@ export class SmartAccountOrchestratorService {
     return this.walletRepository.save(created);
   }
 
-  async deploy(userId: number, sessionKeyId: number, chain: string) {
+  async deploy(userId: number, sessionKeyId: string, chain: string) {
     if (EOA_ONLY_CHAINS.includes(chain.toLowerCase())) {
       throw new BadRequestException(`Cannot deploy a smart account on an EOA-only chain: ${chain}`);
     }

@@ -12,3 +12,4 @@ export * from './types/transaction-job';
 export * from './types/strategy-definition';
 export * from './constants/queues';
 export * from './types/session-key-permissions';
+export * from './interfaces/key-management.interface';

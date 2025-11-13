@@ -38,11 +38,13 @@ export class ExecutionService {
       : `ad-hoc job for user ${job.userId}`;
     this.logger.log(`Received job for ${jobDescription}: ${job.intent.type}`);
 
-    // Validation logic remains largely the same
+    // Validate strategy ownership if strategyId is provided
     if (job.strategyId) {
-      const strategy = await this.strategyRepository.findOne({ where: { id: job.strategyId } });
+      const strategy = await this.strategyRepository.findOne({ 
+        where: { id: job.strategyId, userId: job.userId } 
+      });
       if (!strategy) {
-        await this.recordLog(job, 'failed', `Strategy ${job.strategyId} not found`);
+        await this.recordLog(job, 'failed', `Strategy ${job.strategyId} not found or not owned by user ${job.userId}`);
         return;
       }
     }
@@ -156,16 +158,62 @@ export class ExecutionService {
     const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: job.sessionKeyId! } });
     const perms = sessionKey?.permissions as SessionKeyPermissions | undefined;
 
+    // Reject empty or null permissions
+    if (!perms || Object.keys(perms).length === 0) {
+      return {
+        status: 'failed',
+        description: 'Session key has no permissions configured.',
+        metadata: { sessionKeyId: job.sessionKeyId },
+      };
+    }
+
+    // Validate action permissions
+    if (!perms.actions || perms.actions.length === 0) {
+      return {
+        status: 'failed',
+        description: 'Session key has no action permissions configured.',
+        metadata: { sessionKeyId: job.sessionKeyId },
+      };
+    }
+
+    // Validate chain permissions
+    if (!perms.chains || perms.chains.length === 0) {
+      return {
+        status: 'failed',
+        description: 'Session key has no chain permissions configured.',
+        metadata: { sessionKeyId: job.sessionKeyId },
+      };
+    }
+
+    // Check if intent action is permitted
+    if (!perms.actions.includes(job.intent.type as any)) {
+      return {
+        status: 'failed',
+        description: `Session key does not permit ${job.intent.type} action.`,
+        metadata: { sessionKeyId: job.sessionKeyId, intentType: job.intent.type },
+      };
+    }
+
+    // Check if intent chain is permitted
+    const intentChain = chainName?.toLowerCase();
+    if (intentChain && !perms.chains.some((chain: string) => chain.toLowerCase() === intentChain)) {
+      return {
+        status: 'failed',
+        description: `Session key does not permit operations on ${chainName}.`,
+        metadata: { sessionKeyId: job.sessionKeyId, chain: chainName },
+      };
+    }
+
     // allowedContracts: the destination contract of main tx (and optional approval tx) must be whitelisted if provided
     if (perms?.allowedContracts?.length) {
-      const allowed = new Set(perms.allowedContracts.map((a) => a.toLowerCase()));
+      const allowed = new Set(perms.allowedContracts.map((a: string) => a.toLowerCase()));
       const mainToOk = typeof quote.transactionRequest?.to === 'string' && allowed.has((quote.transactionRequest.to as string).toLowerCase());
       const approvalToOk = !quote.approvalTransactionRequest || (typeof quote.approvalTransactionRequest?.to === 'string' && allowed.has((quote.approvalTransactionRequest.to as string).toLowerCase()));
       if (!mainToOk || !approvalToOk) {
         return {
           status: 'failed',
           description: 'Destination contract not permitted by session key policy.',
-          metadata: { to: quote.transactionRequest?.to, approvalTo: quote.approvalTransactionRequest?.to },
+          metadata: { sessionKeyId: job.sessionKeyId, to: quote.transactionRequest?.to, approvalTo: quote.approvalTransactionRequest?.to },
         };
       }
     }
@@ -176,7 +224,7 @@ export class ExecutionService {
       const token = (job.intent as any)?.fromToken as string | undefined;
       const amount = (job.intent as any)?.fromAmount as string | undefined;
       if (token && amount) {
-        const lim = limits.find((l) => l.token.toLowerCase() === token.toLowerCase());
+        const lim = limits.find((l: any) => l.token.toLowerCase() === token.toLowerCase());
         if (lim) {
           try {
             const amt = BigInt(amount);
@@ -299,7 +347,7 @@ export class ExecutionService {
 
     if (permissions?.chains?.length) {
       if (job.intent.type === 'swap' || job.intent.type === 'bridge') {
-        const chains = new Set(permissions.chains.map((chain) => chain.toLowerCase()));
+        const chains = new Set(permissions.chains.map((chain: string) => chain.toLowerCase()));
         const checkChain = (chain?: string) => !chain || chains.has(chain.toLowerCase());
         const chainAllowed = checkChain(job.intent.fromChain) && checkChain(job.intent.toChain);
 
@@ -317,7 +365,7 @@ export class ExecutionService {
       const token = (job.intent as any)?.fromToken as string | undefined;
       const amountStr = (job.intent as any)?.fromAmount as string | undefined;
       if (token && amountStr) {
-        const limit = permissions.spendLimits.find((l) => l.token.toLowerCase() === token.toLowerCase());
+        const limit = permissions.spendLimits.find((l: any) => l.token.toLowerCase() === token.toLowerCase());
         if (limit && typeof limit.windowSec === 'number' && limit.windowSec > 0) {
           const since = new Date(Date.now() - limit.windowSec * 1000);
           const logs = await this.transactionLogRepository.find({

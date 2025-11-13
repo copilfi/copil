@@ -42,7 +42,7 @@ export type TransactionIntent =
 export interface TransactionJobData {
   strategyId: number | null; // Can be null for ad-hoc jobs
   userId: number;
-  sessionKeyId: number;
+  sessionKeyId: string; // Changed to string for UUID support
   intent: TransactionIntent;
   quote: any; // The quote object received from the chain abstraction layer (e.g., OneBalance)
   metadata?: Record<string, unknown>;

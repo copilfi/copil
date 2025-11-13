@@ -13,7 +13,7 @@ export class SmartAccountController {
     if (!body?.chain || !body?.sessionKeyId) {
       throw new Error('chain and sessionKeyId are required');
     }
-    return this.orchestrator.deploy(req.user.id, body.sessionKeyId, body.chain);
+    return this.orchestrator.deploy(req.user.id, String(body.sessionKeyId), body.chain);
   }
 
   @Get('status')

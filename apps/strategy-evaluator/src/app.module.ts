@@ -5,7 +5,16 @@ import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Strategy, TokenPrice, Wallet, User, TransactionLog, SessionKey, TokenMetadata, STRATEGY_QUEUE } from '@copil/database';
+import {
+  Strategy,
+  TokenPrice,
+  Wallet,
+  User,
+  TransactionLog,
+  SessionKey,
+  TokenMetadata,
+  STRATEGY_QUEUE,
+} from '@copil/database';
 import { StrategyProcessor } from './strategy.processor';
 import { HealthService } from './health.service';
 import { HealthController } from './health.controller';
@@ -34,7 +43,15 @@ import { HealthController } from './health.controller';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Strategy, TokenPrice, Wallet, TransactionLog, SessionKey, TokenMetadata],
+        entities: [
+          User,
+          Strategy,
+          TokenPrice,
+          Wallet,
+          TransactionLog,
+          SessionKey,
+          TokenMetadata,
+        ],
         synchronize: false,
       }),
       inject: [ConfigService],

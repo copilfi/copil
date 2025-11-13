@@ -1,11 +1,12 @@
-import { Entity, PrimaryGeneratedColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
+import { Entity, PrimaryColumn, Column, CreateDateColumn, UpdateDateColumn, ManyToOne } from 'typeorm';
 import { User } from './user.entity';
 import { SessionKeyPermissions } from '../types/session-key-permissions';
+import { v4 as uuidv4 } from 'uuid';
 
 @Entity('SessionKey')
 export class SessionKey {
-  @PrimaryGeneratedColumn()
-  id!: number;
+  @PrimaryColumn('uuid')
+  id!: string;
 
   @Column()
   userId!: number;

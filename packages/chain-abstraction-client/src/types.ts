@@ -27,7 +27,7 @@ export interface Quote {
   fromAmount: string;
   toAmount: string;
   gasCostUsd?: string; // Made optional
-  transactionRequest: any; // The raw request for signing
+  transactionRequest?: any; // Made optional to match API response
   approvalTransactionRequest?: any; // Optional approval tx before main tx
   serializedTx?: string; // For non-EVM chains like Solana, the base64-encoded transaction
 }

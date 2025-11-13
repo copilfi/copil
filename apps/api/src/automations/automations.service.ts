@@ -304,7 +304,7 @@ export class AutomationsService {
       throw new BadRequestException('Session key ID is required for transaction execution.');
     }
 
-    const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
+    const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: String(sessionKeyId) } });
     if (!sessionKey) {
       throw new BadRequestException(`Session key ${sessionKeyId} not found.`);
     }

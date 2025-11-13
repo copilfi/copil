@@ -11,11 +11,12 @@ export class HealthService {
   ) {}
 
   async getStatus() {
-    const latest = await this.tokenRepo.findOne({ order: { timestamp: 'DESC' } });
+    const latest = await this.tokenRepo.findOne({
+      order: { timestamp: 'DESC' },
+    });
     return {
       ok: true,
       latestIngestAt: latest?.timestamp ?? null,
     };
   }
 }
-

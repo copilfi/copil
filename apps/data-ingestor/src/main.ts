@@ -10,7 +10,9 @@ async function bootstrap() {
   // Health server
   try {
     const health = app.get(HealthService);
-    const port = Number(process.env.DATA_INGESTOR_PORT ?? process.env.HEALTH_PORT ?? 3004);
+    const port = Number(
+      process.env.DATA_INGESTOR_PORT ?? process.env.HEALTH_PORT ?? 3004,
+    );
     const server = http.createServer(async (req, res) => {
       if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
         const status = await health.getStatus().catch(() => ({ ok: false }));

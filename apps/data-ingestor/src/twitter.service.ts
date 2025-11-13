@@ -15,14 +15,20 @@ export class TwitterService {
       this.client = new TwitterApi(bearerToken);
       this.logger.log('Twitter client initialized.');
     } else {
-      this.logger.warn('TWITTER_BEARER_TOKEN not found. TwitterService will be disabled.');
+      this.logger.warn(
+        'TWITTER_BEARER_TOKEN not found. TwitterService will be disabled.',
+      );
     }
     this.sentiment = new Sentiment();
   }
 
-  async getSentimentForTokens(tokenConfigs: { symbol: string; keywords: string[] }[]) {
+  async getSentimentForTokens(
+    tokenConfigs: { symbol: string; keywords: string[] }[],
+  ) {
     if (!this.client) {
-      this.logger.warn('Twitter client not initialized, skipping sentiment analysis.');
+      this.logger.warn(
+        'Twitter client not initialized, skipping sentiment analysis.',
+      );
       return [];
     }
 
@@ -31,7 +37,9 @@ export class TwitterService {
     for (const config of tokenConfigs) {
       const query = `(${config.keywords.join(' OR ')}) lang:en`;
       try {
-        this.logger.log(`Searching tweets for ${config.symbol} with query: ${query}`);
+        this.logger.log(
+          `Searching tweets for ${config.symbol} with query: ${query}`,
+        );
         const response = await this.client.v2.search(query, {
           max_results: 100, // Max results per request (100 is the max for recent search)
           sort_order: 'recency',
@@ -39,7 +47,11 @@ export class TwitterService {
 
         if (response.meta.result_count === 0) {
           this.logger.log(`No recent tweets found for ${config.symbol}`);
-          results.push({ symbol: config.symbol, sentimentScore: 0, tweetVolume: 0 });
+          results.push({
+            symbol: config.symbol,
+            sentimentScore: 0,
+            tweetVolume: 0,
+          });
           continue;
         }
 
@@ -55,10 +67,17 @@ export class TwitterService {
           sentimentScore: averageScore,
           tweetVolume: response.meta.result_count,
         });
-
       } catch (error) {
-        this.logger.error(`Failed to fetch or analyze tweets for ${config.symbol}:`, error);
-        results.push({ symbol: config.symbol, sentimentScore: 0, tweetVolume: 0, error: (error as Error).message });
+        this.logger.error(
+          `Failed to fetch or analyze tweets for ${config.symbol}:`,
+          error,
+        );
+        results.push({
+          symbol: config.symbol,
+          sentimentScore: 0,
+          tweetVolume: 0,
+          error: (error as Error).message,
+        });
       }
     }
     return results;

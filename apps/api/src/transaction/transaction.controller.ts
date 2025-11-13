@@ -105,7 +105,7 @@ export class TransactionController {
     const idempotencyKey = executeDto.idempotencyKey || idemKey || undefined;
     return this.transactionService.createAdHocTransactionJob(
       req.user.id,
-      executeDto.sessionKeyId,
+      String(executeDto.sessionKeyId),
       executeDto.intent,
       idempotencyKey,
     );

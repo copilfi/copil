@@ -10,7 +10,14 @@ export class HealthService {
   ) {}
 
   async getStatus() {
-    const strategyCounts = await this.strategyQueue.getJobCounts('waiting', 'active', 'completed', 'failed', 'delayed', 'paused');
+    const strategyCounts = await this.strategyQueue.getJobCounts(
+      'waiting',
+      'active',
+      'completed',
+      'failed',
+      'delayed',
+      'paused',
+    );
     return {
       ok: true,
       queues: {
@@ -19,4 +26,3 @@ export class HealthService {
     };
   }
 }
-

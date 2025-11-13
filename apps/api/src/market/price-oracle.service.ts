@@ -55,7 +55,7 @@ export class PriceOracleService {
       this.logger.warn(`Stale price data for ${chain}:${tokenAddress}`);
     }
 
-    const currentPrice = parseFloat(latestPrice.priceUsd);
+    const currentPrice = latestPrice.priceUsd;
 
     // Step 3: Calculate TWAP for validation
     const twap = await this.calculateTWAP(chain, tokenAddress, this.TWAP_WINDOW_MS);
@@ -128,7 +128,7 @@ export class PriceOracleService {
       const current = prices[i];
       const next = prices[i + 1];
 
-      const price = parseFloat(current.priceUsd);
+      const price = current.priceUsd;
       const weight = new Date(next.timestamp).getTime() - new Date(current.timestamp).getTime();
 
       totalWeightedPrice += price * weight;
@@ -139,7 +139,7 @@ export class PriceOracleService {
     if (prices.length > 0) {
       const lastPrice = prices[prices.length - 1];
       const weight = Date.now() - new Date(lastPrice.timestamp).getTime();
-      totalWeightedPrice += parseFloat(lastPrice.priceUsd) * weight;
+      totalWeightedPrice += lastPrice.priceUsd * weight;
       totalWeight += weight;
     }
 
@@ -183,7 +183,7 @@ export class PriceOracleService {
    * Detect price anomalies using statistical analysis
    */
   private detectPriceAnomaly(history: TokenPrice[], currentPrice: number): string | null {
-    const prices = history.map(h => parseFloat(h.priceUsd));
+    const prices = history.map((h) => h.priceUsd);
 
     // Calculate mean and standard deviation
     const mean = prices.reduce((sum, p) => sum + p, 0) / prices.length;
@@ -219,7 +219,7 @@ export class PriceOracleService {
 
     const prices = [{
       source: latestPrice.source || 'internal',
-      price: parseFloat(latestPrice.priceUsd),
+      price: latestPrice.priceUsd,
       timestamp: new Date(latestPrice.timestamp),
     }];
 

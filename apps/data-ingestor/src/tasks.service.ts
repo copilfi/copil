@@ -25,13 +25,16 @@ export class TasksService {
   async handleCron() {
     this.logger.log('Fetching trending token data...');
     const chainsEnv = process.env.INGEST_CHAINS || 'ethereum,base,arbitrum';
-    const chains = chainsEnv.split(',').map((c) => c.trim()).filter(Boolean);
+    const chains = chainsEnv
+      .split(',')
+      .map((c) => c.trim())
+      .filter(Boolean);
 
     for (const chain of chains) {
       try {
         const pairs = await this.dexScreenerService.getTrendingTokens(chain);
         this.logger.log(`Found ${pairs.length} pairs for ${chain}`);
-        
+
         for (const pair of pairs) {
           if (!pair?.priceUsd || isNaN(parseFloat(pair.priceUsd))) {
             continue;
@@ -46,7 +49,10 @@ export class TasksService {
           await this.tokenPriceRepository.save(tokenPrice);
         }
       } catch (error) {
-        this.logger.error(`Error fetching data for ${chain}:`, error instanceof Error ? error.message : String(error));
+        this.logger.error(
+          `Error fetching data for ${chain}:`,
+          error instanceof Error ? error.message : String(error),
+        );
       }
     }
     this.logger.log('Finished fetching token data.');
@@ -83,7 +89,9 @@ export class TasksService {
       }
       if (saved > 0) this.logger.log(`Saved ${saved} Hyperliquid mid prices.`);
     } catch (e) {
-      this.logger.warn(`Hyperliquid price ingest failed: ${(e as Error).message}`);
+      this.logger.warn(
+        `Hyperliquid price ingest failed: ${(e as Error).message}`,
+      );
     }
   }
 
@@ -99,12 +107,16 @@ export class TasksService {
         .filter(Boolean)
         .map((item) => {
           const [mint, sym] = item.split(':').map((p) => p.trim());
-          return { mint, symbol: sym || undefined } as { mint: string; symbol?: string };
+          return { mint, symbol: sym || undefined } as {
+            mint: string;
+            symbol?: string;
+          };
         });
       if (!mintPairs.length) return;
 
       const ids = mintPairs.map((m) => m.mint).join(',');
-      const base = process.env.JUPITER_PRICE_API_URL || 'https://price.jup.ag/v4/price';
+      const base =
+        process.env.JUPITER_PRICE_API_URL || 'https://price.jup.ag/v4/price';
       const url = `${base}?ids=${encodeURIComponent(ids)}`;
       const timeout = Number(process.env.DEX_SCREENER_TIMEOUT_MS ?? '8000');
       const res = await axios.get(url, { timeout });
@@ -115,7 +127,11 @@ export class TasksService {
         const rec = data[mp.mint];
         const price = rec?.price as number | undefined;
         if (!price || !Number.isFinite(price)) continue;
-        const symbol = mp.symbol || rec?.symbol || (rec?.id as string) || mp.mint.substring(0, 6);
+        const symbol =
+          mp.symbol ||
+          rec?.symbol ||
+          (rec?.id as string) ||
+          mp.mint.substring(0, 6);
         const row = this.tokenPriceRepository.create({
           chain: 'solana',
           address: mp.mint,
@@ -126,7 +142,8 @@ export class TasksService {
         await this.tokenPriceRepository.save(row);
         saved++;
       }
-      if (saved > 0) this.logger.log(`Saved ${saved} Solana prices from Jupiter.`);
+      if (saved > 0)
+        this.logger.log(`Saved ${saved} Solana prices from Jupiter.`);
     } catch (e) {
       this.logger.warn(`Solana price ingest failed: ${(e as Error).message}`);
     }
@@ -141,11 +158,14 @@ export class TasksService {
       { symbol: 'SOL', keywords: ['Solana', 'SOL'] },
     ];
 
-    const sentimentResults = await this.twitterService.getSentimentForTokens(tokensToTrack);
+    const sentimentResults =
+      await this.twitterService.getSentimentForTokens(tokensToTrack);
 
     for (const result of sentimentResults) {
       if (result.error) {
-        this.logger.error(`Could not process sentiment for ${result.symbol}: ${result.error}`);
+        this.logger.error(
+          `Could not process sentiment for ${result.symbol}: ${result.error}`,
+        );
         continue;
       }
       const sentimentRecord = this.tokenSentimentRepository.create({
@@ -155,7 +175,9 @@ export class TasksService {
         tweetVolume: result.tweetVolume,
       });
       await this.tokenSentimentRepository.save(sentimentRecord);
-      this.logger.log(`Saved sentiment for ${result.symbol}: Score ${result.sentimentScore}, Volume ${result.tweetVolume}`);
+      this.logger.log(
+        `Saved sentiment for ${result.symbol}: Score ${result.sentimentScore}, Volume ${result.tweetVolume}`,
+      );
     }
     this.logger.log('Finished fetching Twitter sentiment data.');
   }

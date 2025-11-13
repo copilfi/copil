@@ -15,6 +15,7 @@ import { PortfolioService } from '../portfolio/portfolio.service';
 import { SolanaService } from '../solana/solana.service';
 import { ConfigService } from '@nestjs/config';
 import { RiskManager } from './risk-manager';
+import { IdempotencyService } from './idempotency.service';
 
 @Injectable()
 export class TransactionService {
@@ -35,6 +36,7 @@ export class TransactionService {
     private readonly configService: ConfigService,
     private readonly solanaService: SolanaService,
     private readonly riskManager: RiskManager,
+    private readonly idempotencyService: IdempotencyService,
   ) {}
 
   async getQuote(intent: TransactionIntent) {
@@ -204,14 +206,37 @@ export class TransactionService {
 
   async createAdHocTransactionJob(
     userId: number,
-    sessionKeyId: number,
+    sessionKeyId: string,
     intent: TransactionIntent,
     idempotencyKey?: string,
   ): Promise<TransactionJobData> {
+    // Generate idempotency key if not provided
+    if (!idempotencyKey) {
+      idempotencyKey = this.idempotencyService.generateIdempotencyKey(
+        userId,
+        intent,
+      );
+    }
+
+    // Check for duplicate transactions
+    const idempotencyCheck = await this.idempotencyService.checkAndSetIdempotency(
+      idempotencyKey,
+    );
+    if (!idempotencyCheck.valid) {
+      throw new BadRequestException(
+        idempotencyCheck.reason || 'Duplicate transaction detected',
+      );
+    }
+
     // Concurrency guard per user
-    const maxActive = parseInt(this.configService.get<string>('TX_MAX_ACTIVE_JOBS_PER_USER') || '3', 10);
+    const maxActive = parseInt(
+      this.configService.get<string>('TX_MAX_ACTIVE_JOBS_PER_USER') || '3',
+      10,
+    );
     const activeCount = await this.countUserJobs(userId);
     if (activeCount >= maxActive) {
+      // Clear idempotency since we're not proceeding
+      await this.idempotencyService.clearIdempotency(idempotencyKey);
       throw new HttpException(
         `You have ${activeCount} active jobs; limit is ${maxActive}. Please wait before enqueuing new transactions.`,
         HttpStatus.TOO_MANY_REQUESTS,
@@ -219,12 +244,12 @@ export class TransactionService {
     }
 
     // Idempotency: if key provided and an existing job is present, return its data
-    if (idempotencyKey) {
-      const existing = await this.findExistingJob(userId, idempotencyKey);
-      if (existing) {
-        this.logger.log(`Idempotency hit for user ${userId}, key ${idempotencyKey}; returning existing job data.`);
-        return existing.data as TransactionJobData;
-      }
+    const existing = await this.findExistingJob(userId, idempotencyKey);
+    if (existing) {
+      this.logger.log(
+        `Idempotency hit for user ${userId}, key ${idempotencyKey}; returning existing job data.`,
+      );
+      return existing.data as TransactionJobData;
     }
     let finalIntent = { ...(await this.sanitizeIntent(intent)) } as TransactionIntent;
 
@@ -306,16 +331,16 @@ export class TransactionService {
   }
 
   private async countUserJobs(userId: number): Promise<number> {
-    const states: any = ['waiting', 'delayed', 'active'];
+    const states: any[] = ['waiting', 'delayed', 'active'];
     // Fetch a reasonable window of jobs
     const jobs = await this.transactionQueue.getJobs(states, 0, 500);
-    return jobs.filter((j) => (j?.data as any)?.userId === userId).length;
+    return jobs.filter((j: any) => (j?.data as any)?.userId === userId).length;
   }
 
   private async findExistingJob(userId: number, idempotencyKey: string) {
-    const states: any = ['waiting', 'delayed', 'active'];
+    const states: any[] = ['waiting', 'delayed', 'active'];
     const jobs = await this.transactionQueue.getJobs(states, 0, 500);
-    return jobs.find((j) => {
+    return jobs.find((j: any) => {
       const d = (j?.data as any) ?? {};
       return d.userId === userId && d?.metadata?.idempotencyKey === idempotencyKey;
     });
@@ -332,13 +357,15 @@ export class TransactionService {
     )) as AssetBalance[];
 
     const token = portfolio.find(
-      (b) =>
+      (b: AssetBalance) =>
         b.assetId.toLowerCase().includes(tokenAddress.toLowerCase()) &&
         b.assetId.toLowerCase().includes(chain.toLowerCase()),
     );
 
     if (!token || !token.amount) {
-      this.logger.warn(`No balance found for token ${tokenAddress} for user ${userId} on chain ${chain}.`);
+      this.logger.warn(
+        `No balance found for token ${tokenAddress} for user ${userId} on chain ${chain}.`,
+      );
       return null;
     }
 
