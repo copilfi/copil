@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PortfolioService } from '../portfolio/portfolio.service';
 import { TransactionService } from '../transaction/transaction.service';
@@ -18,6 +18,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { OpenAIEmbeddings } from '@langchain/openai';
 import { MarketService } from '../market/market.service';
+import { PromptValidator } from './prompt-validator';
 
 class CompareQuotesTool extends StructuredTool {
   name = 'compare_quotes';
@@ -150,15 +151,20 @@ class CreateTransactionTool extends StructuredTool {
         sessionKeyId,
         intent as TransactionIntent, // Cast to the correct type
       );
-      const jobIntent = result.intent as any;
+      const jobIntent = result.intent;
+
+      // Type-safe checks using discriminated unions
       if (jobIntent.type === 'open_position') {
         return `Hyperliquid order queued: Open ${jobIntent.side} ${jobIntent.size} USD ${jobIntent.market} x${jobIntent.leverage}.`;
       }
       if (jobIntent.type === 'close_position') {
         return `Hyperliquid order queued: Close position on ${jobIntent.market}.`;
       }
-      const quote = result.quote as any;
-      return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote?.toAmount ?? 'n/a'} of ${jobIntent.toToken}.`;
+      if (jobIntent.type === 'swap' || jobIntent.type === 'bridge') {
+        const quote = result.quote as { toAmount?: string };
+        return `Transaction successfully queued! You will sell ${jobIntent.fromAmount} of ${jobIntent.fromToken} to receive an estimated ${quote?.toAmount ?? 'n/a'} of ${jobIntent.toToken}.`;
+      }
+      return `Transaction successfully queued!`;
     } catch (error) {
       return `Error creating transaction: ${
         error instanceof Error ? error.message : 'Unknown error'
@@ -314,6 +320,8 @@ class GetTokenSentimentTool extends StructuredTool {
 
 @Injectable()
 export class ChatService {
+  private readonly promptValidator: PromptValidator;
+
   constructor(
     private readonly configService: ConfigService,
     private readonly portfolioService: PortfolioService,
@@ -322,13 +330,24 @@ export class ChatService {
     private readonly marketService: MarketService,
     @InjectRepository(ChatMemory) private readonly memoryRepo: Repository<ChatMemory>,
     @InjectRepository(ChatEmbedding) private readonly embRepo: Repository<ChatEmbedding>,
-  ) {}
+  ) {
+    this.promptValidator = new PromptValidator();
+  }
 
   async invokeAgent(
     user: { id: number },
     input: string,
     chatHistory: (HumanMessage | AIMessage)[],
   ) {
+    // Validate input for prompt injection attempts
+    const validation = this.promptValidator.validateUserInput(input);
+    if (!validation.safe) {
+      throw new BadRequestException(validation.reason || 'Invalid input detected');
+    }
+
+    // Sanitize input before processing
+    const sanitizedInput = this.promptValidator.sanitizeInput(input);
+
     const tools = [
       new GetPortfolioTool(this.portfolioService, user.id),
       new CompareQuotesTool(this.transactionService),
@@ -342,17 +361,15 @@ export class ChatService {
     const llm = this.buildLlm();
 
     const priorMemory = await this.loadMemory(user.id);
-    const recalls = await this.recallEmbeddings(user.id, input, 3).catch(() => [] as string[]);
+    const recalls = await this.recallEmbeddings(user.id, sanitizedInput, 3).catch(() => [] as string[]);
+
+    // Create secure system prompt that resists injection
+    const systemPrompt = this.promptValidator.createSecureSystemPrompt(priorMemory, recalls);
 
     const prompt = ChatPromptTemplate.fromMessages([
       [
         'system',
-        `You are Copil, an AI DeFi assistant. Your goal is to help users by answering questions and executing transactions on their behalf.
-
-        Long-term memory (summarized): ${priorMemory || '(empty)'}
-
-        Retrieved memory (semantic):
-        ${recalls.length ? recalls.map((r, i) => `#${i+1}: ${r}`).join('\n') : '(none)'}
+        systemPrompt + `
 
         Tools available:
         - get_portfolio: Aggregated balances for all wallets.
@@ -363,7 +380,7 @@ export class ChatService {
         - create_automation: Create price/trend-triggered automation using a session key.
 
         Policy:
-        - Never move funds without explicit confirmation and a sessionKeyId.
+        - NEVER move funds without explicit confirmation containing "confirm" or "yes" and a sessionKeyId.
         - For EVM swaps/bridges, compare quotes first; summarize tradeoffs (receive amount, readiness, constraints).
         - For Hyperliquid, present a concise order plan (market, side, size, leverage/slippage if any) and ask for confirmation.
 
@@ -397,17 +414,28 @@ export class ChatService {
     });
 
     const result = await agentExecutor.invoke({
-      input,
+      input: sanitizedInput,  // Use sanitized input
       chat_history: chatHistory,
     });
 
+    // Validate AI response before returning
+    const responseValidation = this.promptValidator.validateAIResponse(result, input);
+    if (!responseValidation.valid) {
+      throw new BadRequestException(responseValidation.reason || 'Invalid AI response detected');
+    }
+
     try {
-      // Update memory with a concise summary
+      // Update memory with a concise summary (using original input for context)
       const outputText = String((result as any)?.output ?? '');
       const newSummary = await this.summarizeMemory(llm, priorMemory || '', input, outputText);
       await this.saveMemory(user.id, newSummary);
-      await this.storeEmbedding(user.id, input).catch(() => void 0);
-    } catch { /* best-effort */ }
+
+      // Store embedding only if input was safe
+      await this.storeEmbedding(user.id, sanitizedInput).catch(() => void 0);
+    } catch (error) {
+      // Log but don't fail the request
+      console.warn('Failed to update memory:', error);
+    }
 
     return result;
   }

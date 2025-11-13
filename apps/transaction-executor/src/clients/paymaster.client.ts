@@ -22,9 +22,15 @@ export class PaymasterClient {
     if (!apiKey) {
       throw new Error('PIMLICO_PAYMASTER_API_KEY (or PIMLICO_API_KEY) is not configured.');
     }
-    // Pimlico v2 paymaster endpoint
-    const url = `https://api.pimlico.io/v2/${chain.name.toLowerCase()}/rpc?apikey=${apiKey}`;
-    return http(url);
+    // Pimlico v2 paymaster endpoint - API key moved to header for security
+    const url = `https://api.pimlico.io/v2/${chain.name.toLowerCase()}/rpc`;
+    return http(url, {
+      fetchOptions: {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      },
+    });
   }
 }
 

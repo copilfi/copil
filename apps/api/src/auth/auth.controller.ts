@@ -1,18 +1,22 @@
-import { Controller, Post, UseGuards, Get, Request, Body } from '@nestjs/common';
+import { Body, Controller, Get, Post, Request, UseGuards } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { JwtAuthGuard } from './jwt-auth.guard';
-
 import { AuthRequest } from './auth-request.interface';
 import { Throttle } from '@nestjs/throttler';
+
+class LoginRequestDto {
+  walletAddress?: string;
+}
 
 @Controller('auth')
 export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
+  @UseGuards(JwtAuthGuard)
   @Post('login')
-  @Throttle({ default: { limit: 15, ttl: 60000 } })
-  async login(@Body() body: { privyDid: string, email: string, walletAddress?: string }) {
-    const user = await this.authService.findOrCreateUser(body.privyDid, body.email, body.walletAddress);
+  @Throttle({ default: { limit: 5, ttl: 10000 } })
+  async login(@Request() req: AuthRequest, @Body() _body: LoginRequestDto) {
+    const user = await this.authService.getUserById(req.user.id);
     return this.authService.login(user);
   }
 

@@ -53,14 +53,17 @@ export class SeiClient {
         throw new Error('SeiClient only supports swap/bridge intents');
     }
 
+    // Default slippage tolerance: 1% (can be made configurable)
+    const SLIPPAGE_BPS = 100; // 100 basis points = 1%
+
     // For Sei, we assume a single-hop swap on Dragonswap
-    const params = {
+    const simulationParams = {
         tokenIn: intent.fromToken as `0x${string}`,
         tokenOut: intent.toToken as `0x${string}`,
         fee: 3000, // Common fee tier, may need to be fetched dynamically
         recipient: intent.userAddress as `0x${string}`,
         amountIn: BigInt(intent.fromAmount),
-        amountOutMinimum: 0n, // We are simulating, so we can use 0
+        amountOutMinimum: 0n, // For simulation only, we can use 0
         sqrtPriceLimitX96: 0n, // No price limit for simulation
     };
 
@@ -69,19 +72,28 @@ export class SeiClient {
         address: DRAGONSWAP_ROUTER_ADDRESS,
         abi: dragonswapRouterAbi,
         functionName: 'exactInputSingle',
-        args: [params],
+        args: [simulationParams],
         account: intent.userAddress as `0x${string}`, // Needed for simulation context
       });
 
-      const amountOut = result.toString();
+      const amountOut = BigInt(result.toString());
 
-      // Prepare the transaction data for actual execution
+      // Calculate minimum amount out with slippage protection
+      // amountOutMinimum = amountOut * (10000 - SLIPPAGE_BPS) / 10000
+      const amountOutMinimum = (amountOut * BigInt(10000 - SLIPPAGE_BPS)) / BigInt(10000);
+
+      // Prepare the transaction data for actual execution with slippage protection
+      const executionParams = {
+        ...simulationParams,
+        amountOutMinimum, // Apply slippage protection for actual execution
+      };
+
       const transactionRequest = {
         to: DRAGONSWAP_ROUTER_ADDRESS,
         data: encodeFunctionData({
             abi: dragonswapRouterAbi,
             functionName: 'exactInputSingle',
-            args: [params],
+            args: [executionParams],
         }),
         value: '0', // Assuming no native SEI is sent with the swap itself
       };
@@ -89,7 +101,7 @@ export class SeiClient {
       const quote: Quote = {
         id: `sei-dragonswap-${new Date().toISOString()}`,
         fromAmount: intent.fromAmount,
-        toAmount: amountOut,
+        toAmount: amountOut.toString(),
         transactionRequest,
       };
 

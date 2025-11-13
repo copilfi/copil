@@ -18,6 +18,9 @@ export class TokenPrice {
   @Column({ type: 'decimal', precision: 18, scale: 8 })
   priceUsd!: number;
 
+  @Column({ type: 'text', nullable: true })
+  source?: string;
+
   @CreateDateColumn()
   timestamp!: Date;
 }

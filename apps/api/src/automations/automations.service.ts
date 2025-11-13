@@ -1,4 +1,4 @@
-import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException, ConflictException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import {
@@ -14,11 +14,15 @@ import { InjectQueue } from '@nestjs/bull';
 import { Queue } from 'bullmq';
 import { parseStrategyDefinition } from './strategy-definition.utils';
 import { TokenPrice } from '@copil/database';
+import { RedisLockService } from '../common/redis-lock.service';
+import { PriceOracleService } from '../market/price-oracle.service';
 
 const DEFAULT_CONDITION_INTERVAL_MS = 60_000;
 
 @Injectable()
 export class AutomationsService {
+  private readonly redisLockService: RedisLockService;
+
   constructor(
     @InjectRepository(Strategy)
     private readonly strategyRepository: Repository<Strategy>,
@@ -29,7 +33,11 @@ export class AutomationsService {
     @InjectQueue(STRATEGY_QUEUE) private readonly strategyQueue: Queue<{ strategyId: number }>,
     @InjectQueue(TRANSACTION_QUEUE)
     private readonly transactionQueue: Queue<TransactionJobData>,
-  ) {}
+    private readonly priceOracleService: PriceOracleService,
+  ) {
+    // Initialize RedisLockService with the strategy queue
+    this.redisLockService = new RedisLockService(this.strategyQueue as any);
+  }
 
   async create(createStrategyDto: CreateStrategyDto, userId: number): Promise<Strategy> {
     const { definition: rawDefinition, ...rest } = createStrategyDto;
@@ -37,30 +45,77 @@ export class AutomationsService {
 
     await this.ensureSessionKeyOwnership(definition.sessionKeyId, userId);
 
-    const strategy = this.strategyRepository.create({
-      ...rest,
-      definition,
-      userId,
-    });
-    const savedStrategy = await this.strategyRepository.save(strategy);
+    // Create a hash of strategy definition to prevent duplicates
+    const strategyHash = this.hashStrategyDefinition(userId, definition);
+    const lockKey = `strategy:create:${strategyHash}`;
 
-    if (savedStrategy.isActive) {
-      if (savedStrategy.schedule) {
-        // Add a repeatable job based on the cron schedule
-        await this.strategyQueue.add(
-          savedStrategy.name, 
-          { strategyId: savedStrategy.id }, 
-          { repeat: { pattern: savedStrategy.schedule }, jobId: `strategy:${savedStrategy.id}` }
-        );
-      } else {
-        // Add a repeatable job that runs every minute for condition-based triggers
-        await this.strategyQueue.add(savedStrategy.name, { strategyId: savedStrategy.id }, {
-          repeat: { every: DEFAULT_CONDITION_INTERVAL_MS },
-          jobId: `strategy:${savedStrategy.id}`,
-        });
-      }
+    // Try to acquire lock to prevent duplicate strategy creation
+    const lockToken = await this.redisLockService.acquireLock(lockKey, 5000);
+    if (!lockToken) {
+      throw new ConflictException('A similar strategy is already being created. Please wait and try again.');
     }
-    return savedStrategy;
+
+    try {
+      // Check if identical strategy already exists
+      const existingStrategies = await this.strategyRepository.find({
+        where: { userId, isActive: true }
+      });
+
+      for (const existing of existingStrategies) {
+        if (this.areStrategiesIdentical(existing.definition as any, definition)) {
+          throw new ConflictException('An identical active strategy already exists.');
+        }
+      }
+
+      const strategy = this.strategyRepository.create({
+        ...rest,
+        definition,
+        userId,
+      });
+      const savedStrategy = await this.strategyRepository.save(strategy);
+
+      if (savedStrategy.isActive) {
+        // Use another lock to prevent duplicate job creation
+        const jobLockKey = `strategy:job:${savedStrategy.id}`;
+        const jobLockToken = await this.redisLockService.acquireLock(jobLockKey, 3000);
+
+        if (jobLockToken) {
+          try {
+            if (savedStrategy.schedule) {
+              // Add a repeatable job based on the cron schedule
+              await this.strategyQueue.add(
+                savedStrategy.name,
+                { strategyId: savedStrategy.id },
+                { repeat: { pattern: savedStrategy.schedule }, jobId: `strategy:${savedStrategy.id}` }
+              );
+            } else {
+              // Add a repeatable job that runs every minute for condition-based triggers
+              await this.strategyQueue.add(savedStrategy.name, { strategyId: savedStrategy.id }, {
+                repeat: { every: DEFAULT_CONDITION_INTERVAL_MS },
+                jobId: `strategy:${savedStrategy.id}`,
+              });
+            }
+          } finally {
+            await this.redisLockService.releaseLock(jobLockKey, jobLockToken);
+          }
+        }
+      }
+      return savedStrategy;
+    } finally {
+      await this.redisLockService.releaseLock(lockKey, lockToken);
+    }
+  }
+
+  private hashStrategyDefinition(userId: number, definition: any): string {
+    // Create a unique hash based on key strategy parameters
+    const key = `${userId}-${JSON.stringify(definition.trigger)}-${JSON.stringify(definition.intent)}`;
+    return Buffer.from(key).toString('base64').substring(0, 32);
+  }
+
+  private areStrategiesIdentical(def1: any, def2: any): boolean {
+    // Compare trigger and intent to determine if strategies are identical
+    return JSON.stringify(def1.trigger) === JSON.stringify(def2.trigger) &&
+           JSON.stringify(def1.intent) === JSON.stringify(def2.intent);
   }
 
   async diagnose(id: number, userId: number) {
@@ -71,12 +126,58 @@ export class AutomationsService {
       return { ok: false, reason: 'Trigger missing in definition.' };
     }
     if (trig.type === 'price') {
-      const latest = await this.tokenPriceRepository.findOne({ where: { chain: trig.chain, address: trig.tokenAddress }, order: { timestamp: 'DESC' } });
-      if (!latest) return { ok: false, type: 'price', reason: 'No TokenPrice data found for chain/token.', chain: trig.chain, tokenAddress: trig.tokenAddress };
       const cmp: 'gte' | 'lte' = trig.comparator ?? 'gte';
-      const met = cmp === 'gte' ? Number(latest.priceUsd) >= Number(def.trigger.priceTarget) : Number(latest.priceUsd) <= Number(def.trigger.priceTarget);
-      const reason = met ? 'Condition met.' : `Condition not met: latest=${Number(latest.priceUsd)} ${cmp} target=${Number(def.trigger.priceTarget)} is false.`;
-      return { ok: true, type: 'price', met, comparator: cmp, latestPrice: Number(latest.priceUsd), target: Number(def.trigger.priceTarget), at: latest.timestamp, reason };
+      const targetPrice = Number(def.trigger.priceTarget);
+
+      try {
+        // Use price oracle for validated price with TWAP and circuit breaker
+        const validation = await this.priceOracleService.validatePriceTrigger(
+          trig.chain,
+          trig.tokenAddress,
+          targetPrice,
+          cmp
+        );
+
+        if (!validation.safe) {
+          return {
+            ok: true,
+            type: 'price',
+            met: false,
+            comparator: cmp,
+            latestPrice: validation.currentPrice,
+            target: targetPrice,
+            twap: validation.twap,
+            safe: false,
+            warnings: validation.warnings,
+            reason: `Trigger met but BLOCKED for safety: ${validation.warnings.join(', ')}`
+          };
+        }
+
+        const reason = validation.triggered
+          ? `Condition met. Price: $${validation.currentPrice}, TWAP: $${validation.twap?.toFixed(4) || 'N/A'}`
+          : `Condition not met: latest=$${validation.currentPrice} ${cmp} target=$${targetPrice} is false.`;
+
+        return {
+          ok: true,
+          type: 'price',
+          met: validation.triggered && validation.safe,
+          comparator: cmp,
+          latestPrice: validation.currentPrice,
+          target: targetPrice,
+          twap: validation.twap,
+          safe: validation.safe,
+          warnings: validation.warnings,
+          reason
+        };
+      } catch (error) {
+        return {
+          ok: false,
+          type: 'price',
+          reason: `Price validation failed: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          chain: trig.chain,
+          tokenAddress: trig.tokenAddress
+        };
+      }
     }
     if (trig.type === 'trend') {
       const top = Math.max(1, Math.min(Number(trig.top ?? 10), 50));

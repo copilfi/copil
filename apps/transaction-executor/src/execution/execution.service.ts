@@ -82,7 +82,9 @@ export class ExecutionService {
               await this.sessionKeyRepository.save(sk);
             }
           }
-        } catch {}
+        } catch (error) {
+          this.logger.warn(`Failed to update session key usage telemetry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       } else {
         this.logger.error(
           `Job for ${jobDescription} action failed. ${result.description ?? 'No details provided.'}`,
@@ -112,7 +114,10 @@ export class ExecutionService {
     // Hyperliquid intents are executed directly by the signer service without a quote
     if (intent.type === 'open_position' || intent.type === 'close_position') {
       const wallet = await this.walletRepository.findOne({ where: { userId, chain: 'hyperliquid' } })
-        .catch(() => null);
+        .catch((error) => {
+          this.logger.warn(`Failed to fetch hyperliquid wallet for user ${userId}: ${error.message}`);
+          return null;
+        });
       // Provide a lightweight fallback wallet; signer derives the actual HL address from session key
       const fallback: any = wallet ?? { userId, chain: 'hyperliquid', address: '0x0000000000000000000000000000000000000000', type: 'eoa' };
       return this.signerService.signAndSend({
@@ -137,9 +142,14 @@ export class ExecutionService {
       chainName = (job.metadata as any)?.chain;
     }
 
-    const wallet = await this.walletRepository.findOne({ where: { userId: job.userId, chain: chainName } });
+    let wallet = await this.walletRepository.findOne({ where: { userId: job.userId, chain: chainName } });
     if (!wallet) {
-      throw new NotFoundException(`Wallet for user ${job.userId} on chain ${chainName} not found.`);
+      // Allow Solana executions without a persisted wallet entry; signer uses session key directly
+      if ((chainName || '').toLowerCase() === 'solana') {
+        wallet = { userId: job.userId, chain: 'solana', address: 'solana:session-key', type: 'eoa' } as any;
+      } else {
+        throw new NotFoundException(`Wallet for user ${job.userId} on chain ${chainName} not found.`);
+      }
     }
 
     // Enforce session key on-chain-like policy at app layer (defense-in-depth)
@@ -239,7 +249,9 @@ export class ExecutionService {
     newLog.chain = chain; // Can be undefined for custom intents
     try {
       (newLog as any).details = { intent: job.intent, ...(job as any).metadata };
-    } catch {}
+    } catch (error) {
+      this.logger.warn(`Failed to set transaction log details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    }
 
     if (job.strategyId) {
       newLog.strategyId = job.strategyId;

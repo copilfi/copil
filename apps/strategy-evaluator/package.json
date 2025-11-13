@@ -29,6 +29,7 @@
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/typeorm": "^11.0.0",
     "bullmq": "^5.61.0",
+    "ioredis": "^5.4.2",
     "pg": "^8.16.3",
     "@copil/database": "1.0.0",
     "alchemy-sdk": "^3.3.1"

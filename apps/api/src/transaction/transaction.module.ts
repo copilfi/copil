@@ -3,16 +3,17 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { TransactionService } from './transaction.service';
 import { TransactionController } from './transaction.controller';
 import { TransactionInternalController } from './transaction.internal.controller';
-import { TransactionLog, TRANSACTION_QUEUE, TokenMetadata } from '@copil/database';
+import { TransactionLog, TRANSACTION_QUEUE, TokenMetadata, User, Wallet } from '@copil/database';
 import { BullModule } from '@nestjs/bull';
 import { PortfolioModule } from '../portfolio/portfolio.module';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
 import { ConfigService } from '@nestjs/config';
 import { SolanaService } from '../solana/solana.service';
+import { RiskManager } from './risk-manager';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([TransactionLog, TokenMetadata]),
+    TypeOrmModule.forFeature([TransactionLog, TokenMetadata, User, Wallet]),
     BullModule.registerQueue({
       name: TRANSACTION_QUEUE,
     }),
@@ -22,6 +23,7 @@ import { SolanaService } from '../solana/solana.service';
   providers: [
     TransactionService,
     SolanaService,
+    RiskManager,
     {
       provide: ChainAbstractionClient,
       useFactory: (configService: ConfigService) => {

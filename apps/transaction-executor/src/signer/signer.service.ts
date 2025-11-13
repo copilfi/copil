@@ -16,6 +16,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Wallet, SessionKey, SessionKeyPermissions } from '@copil/database';
 import { Repository } from 'typeorm';
 import { seiChain, hyperliquidChain } from '@copil/chain-abstraction-client';
+import { KeyManagementService } from '../../../api/src/common/key-management.service';
 
 export interface SignAndSendRequest {
   userId: number;
@@ -71,6 +72,7 @@ export class SignerService {
     private readonly configService: ConfigService,
     private readonly bundlerClient: BundlerClient,
     private readonly paymasterClient: PaymasterClient,
+    private readonly keyManagementService: KeyManagementService,
     @InjectRepository(Wallet)
     private readonly walletRepository: Repository<Wallet>,
     @InjectRepository(SessionKey)
@@ -97,7 +99,7 @@ export class SignerService {
     const intent = metadata?.intent as any;
     const t0 = Date.now();
 
-    const sessionKey = this.getSessionKey(sessionKeyId);
+    const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
     }
@@ -273,8 +275,9 @@ export class SignerService {
       const bestBid = bids?.length ? Number(bids[0].px) : null;
       const bestAsk = asks?.length ? Number(asks[0].px) : null;
       return { bid: bestBid, ask: bestAsk };
-    } catch {
-      return null;
+    } catch (err) {
+      this.logger.error(`Failed to enforce Hyperliquid policy: ${(err as Error).message}`);
+      return { status: 'failed', description: 'Unable to verify session key policy.' };
     }
   }
 
@@ -332,7 +335,9 @@ export class SignerService {
     try {
       const sk = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
       const perms = (sk?.permissions as SessionKeyPermissions | undefined) ?? undefined;
-      if (!perms) return null;
+      if (!perms) {
+        return { status: 'failed', description: 'Session key missing permissions for Hyperliquid trades.' };
+      }
       // actions check (matches API-side behavior)
       if (perms.actions?.length && !perms.actions.includes(intent.type)) {
         return { status: 'failed', description: `Session key does not permit ${intent.type}.` };
@@ -369,7 +374,9 @@ export class SignerService {
         const map = JSON.parse(raw) as Record<string, string>;
         const hit = map[market.toLowerCase()];
         if (hit) return String(hit).toUpperCase();
-      } catch {}
+      } catch (error) {
+        this.logger.warn(`Failed to parse market aliases: ${error instanceof Error ? error.message : 'Invalid JSON'}`);
+      }
     }
     return String(market).toUpperCase();
   }
@@ -495,7 +502,9 @@ export class SignerService {
             const slip = this.computeAdaptiveSlippage(tob?.bid ?? null, tob?.ask ?? null, undefined);
             price = this.chooseIocPrice(mid, tob?.bid ?? null, tob?.ask ?? null, slip, isBuy);
           }
-        } catch {}
+        } catch (error) {
+          this.logger.warn(`Failed to fetch adaptive price for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+        }
       }
       const res = await this.placeOrder(exch, assetId, isBuy, price, q, szDecimals, reduceOnly);
       if (res.status !== 'success') return res;
@@ -621,12 +630,23 @@ export class SignerService {
     const { sessionKeyId } = request;
     const tx = request.transaction!;
 
-    const sessionKey = this.getSessionKey(sessionKeyId);
+    const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
     }
 
     try {
+      // Double-check session key permissions right before signing (TOCTOU prevention)
+      if (sessionKeyId && request.metadata?.intent) {
+        const sk = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
+        if (!sk || !sk.isActive) {
+          return { status: 'failed', description: 'Session key is no longer active.' };
+        }
+        if (sk.expiresAt && new Date(sk.expiresAt) < new Date()) {
+          return { status: 'failed', description: 'Session key has expired.' };
+        }
+      }
+
       const walletClient = createWalletClient({
         account: privateKeyToAccount(sessionKey),
         chain: chain,
@@ -659,7 +679,7 @@ export class SignerService {
     const chainName = SOLANA_CHAIN_NAME;
     const quote = (request.metadata as any)?.quote;
 
-    const sessionKey = this.getSessionKeyBytes(sessionKeyId);
+    const sessionKey = await this.getSessionKeyBytes(sessionKeyId);
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found or invalid.` };
     }
@@ -711,7 +731,7 @@ export class SignerService {
       return { status: 'failed', description: `Smart Account for user ${userId} on chain ${chainName} not found.` };
     }
 
-    const sessionKey = this.getSessionKey(sessionKeyId);
+    const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
       return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
     }
@@ -769,45 +789,14 @@ export class SignerService {
     }
   }
 
-  private getSessionKey(sessionKeyId: number): Hex | undefined {
-    const key = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY`);
-    if (key) {
-      return key.startsWith('0x') ? (key as Hex) : `0x${key}`;
-    }
-    const fallback = this.configService.get<string>('SESSION_KEY_PRIVATE_KEY');
-    if (fallback) {
-      return fallback.startsWith('0x') ? (fallback as Hex) : `0x${fallback}`;
-    }
-    return undefined;
-  } 
-  
-  private getSessionKeyBytes(sessionKeyId: number): Uint8Array | undefined {
-    // 1. Try to get the key as a JSON byte array
-    const keyBytes = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY_BYTES`);
-    if (keyBytes) {
-        try {
-            this.logger.log('Found _BYTES session key for Solana');
-            return Uint8Array.from(JSON.parse(keyBytes));
-        } catch (e) {
-            this.logger.error('Failed to parse SESSION_KEY_..._PRIVATE_KEY_BYTES');
-            return undefined;
-        }
-    }
+  private async getSessionKey(sessionKeyId: number): Promise<Hex | undefined> {
+    // Use KeyManagementService for secure key retrieval
+    return await this.keyManagementService.getSessionKey(sessionKeyId);
+  }
 
-    // 2. Fallback to a Base58 encoded string
-    const keyB58 = this.configService.get<string>(`SESSION_KEY_${sessionKeyId}_PRIVATE_KEY_B58`);
-    if (keyB58) {
-        try {
-            this.logger.log('Found _B58 session key for Solana');
-            return bs58.decode(keyB58);
-        } catch (e) {
-            this.logger.error('Failed to decode Base58 private key for Solana');
-            return undefined;
-        }
-    }
-
-    this.logger.warn(`No valid _BYTES or _B58 private key found for session key ID ${sessionKeyId}`);
-    return undefined;
+  private async getSessionKeyBytes(sessionKeyId: number): Promise<Uint8Array | undefined> {
+    // Use KeyManagementService for secure key retrieval (Solana)
+    return await this.keyManagementService.getSessionKeyBytes(sessionKeyId);
   }
 
   private getRpcUrl(chain: string): string {

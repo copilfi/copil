@@ -14,11 +14,14 @@ import { ChainAbstractionClient, AssetBalance } from '@copil/chain-abstraction-c
 import { PortfolioService } from '../portfolio/portfolio.service';
 import { SolanaService } from '../solana/solana.service';
 import { ConfigService } from '@nestjs/config';
+import { RiskManager } from './risk-manager';
 
 @Injectable()
 export class TransactionService {
   private readonly logger = new Logger(TransactionService.name);
   private readonly quoteCache = new Map<string, { t: number; data: any }>();
+  private readonly MAX_CACHE_SIZE = 1000; // Maximum cache entries to prevent memory leak
+  private readonly CACHE_CLEANUP_THRESHOLD = 1200; // Trigger cleanup when reaching this size
 
   constructor(
     @InjectRepository(TransactionLog)
@@ -31,6 +34,7 @@ export class TransactionService {
     private readonly portfolioService: PortfolioService, // Injected PortfolioService
     private readonly configService: ConfigService,
     private readonly solanaService: SolanaService,
+    private readonly riskManager: RiskManager,
   ) {}
 
   async getQuote(intent: TransactionIntent) {
@@ -244,9 +248,33 @@ export class TransactionService {
       }
     }
 
-    // For Hyperliquid intents, we do not fetch a quote — executor will construct and send the order
-    const needsQuote = !(finalIntent.type === 'open_position' || finalIntent.type === 'close_position');
-    const quote = needsQuote ? await this.getQuote(finalIntent) : null;
+    let riskWarnings: string[] = [];
+    if (finalIntent.type === 'open_position' || finalIntent.type === 'swap' || finalIntent.type === 'bridge') {
+      const riskResult = await this.riskManager.validateTrade(userId, finalIntent);
+      if (!riskResult.allowed) {
+        const message = riskResult.reasons?.join('; ') || 'Trade blocked by risk controls.';
+        throw new BadRequestException(message);
+      }
+      if (riskResult.adjustedIntent) {
+        finalIntent = { ...finalIntent, ...riskResult.adjustedIntent };
+      }
+      if (riskResult.reasons?.length) {
+        riskWarnings = riskResult.reasons;
+      }
+    }
+
+    // Quote/prepare handling per intent type
+    let quote: any = null;
+    if (finalIntent.type === 'open_position' || finalIntent.type === 'close_position') {
+      // Hyperliquid intents: no quote; executor constructs the order
+      quote = null;
+    } else if (finalIntent.type === 'transfer') {
+      // Transfers are prepared locally (EVM calldata / Solana serialized tx)
+      quote = await this.chainAbstractionClient.prepareTransfer(finalIntent);
+    } else {
+      // swap/bridge flows use provider selection getQuote
+      quote = await this.getQuote(finalIntent);
+    }
 
     const jobData: TransactionJobData = {
       strategyId: null, // Explicitly set strategyId to null for ad-hoc jobs
@@ -258,6 +286,7 @@ export class TransactionService {
         source: 'ad-hoc',
         enqueuedAt: new Date().toISOString(),
         ...(idempotencyKey ? { idempotencyKey } : {}),
+        ...(riskWarnings.length ? { riskWarnings } : {}),
       },
     };
 
@@ -363,7 +392,37 @@ export class TransactionService {
   }
 
   private writeCache(key: string, data: any) {
+    // Check if cache cleanup is needed
+    if (this.quoteCache.size >= this.CACHE_CLEANUP_THRESHOLD) {
+      this.cleanupCache();
+    }
+
     this.quoteCache.set(key, { t: Date.now(), data });
+  }
+
+  private cleanupCache() {
+    const now = Date.now();
+    const defaultTtl = 60000; // 60 seconds default TTL for cleanup
+
+    // First, remove expired entries
+    for (const [key, value] of this.quoteCache.entries()) {
+      if (now - value.t > defaultTtl) {
+        this.quoteCache.delete(key);
+      }
+    }
+
+    // If still over limit, remove oldest entries
+    if (this.quoteCache.size > this.MAX_CACHE_SIZE) {
+      const entries = Array.from(this.quoteCache.entries())
+        .sort((a, b) => a[1].t - b[1].t); // Sort by timestamp, oldest first
+
+      const toRemove = entries.slice(0, this.quoteCache.size - this.MAX_CACHE_SIZE);
+      for (const [key] of toRemove) {
+        this.quoteCache.delete(key);
+      }
+
+      this.logger.warn(`Quote cache cleanup: removed ${toRemove.length} entries`);
+    }
   }
 
   private async sanitizeIntent(intent: TransactionIntent): Promise<TransactionIntent> {

@@ -7,7 +7,7 @@ const logger = {
     error: (...args: any[]) => console.error('[JupiterClient]', ...args),
 };
 
-const JUPITER_API_BASE_URL = 'https://quote-api.jup.ag/v6';
+const JUPITER_API_BASE_URL = process.env.JUPITER_API_URL || 'https://quote-api.jup.ag/v6';
 
 export class JupiterClient {
     private http: AxiosInstance;

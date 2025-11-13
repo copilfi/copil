@@ -12,6 +12,7 @@ import { HealthService } from './health.service';
 import { HealthController } from './health.controller';
 import { MetricsController } from './metrics.controller';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
+import { KeyManagementService } from '../../api/src/common/key-management.service';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
     BundlerClient,
     PaymasterClient,
     HealthService,
+    KeyManagementService,
     {
       provide: ChainAbstractionClient,
       useFactory: (configService: ConfigService) => {

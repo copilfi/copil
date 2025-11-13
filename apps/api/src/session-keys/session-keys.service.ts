@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, ConflictException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { SessionKey, SessionKeyPermissions, SessionActionType } from '@copil/database';
 import { Repository } from 'typeorm';
@@ -23,10 +23,15 @@ export class SessionKeysService {
       throw new ConflictException('Session key already registered.');
     }
 
+    const permissions = this.mapPermissions(dto.permissions);
+    if (!permissions.actions || permissions.actions.length === 0) {
+      throw new BadRequestException('Session key permissions.actions must be defined.');
+    }
+
     const sessionKey = this.sessionKeyRepository.create({
       userId,
       publicKey: dto.publicKey,
-      permissions: this.mapPermissions(dto.permissions),
+      permissions,
       expiresAt: dto.expiresAt ? new Date(dto.expiresAt) : undefined,
       isActive: dto.isActive ?? true,
     });
@@ -60,7 +65,11 @@ export class SessionKeysService {
       sessionKey.expiresAt = dto.expiresAt ? new Date(dto.expiresAt) : undefined;
     }
     if (dto.permissions !== undefined) {
-      sessionKey.permissions = this.mapPermissions(dto.permissions);
+      const mapped = this.mapPermissions(dto.permissions);
+      if (!mapped.actions || !mapped.actions.length) {
+        throw new BadRequestException('Session key permissions.actions must be defined.');
+      }
+      sessionKey.permissions = mapped;
     }
 
     return this.sessionKeyRepository.save(sessionKey);
@@ -86,6 +95,13 @@ export class SessionKeysService {
     }
     if (permissions.notes) {
       mapped.notes = permissions.notes;
+    }
+    // Hyperliquid policy extensions (optional)
+    if (permissions.hlAllowedMarkets) {
+      mapped.hlAllowedMarkets = permissions.hlAllowedMarkets;
+    }
+    if (typeof permissions.hlMaxUsdPerTrade === 'number') {
+      mapped.hlMaxUsdPerTrade = permissions.hlMaxUsdPerTrade;
     }
     return mapped;
   }

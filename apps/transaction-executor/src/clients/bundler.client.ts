@@ -15,7 +15,14 @@ export class BundlerClient {
     if (!apiKey) {
       throw new Error('PIMLICO_API_KEY is not configured.');
     }
-    const bundlerUrl = `https://api.pimlico.io/v1/${chain.name.toLowerCase()}/rpc?apikey=${apiKey}`;
-    return http(bundlerUrl);
+    // API key moved to header for security
+    const bundlerUrl = `https://api.pimlico.io/v1/${chain.name.toLowerCase()}/rpc`;
+    return http(bundlerUrl, {
+      fetchOptions: {
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+        },
+      },
+    });
   }
 }

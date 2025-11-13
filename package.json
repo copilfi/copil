@@ -6,7 +6,9 @@
     "dev": "turbo dev",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
-    "e2e:smoke": "node scripts/e2e-smoke.mjs"
+    "e2e:smoke": "node scripts/e2e-smoke.mjs",
+    "migrate:vault": "npx tsx scripts/migrate-keys-to-vault.ts",
+    "migrate:vault:dry-run": "DRY_RUN=true npx tsx scripts/migrate-keys-to-vault.ts"
   },
   "devDependencies": {
     "@nestjs/cli": "^11.0.10",

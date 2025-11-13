@@ -3,6 +3,8 @@ import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
 import { AuthService } from './auth.service';
+import { UrlValidatorService } from '../common/url-validator.service';
+import { Request } from 'express';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -12,10 +14,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   constructor(
     private readonly configService: ConfigService,
     private readonly authService: AuthService,
+    private readonly urlValidator: UrlValidatorService,
   ) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
+      passReqToCallback: true,
       secretOrKeyProvider: async (_req: any, rawJwtToken: string, done: (err: any, secret?: string | Buffer) => void) => {
         try {
           const secret = await this.resolveSecretOrKey(rawJwtToken);
@@ -63,10 +67,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
         }
         this.logger.warn('JWKS lookup failed; falling back to JWT_SECRET for this request.');
       }
-      // As last resort, use internal secret (not recommended for Privy tokens)
-      const fallback = this.configService.get<string>('JWT_SECRET');
-      if (!fallback) throw new Error('No verification key available for JWT.');
-      return fallback;
+      // No fallback for Privy tokens - must have proper PEM or JWKS
+      throw new Error('No Privy public key configured. Set PRIVY_PUBLIC_KEY_PEM or PRIVY_JWKS_ENDPOINT.');
     }
 
     // Internal app JWTs
@@ -86,7 +88,15 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     }
 
     try {
-      const res = await fetch(jwksUrl);
+      // Validate URL to prevent SSRF
+      const validation = this.urlValidator.validateUrl(jwksUrl);
+      if (!validation.valid) {
+        this.logger.error(`JWKS URL validation failed: ${validation.reason}`);
+        return null;
+      }
+
+      // Use safe fetch with timeout
+      const res = await this.urlValidator.safeFetch(jwksUrl, { timeout: 10000 });
       if (!res.ok) {
         this.logger.warn(`JWKS fetch failed with HTTP ${res.status}`);
         return null;
@@ -123,34 +133,85 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     return `-----BEGIN CERTIFICATE-----\n${body}\n-----END CERTIFICATE-----\n`;
   }
 
-  async validate(payload: any) {
+  async validate(req: Request, payload: any) {
+    // Log all authentication attempts for security auditing
+    this.logger.log(`Authentication attempt - iss: ${payload?.iss}, sub: ${payload?.sub}`);
+
     // Internal tokens: payload.sub is numeric user id
     if (typeof payload?.sub === 'number') {
       return { id: payload.sub, privyDid: payload.privyDid, email: payload.email };
     }
 
-    // Privy tokens: create or find user by Privy DID
-    if (!(typeof payload?.iss === 'string' && payload.iss.includes('auth.privy.io'))) {
-      throw new Error('Invalid token issuer.');
+    // Privy tokens: strict validation with no bypass
+    const issuer = payload?.iss;
+
+    // Strict issuer validation - must be exactly from Privy
+    const validIssuers = ['https://auth.privy.io', 'auth.privy.io'];
+    if (!(typeof issuer === 'string' && validIssuers.some(valid => issuer === valid || issuer === `https://${valid}`))) {
+      this.logger.error(`Invalid token issuer: ${issuer}`);
+      throw new Error('Invalid token issuer - must be from auth.privy.io');
     }
+
+    // Verify audience matches our app
     const expectedAud = this.configService.get<string>('PRIVY_APP_ID') || this.configService.get<string>('PRIVY_EXPECT_AUD');
+    if (!expectedAud) {
+      this.logger.error('PRIVY_APP_ID not configured - authentication disabled');
+      throw new Error('Privy authentication not properly configured');
+    }
+
     const aud = payload?.aud;
-    if (expectedAud) {
-      const audOk = Array.isArray(aud) ? aud.includes(expectedAud) : aud === expectedAud;
-      if (!audOk) {
-        throw new Error('Invalid token audience.');
-      }
+    const audOk = Array.isArray(aud) ? aud.includes(expectedAud) : aud === expectedAud;
+    if (!audOk) {
+      this.logger.error(`Invalid token audience. Expected: ${expectedAud}, Got: ${aud}`);
+      throw new Error('Invalid token audience.');
     }
+
+    // Validate subject (Privy DID)
     const privyDid: string | undefined = typeof payload?.sub === 'string' ? payload.sub : undefined;
-    if (!privyDid) {
-      throw new Error('Invalid token payload: missing subject.');
+    if (!privyDid || !privyDid.startsWith('did:privy:')) {
+      this.logger.error(`Invalid Privy DID format: ${privyDid}`);
+      throw new Error('Invalid token payload: missing or malformed Privy DID.');
     }
+
+    // Check token timing
     const nowSec = Math.floor(Date.now() / 1000);
-    if (typeof (payload as any)?.nbf === 'number' && nowSec < (payload as any).nbf) {
+
+    // Not before check
+    if (typeof payload?.nbf === 'number' && nowSec < payload.nbf) {
       throw new Error('Token not yet valid.');
     }
+
+    // Expiration check (redundant but explicit)
+    if (typeof payload?.exp === 'number' && nowSec >= payload.exp) {
+      throw new Error('Token has expired.');
+    }
+
+    // Issued at check - reject tokens issued too far in the past (potential replay)
+    if (typeof payload?.iat === 'number') {
+      const maxAge = 24 * 60 * 60; // 24 hours
+      if (nowSec - payload.iat > maxAge) {
+        this.logger.warn(`Token too old - issued ${nowSec - payload.iat} seconds ago`);
+        throw new Error('Token is too old. Please re-authenticate.');
+      }
+    }
+
     const email: string = typeof payload?.email === 'string' ? payload.email : 'user@privy.local';
-    const user = await this.authService.findOrCreateUser(privyDid, email);
+    const walletAddress = this.extractWalletAddress(req);
+    const user = await this.authService.findOrCreateUser(privyDid, email, walletAddress);
+
+    this.logger.log(`Authentication successful for user ${user.id} (${privyDid})`);
     return { id: user.id, privyDid: user.privyDid, email: user.email };
+  }
+
+  private extractWalletAddress(req: Request): string | undefined {
+    try {
+      const body = (req as any)?.body;
+      if (body && typeof body.walletAddress === 'string' && body.walletAddress.length > 0) {
+        return body.walletAddress;
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to read wallet address from request body: ${(e as Error).message}`);
+    }
+    return undefined;
   }
 }

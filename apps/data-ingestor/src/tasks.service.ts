@@ -41,6 +41,7 @@ export class TasksService {
             address: pair.baseToken.address,
             symbol: pair.baseToken.symbol,
             priceUsd: parseFloat(pair.priceUsd),
+            source: 'dexscreener',
           });
           await this.tokenPriceRepository.save(tokenPrice);
         }
@@ -75,6 +76,7 @@ export class TasksService {
           address: sym,
           symbol: sym,
           priceUsd: price,
+          source: 'hyperliquid',
         });
         await this.tokenPriceRepository.save(rec);
         saved++;
@@ -119,6 +121,7 @@ export class TasksService {
           address: mp.mint,
           symbol: String(symbol),
           priceUsd: Number(price),
+          source: 'jupiter',
         });
         await this.tokenPriceRepository.save(row);
         saved++;

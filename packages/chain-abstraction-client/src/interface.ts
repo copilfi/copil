@@ -3,6 +3,7 @@ import {
   GetAggregatedBalanceResponse,
   GetQuoteRequest,
   GetQuoteResponse,
+  TransactionIntent,
 } from './types';
 
 export interface IChainAbstractionClient {
@@ -11,5 +12,7 @@ export interface IChainAbstractionClient {
   ): Promise<GetAggregatedBalanceResponse>;
 
   getQuote(request: GetQuoteRequest): Promise<GetQuoteResponse>;
+
+  prepareTransfer(intent: TransactionIntent): Promise<GetQuoteResponse>;
 
 }

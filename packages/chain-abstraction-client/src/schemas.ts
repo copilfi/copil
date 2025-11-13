@@ -20,11 +20,15 @@ export const QuoteSchema = z.object({
   fromAmount: z.string(),
   toAmount: z.string(),
   gasCostUsd: z.string().optional(),
-  transactionRequest: z.object({
-    to: z.string(),
-    data: z.string(),
-    value: z.string().optional(),
-  }),
+  transactionRequest: z
+    .object({
+      to: z.string(),
+      data: z.string(),
+      value: z.string().optional(),
+    })
+    .nullable()
+    .optional(),
+  serializedTx: z.string().optional(),
   // Add other fields from OneBalance quote response as needed
 });
 

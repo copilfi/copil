@@ -9,6 +9,7 @@ import { User } from '@copil/database';
 import { JwtStrategy } from './jwt.strategy';
 import { Wallet } from '@copil/database';
 import { SmartAccountService } from './smart-account.service';
+import { UrlValidatorService } from '../common/url-validator.service';
 
 @Module({
   imports: [
@@ -24,7 +25,7 @@ import { SmartAccountService } from './smart-account.service';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService, JwtStrategy, SmartAccountService],
+  providers: [AuthService, JwtStrategy, SmartAccountService, UrlValidatorService],
   exports: [AuthService, SmartAccountService],
 })
 export class AuthModule {}

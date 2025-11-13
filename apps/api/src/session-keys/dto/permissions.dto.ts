@@ -18,7 +18,7 @@ export class SessionKeyPermissionsDto {
   @IsArray()
   @ArrayNotEmpty()
   @ArrayUnique()
-  @IsIn(['swap', 'bridge', 'custom'], { each: true })
+  @IsIn(['swap', 'bridge', 'custom', 'transfer', 'open_position', 'close_position'], { each: true })
   actions?: string[];
 
   @IsOptional()
@@ -43,4 +43,15 @@ export class SessionKeyPermissionsDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  // Hyperliquid-specific policy extensions (optional)
+  @IsOptional()
+  @IsArray()
+  @ArrayUnique()
+  @IsString({ each: true })
+  hlAllowedMarkets?: string[];
+
+  @IsOptional()
+  @IsNumber()
+  hlMaxUsdPerTrade?: number;
 }
