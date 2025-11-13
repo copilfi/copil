@@ -301,7 +301,7 @@ export class AutomationsService {
 
   private async ensureSessionKeyOwnership(sessionKeyId: number | undefined, userId: number) {
     if (sessionKeyId === undefined) {
-      return;
+      throw new BadRequestException('Session key ID is required for transaction execution.');
     }
 
     const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: sessionKeyId } });
