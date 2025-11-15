@@ -1,14 +1,9 @@
-import { Logger } from '@nestjs/common';
-import { InjectQueue, Processor, Process } from '@nestjs/bull';
-import { Job } from 'bullmq';
+import { Processor, Process, InjectQueue } from '@nestjs/bull';
+import { Job } from 'bull';
 import { InjectRepository } from '@nestjs/typeorm';
-import { MoreThan, Repository } from 'typeorm';
-import { HttpService } from '@nestjs/axios';
-import { ConfigService } from '@nestjs/config';
+import { Repository, MoreThan } from 'typeorm';
+import { Logger } from '@nestjs/common';
 import { firstValueFrom } from 'rxjs';
-import axios from 'axios';
-import { createHmac } from 'crypto';
-import Redis from 'ioredis';
 import {
   Strategy,
   StrategyDefinition,
@@ -16,6 +11,12 @@ import {
   STRATEGY_QUEUE,
 } from '@copil/database';
 import { OracleValidatorService } from './oracle-validator.service';
+import { BullJob, BullQueue } from './types/external-api.types';
+import { ConfigService } from '@nestjs/config';
+import { HttpService } from '@nestjs/axios';
+import axios from 'axios';
+import { createHmac } from 'crypto';
+import Redis from 'ioredis';
 
 @Processor(STRATEGY_QUEUE)
 export class StrategyProcessor {
@@ -33,7 +34,7 @@ export class StrategyProcessor {
     private readonly tokenPriceRepository: Repository<TokenPrice>,
     private readonly httpService: HttpService,
     private readonly configService: ConfigService,
-    @InjectQueue(STRATEGY_QUEUE) private readonly strategyQueue: any,
+    @InjectQueue(STRATEGY_QUEUE) private readonly strategyQueue: BullQueue,
     private readonly oracleValidator: OracleValidatorService,
   ) {
     this.apiServiceUrl = this.configService.get<string>(
@@ -67,24 +68,24 @@ export class StrategyProcessor {
     try {
       // Concurrency guard: if there is another active job for the same strategy, skip
       try {
-        const activeJobs: any[] = await this.strategyQueue.getJobs(
+        const activeJobs: BullJob[] = await this.strategyQueue.getJobs(
           ['active'],
           0,
           500,
         );
-        const hasOtherActive = activeJobs.some(
-          (j) => j?.id !== job.id && j?.data?.strategyId === strategyId,
+        const duplicateJob = activeJobs.find(
+          (job: BullJob) => job.data.strategyId === strategyId,
         );
-        if (hasOtherActive) {
+        if (duplicateJob) {
           this.logger.warn(
-            `Strategy ${strategyId} already has an active job. Skipping overlapping execution.`,
+            `Strategy ${strategyId} already has active job ${duplicateJob.id}, skipping`,
           );
           return;
         }
       } catch (error) {
         this.logger.warn('Failed to check active jobs', error);
       }
-      const strategy = await this.strategyRepository.findOne({
+      const strategy: Strategy | null = await this.strategyRepository.findOne({
         where: { id: strategyId },
       });
 
@@ -159,7 +160,7 @@ export class StrategyProcessor {
     const comparator = definition.trigger.comparator ?? 'gte';
 
     this.logger.debug(
-      `Oracle validation passed for ${definition.trigger.tokenAddress}: $${currentPrice.toFixed(6)} (sources: ${validation.sources.map((s: any) => `${s.name}:$${s.price || 'null'}`).join(', ')})`,
+      `Oracle validation passed for ${definition.trigger.tokenAddress}: $${currentPrice.toFixed(6)} (sources: ${validation.sources.map((s) => `${s.name}:$${s.price || 'null'}`).join(', ')})`,
     );
 
     const met =
@@ -185,7 +186,7 @@ export class StrategyProcessor {
     const top = Math.max(1, Math.min(definition.trigger.top ?? 10, 50));
 
     // Fetch a recent window of TokenPrice rows and dedupe by (chain,address) similar to MarketService
-    const rows = await this.tokenPriceRepository.find({
+    const rows: TokenPrice[] = await this.tokenPriceRepository.find({
       where: { chain },
       order: { timestamp: 'DESC' },
       take: Math.max(top * 10, 100),
@@ -255,7 +256,7 @@ export class StrategyProcessor {
       const baseDelay = Number(
         this.configService.get<string>('EVALUATOR_EXECUTE_BACKOFF_MS') ?? '500',
       );
-      let lastErr: any;
+      let lastErr: unknown = null;
       for (let i = 0; i < attempts; i++) {
         try {
           await firstValueFrom(
@@ -269,14 +270,22 @@ export class StrategyProcessor {
           await new Promise((r) => setTimeout(r, delay));
         }
       }
-      if (lastErr) throw lastErr;
+      if (lastErr instanceof Error) {
+        throw lastErr;
+      } else if (lastErr) {
+        throw new Error(
+          typeof lastErr === 'string' ? lastErr : 'Unknown error occurred',
+        );
+      }
       this.logger.log(
         `Successfully triggered execution for strategy ${strategy.id}`,
       );
-    } catch (error) {
+    } catch (error: unknown) {
       let errorMessage = 'Unknown error';
       if (axios.isAxiosError(error)) {
-        errorMessage = error.response?.data?.message ?? error.message;
+        errorMessage =
+          (error.response?.data as { message?: string })?.message ??
+          error.message;
       } else if (error instanceof Error) {
         errorMessage = error.message;
       }
@@ -336,7 +345,7 @@ export class StrategyProcessor {
     windowMs: number,
   ): Promise<number | null> {
     const since = new Date(Date.now() - windowMs);
-    const rows = await this.tokenPriceRepository.find({
+    const rows: TokenPrice[] = await this.tokenPriceRepository.find({
       where: {
         chain: chain.toLowerCase(),
         address: tokenAddress.toLowerCase(),

@@ -4,12 +4,28 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { TokenPrice } from '@copil/database';
 import { firstValueFrom } from 'rxjs';
+import { DexscreenerToken } from './types/external-api.types';
+import { ExternalApiError, DatabaseError } from './types/error.types';
 
-interface PriceSource {
+interface DexscreenerPriceSource {
   name: string;
   url: string;
-  getPrice: (data: any, tokenAddress: string) => number | null;
+  getPrice: (
+    data: { pairs: DexscreenerToken[] },
+    tokenAddress: string,
+  ) => number | null;
 }
+
+interface CoinGeckoPriceSource {
+  name: string;
+  url: string;
+  getPrice: (
+    data: Record<string, { usd: number }>,
+    tokenAddress: string,
+  ) => number | null;
+}
+
+type PriceSource = DexscreenerPriceSource | CoinGeckoPriceSource;
 
 @Injectable()
 export class OracleValidatorService {
@@ -18,10 +34,10 @@ export class OracleValidatorService {
     {
       name: 'dexscreener',
       url: 'https://api.dexscreener.com/latest/dex/tokens',
-      getPrice: (data, tokenAddress) => {
-        const pairs = data.pairs || [];
+      getPrice: (data: { pairs: DexscreenerToken[] }, tokenAddress: string) => {
+        const pairs: DexscreenerToken[] = data.pairs || [];
         const pair = pairs.find(
-          (p: any) =>
+          (p: DexscreenerToken) =>
             p.baseToken.address.toLowerCase() === tokenAddress.toLowerCase(),
         );
         return pair?.priceUsd ? parseFloat(pair.priceUsd) : null;
@@ -30,7 +46,10 @@ export class OracleValidatorService {
     {
       name: 'coingecko',
       url: 'https://api.coingecko.com/api/v3/simple/token_price',
-      getPrice: (data, tokenAddress) => {
+      getPrice: (
+        data: Record<string, { usd: number }>,
+        tokenAddress: string,
+      ) => {
         return data[tokenAddress.toLowerCase()]?.usd || null;
       },
     },
@@ -126,36 +145,71 @@ export class OracleValidatorService {
       ? source.url.replace('{address}', tokenAddress)
       : `${source.url}/${tokenAddress}`;
 
-    const response = await firstValueFrom(
-      this.httpService.get(url, { timeout: 5000 }),
-    );
+    try {
+      const response = await firstValueFrom(
+        this.httpService.get(url, { timeout: 5000 }),
+      );
 
-    return source.getPrice(response.data, tokenAddress);
+      // Type-safe price extraction based on source type
+      if (source.name === 'dexscreener') {
+        const dexSource = source as DexscreenerPriceSource;
+        return dexSource.getPrice(
+          response.data as { pairs: DexscreenerToken[] },
+          tokenAddress,
+        );
+      } else {
+        const coinSource = source as CoinGeckoPriceSource;
+        return coinSource.getPrice(
+          response.data as Record<string, { usd: number }>,
+          tokenAddress,
+        );
+      }
+    } catch (error) {
+      const apiError: ExternalApiError = {
+        type: 'external_api',
+        message: `Failed to fetch price from ${source.name}`,
+        source: source.name,
+        details: error,
+      };
+      this.logger.error(`External API error: ${apiError.message}`, apiError);
+      return null;
+    }
   }
 
   private async getStoredPrice(
     chain: string,
     tokenAddress: string,
   ): Promise<number | null> {
-    const latest = await this.tokenPriceRepository.findOne({
-      where: {
-        chain: chain.toLowerCase(),
-        address: tokenAddress.toLowerCase(),
-      },
-      order: { timestamp: 'DESC' },
-    });
+    try {
+      const latest = await this.tokenPriceRepository.findOne({
+        where: {
+          chain: chain.toLowerCase(),
+          address: tokenAddress.toLowerCase(),
+        },
+        order: { timestamp: 'DESC' },
+      });
 
-    if (!latest) {
+      if (!latest) {
+        return null;
+      }
+
+      const ageMs = Date.now() - new Date(latest.timestamp).getTime();
+      const maxAge = 5 * 60 * 1000; // 5 minutes
+
+      if (ageMs > maxAge) {
+        return null;
+      }
+
+      return latest.priceUsd;
+    } catch (error) {
+      const dbError: DatabaseError = {
+        type: 'database',
+        message: 'Failed to fetch stored price',
+        query: 'findOne',
+        details: error,
+      };
+      this.logger.error(`Database error: ${dbError.message}`, dbError);
       return null;
     }
-
-    const ageMs = Date.now() - new Date(latest.timestamp).getTime();
-    const maxAge = 5 * 60 * 1000; // 5 minutes
-
-    if (ageMs > maxAge) {
-      return null;
-    }
-
-    return latest.priceUsd;
   }
 }

@@ -19,6 +19,13 @@ import { StrategyProcessor } from './strategy.processor';
 import { HealthService } from './health.service';
 import { HealthController } from './health.controller';
 
+interface HttpModuleConfig {
+  timeout: number;
+  maxRedirects: number;
+  httpAgent: http.Agent;
+  httpsAgent: https.Agent;
+}
+
 @Module({
   imports: [
     ConfigModule.forRoot(),
@@ -31,7 +38,7 @@ import { HealthController } from './health.controller';
           maxRedirects: 0,
           httpAgent: new http.Agent({ keepAlive: true, maxSockets: max }),
           httpsAgent: new https.Agent({ keepAlive: true, maxSockets: max }),
-        } as any;
+        } satisfies HttpModuleConfig;
       },
     }),
     TypeOrmModule.forRootAsync({

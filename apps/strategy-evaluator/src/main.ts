@@ -13,11 +13,19 @@ async function bootstrap() {
     const port = Number(
       process.env.STRATEGY_EVALUATOR_PORT ?? process.env.HEALTH_PORT ?? 3003,
     );
-    const server = http.createServer(async (req, res) => {
+    const server = http.createServer((req, res) => {
       if (req.method === 'GET' && (req.url === '/' || req.url === '/health')) {
-        const status = await health.getStatus().catch(() => ({ ok: false }));
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify(status));
+        void health
+          .getStatus()
+          .catch(() => ({ ok: false }))
+          .then((status) => {
+            res.writeHead(200, { 'Content-Type': 'application/json' });
+            res.end(JSON.stringify(status));
+          })
+          .catch(() => {
+            res.writeHead(500);
+            res.end(JSON.stringify({ ok: false }));
+          });
       } else {
         res.writeHead(404);
         res.end();
@@ -33,4 +41,5 @@ async function bootstrap() {
   await new Promise((resolve) => process.on('SIGINT', resolve));
   await app.close();
 }
-bootstrap();
+
+void bootstrap();
