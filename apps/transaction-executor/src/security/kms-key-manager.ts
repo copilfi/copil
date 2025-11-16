@@ -1,8 +1,14 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { KMSClient, CreateKeyCommand, DescribeKeyCommand, ScheduleKeyDeletionCommand, GenerateDataKeyCommand, EncryptCommand, DecryptCommand } from '@aws-sdk/client-kms';
+import {
+  KMSClient,
+  ScheduleKeyDeletionCommand,
+  GenerateDataKeyCommand,
+  DecryptCommand,
+} from '@aws-sdk/client-kms';
 import * as crypto from 'crypto';
 import { ethers } from 'ethers';
+import { StorageService } from '../services/storage.service';
 
 // Interfaces
 export interface KeyPairResult {
@@ -27,7 +33,10 @@ export class KmsKeyManager {
   private readonly masterKeyId: string | undefined;
   private readonly encryptionAlgorithm = 'aes-256-gcm';
 
-  constructor(private readonly configService: ConfigService) {
+  constructor(
+    private readonly configService: ConfigService,
+    private readonly storageService: StorageService,
+  ) {
     const kmsProvider = this.configService.get<string>('KMS_PROVIDER', 'aws');
     
     switch (kmsProvider) {
@@ -95,6 +104,7 @@ export class KmsKeyManager {
       
       const dataKeyResponse = await this.kms.send(dataKeyCommand);
       const plaintextKey = dataKeyResponse.Plaintext;
+      // Note: encryptedDataKey is stored with the encrypted private key for later decryption
       const encryptedDataKey = dataKeyResponse.CiphertextBlob;
 
       if (!plaintextKey) {
@@ -274,30 +284,84 @@ export class KmsKeyManager {
   }
 
   private async storeEncryptedKey(sessionKeyId: string, encryptedData: EncryptedData): Promise<void> {
-    // Implementation to store encrypted key in secure database or vault
-    // This would integrate with your secure storage solution
-    this.logger.debug(`Storing encrypted key for ${sessionKeyId}`);
+    try {
+      this.logger.debug(`Storing encrypted key for ${sessionKeyId} using production Redis storage`);
+      
+      await this.storageService.storeEncryptedKey(sessionKeyId, encryptedData);
+      
+      this.logger.debug(`Successfully stored encrypted key for ${sessionKeyId}`);
+    } catch (error) {
+      this.logger.error(
+        `Failed to store encrypted key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
+      throw error;
+    }
   }
 
   private async retrieveEncryptedKey(sessionKeyId: string): Promise<EncryptedData | null> {
-    // Implementation to retrieve encrypted key from secure storage
-    this.logger.debug(`Retrieving encrypted key for ${sessionKeyId}`);
-    return null; // Placeholder
+    try {
+      this.logger.debug(`Retrieving encrypted key for ${sessionKeyId} using production Redis storage`);
+      
+      const storedData = await this.storageService.retrieveEncryptedKey(sessionKeyId);
+
+      if (!storedData) {
+        this.logger.warn(`No encrypted key found for ${sessionKeyId}`);
+        return null;
+      }
+
+      return {
+        ciphertext: storedData.ciphertext,
+        iv: storedData.iv,
+        tag: storedData.tag,
+        keyId: storedData.keyId,
+        revoked: storedData.revoked,
+      };
+    } catch (error) {
+      this.logger.error(`Failed to retrieve encrypted key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      return null;
+    }
   }
 
   private async retrieveEncryptedDataKey(keyId: string): Promise<string> {
-    // Implementation to retrieve encrypted data key
-    this.logger.debug(`Retrieving encrypted data key ${keyId}`);
-    return ''; // Placeholder
+    try {
+      this.logger.debug(`Retrieving encrypted data key for ${keyId} using production Redis storage`);
+      
+      const encryptedDataKey = await this.storageService.retrieveDataKey(keyId);
+
+      if (!encryptedDataKey) {
+        throw new Error(`No encrypted data key found for ${keyId}`);
+      }
+
+      return encryptedDataKey;
+    } catch (error) {
+      this.logger.error(`Failed to retrieve encrypted data key ${keyId}: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 
   private async markKeyAsRevoked(sessionKeyId: string): Promise<void> {
-    // Implementation to mark key as revoked in storage
-    this.logger.debug(`Marking key ${sessionKeyId} as revoked`);
+    try {
+      this.logger.debug(`Marking key as revoked for ${sessionKeyId} using production Redis storage`);
+      
+      await this.storageService.markKeyAsRevoked(sessionKeyId);
+      
+      this.logger.debug(`Successfully marked key ${sessionKeyId} as revoked`);
+    } catch (error) {
+      this.logger.error(`Failed to mark key ${sessionKeyId} as revoked: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 
   private async retireKey(sessionKeyId: string): Promise<void> {
-    // Implementation to retire old key during rotation
-    this.logger.debug(`Retiring key ${sessionKeyId}`);
+    try {
+      this.logger.debug(`Retiring key for ${sessionKeyId} using production Redis storage`);
+      
+      await this.storageService.retireKey(sessionKeyId);
+      
+      this.logger.debug(`Successfully retired key ${sessionKeyId}`);
+    } catch (error) {
+      this.logger.error(`Failed to retire key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      throw error;
+    }
   }
 }

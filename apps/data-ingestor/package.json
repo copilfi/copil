@@ -21,22 +21,25 @@
     "test:e2e": "jest --config ./test/jest-e2e.json"
   },
   "dependencies": {
+    "@binance/connector": "^3.6.1",
     "@copil/database": "1.0.0",
     "@nestjs/common": "^11.0.1",
     "@nestjs/core": "^11.0.1",
     "@nestjs/platform-express": "^11.0.1",
     "@nestjs/schedule": "^6.0.1",
     "@nestjs/typeorm": "^11.0.0",
-    "axios": "^1.12.2",
+    "axios": "^1.13.2",
+    "coinbase-pro-node": "^9.1.0",
+    "ethers": "^6.15.0",
+    "kraken-api": "^1.0.2",
     "pg": "^8.16.3",
     "reflect-metadata": "^0.2.2",
     "rxjs": "^7.8.1",
-    "typeorm": "^0.3.27",
+    "sentiment": "5.0.2",
     "twitter-api-v2": "^1.16.0",
-    "sentiment": "5.0.2"
+    "typeorm": "^0.3.27"
   },
   "devDependencies": {
-    "@types/sentiment": "^5.0.0",
     "@eslint/eslintrc": "^3.2.0",
     "@eslint/js": "^9.18.0",
     "@nestjs/cli": "^11.0.0",
@@ -45,6 +48,7 @@
     "@types/express": "^5.0.0",
     "@types/jest": "^30.0.0",
     "@types/node": "^22.10.7",
+    "@types/sentiment": "^5.0.0",
     "@types/supertest": "^6.0.2",
     "eslint": "^9.18.0",
     "eslint-config-prettier": "^10.0.1",

@@ -1,18 +1,25 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
-import { BullModule } from '@nestjs/bull';
 import { TypeOrmModule } from '@nestjs/typeorm';
-import { Strategy, TransactionLog, User, Wallet, SessionKey, TRANSACTION_QUEUE } from '@copil/database';
-import { TransactionProcessor } from './transaction.processor';
-import { ExecutionService } from './execution/execution.service';
+import { BullModule } from '@nestjs/bull';
+import { ThrottlerModule } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+
+// Database entities
+import { User, Wallet, Strategy, TransactionLog, SessionKey } from '@copil/database';
+
+// Services
 import { SignerService } from './signer/signer.service';
-import { BundlerClient } from './clients/bundler.client';
-import { PaymasterClient } from './clients/paymaster.client';
-import { HealthService } from './health.service';
-import { HealthController } from './health.controller';
-import { MetricsController } from './metrics.controller';
-import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
+import { ExecutionService } from './execution/execution.service';
+import { EnterpriseKeyManagementService } from './services/enterprise-key-management.service';
 import { MockKeyManagementService } from './services/mock-key-management.service';
+import { AuditService } from './audit/audit.service';
+import { RiskEngine } from './risk/risk-engine';
+import { KmsKeyManager } from './security/kms-key-manager';
+import { StorageService } from './services/storage.service';
+
+// Constants
+const TRANSACTION_QUEUE = 'transactions';
 
 @Module({
   imports: [
@@ -27,7 +34,8 @@ import { MockKeyManagementService } from './services/mock-key-management.service
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
         entities: [User, Wallet, Strategy, TransactionLog, SessionKey],
-        synchronize: false,
+        synchronize: configService.get<string>('NODE_ENV') !== 'production',
+        logging: configService.get<string>('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],
     }),
@@ -46,28 +54,36 @@ import { MockKeyManagementService } from './services/mock-key-management.service
       name: TRANSACTION_QUEUE,
     }),
   ],
-  controllers: [HealthController, MetricsController],
+  controllers: [],
   providers: [
     ExecutionService,
-    TransactionProcessor,
     SignerService,
-    BundlerClient,
-    PaymasterClient,
-    HealthService,
+    // Production Storage Service
+    StorageService,
+    // Enterprise Security Services (always available, but only used when enterprise mode is enabled)
+    AuditService,
+    RiskEngine,
+    KmsKeyManager,
+    EnterpriseKeyManagementService,
+    // Feature-flagged Key Management Service
     {
       provide: 'IKeyManagementService',
-      useClass: MockKeyManagementService,
-    },
-    {
-      provide: ChainAbstractionClient,
-      useFactory: (configService: ConfigService) => {
-        const apiKey = configService.get<string>('ONEBALANCE_API_KEY');
-        if (!apiKey) {
-          throw new Error('ONEBALANCE_API_KEY is not defined in environment variables.');
+      useFactory: (
+        configService: ConfigService,
+        enterpriseService: EnterpriseKeyManagementService,
+        mockService: MockKeyManagementService
+      ) => {
+        const enterpriseSecurityEnabled = configService.get<string>('ENTERPRISE_SECURITY_ENABLED') === 'true';
+        
+        if (enterpriseSecurityEnabled) {
+          console.log('🔐 Enterprise Security Mode Enabled - Using EnterpriseKeyManagementService');
+          return enterpriseService;
+        } else {
+          console.log('  Development Mode - Using MockKeyManagementService (NOT SECURE FOR PRODUCTION)');
+          return mockService;
         }
-        return new ChainAbstractionClient(apiKey);
       },
-      inject: [ConfigService],
+      inject: [ConfigService, EnterpriseKeyManagementService, MockKeyManagementService],
     },
   ],
 })
