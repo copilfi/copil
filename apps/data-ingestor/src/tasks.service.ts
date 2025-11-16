@@ -36,14 +36,23 @@ export class TasksService {
         this.logger.log(`Found ${pairs.length} pairs for ${chain}`);
 
         for (const pair of pairs) {
-          if (!pair?.priceUsd || isNaN(parseFloat(pair.priceUsd))) {
+          // Type-safe access with proper guards
+          if (!pair || typeof pair !== 'object') continue;
+          if (!('priceUsd' in pair) || !('baseToken' in pair)) continue;
+          if (!pair.priceUsd || typeof pair.priceUsd !== 'string') continue;
+          if (!pair.baseToken || typeof pair.baseToken !== 'object') continue;
+          if (!('address' in pair.baseToken) || !('symbol' in pair.baseToken))
             continue;
-          }
+          if (!pair.baseToken.address || !pair.baseToken.symbol) continue;
+
+          const price = parseFloat(pair.priceUsd);
+          if (isNaN(price)) continue;
+
           const tokenPrice = this.tokenPriceRepository.create({
             chain: chain,
             address: pair.baseToken.address,
             symbol: pair.baseToken.symbol,
-            priceUsd: parseFloat(pair.priceUsd),
+            priceUsd: price,
             source: 'dexscreener',
           });
           await this.tokenPriceRepository.save(tokenPrice);
@@ -124,14 +133,26 @@ export class TasksService {
 
       let saved = 0;
       for (const mp of mintPairs) {
+        // Type-safe access for Jupiter price data
+        if (!data || typeof data !== 'object') continue;
+        if (!(mp.mint in data)) continue;
+
         const rec = data[mp.mint];
-        const price = rec?.price as number | undefined;
-        if (!price || !Number.isFinite(price)) continue;
-        const symbol =
-          mp.symbol ||
-          rec?.symbol ||
-          (rec?.id as string) ||
-          mp.mint.substring(0, 6);
+        if (!rec || typeof rec !== 'object') continue;
+        if (!('price' in rec) || typeof rec.price !== 'number') continue;
+
+        const price = rec.price;
+        if (!Number.isFinite(price)) continue;
+
+        let symbol = mp.symbol;
+        if (!symbol && 'symbol' in rec && typeof rec.symbol === 'string') {
+          symbol = rec.symbol;
+        } else if (!symbol && 'id' in rec && typeof rec.id === 'string') {
+          symbol = rec.id;
+        } else if (!symbol) {
+          symbol = mp.mint.substring(0, 6);
+        }
+
         const row = this.tokenPriceRepository.create({
           chain: 'solana',
           address: mp.mint,

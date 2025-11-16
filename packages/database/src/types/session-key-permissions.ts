@@ -12,6 +12,12 @@ export interface SessionKeyPermissions {
   allowedContracts?: string[]; // whitelist of destination contracts (tx.to)
   spendLimits?: SessionSpendLimit[]; // simple per-tx caps; aggregate window optional
   notes?: string;
+  timeWindow?: {
+    start: string; // HH:mm
+    end: string;   // HH:mm
+    timezone: string;
+  };
+  cooldownPeriod?: number; // seconds
   // Optional Hyperliquid-specific policy extensions
   hlAllowedMarkets?: string[];
   hlMaxUsdPerTrade?: number;
