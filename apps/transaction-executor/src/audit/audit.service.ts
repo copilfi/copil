@@ -136,7 +136,7 @@ export class AuditService {
 
   async logWalletCreation(event: WalletCreationEvent): Promise<void> {
     this.logger.log(`Wallet creation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -145,16 +145,18 @@ export class AuditService {
         riskScore: 0,
         riskLevel: 'low',
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log wallet creation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log wallet creation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   async logTransactionInitiation(event: TransactionInitiationEvent): Promise<void> {
     this.logger.log(`Transaction initiation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -164,16 +166,18 @@ export class AuditService {
         sourceIp: event.metadata?.sourceIp,
         userAgent: event.metadata?.userAgent,
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log transaction initiation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log transaction initiation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   async logKeyRotation(event: KeyRotationEvent): Promise<void> {
     this.logger.log(`Key rotation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -181,16 +185,18 @@ export class AuditService {
         eventData: event,
         sessionKeyId: event.sessionKeyId,
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log key rotation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log key rotation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   async logKeyRevocation(event: KeyRevocationEvent): Promise<void> {
     this.logger.log(`Key revocation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -198,16 +204,18 @@ export class AuditService {
         eventData: event,
         sessionKeyId: event.sessionKeyId,
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log key revocation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log key revocation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   async logThresholdOperation(event: ThresholdOperationEvent): Promise<void> {
     this.logger.log(`Threshold operation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: parseInt(event.initiatedBy || '0'),
@@ -216,10 +224,12 @@ export class AuditService {
         riskScore: 50, // Medium risk by default for threshold operations
         riskLevel: 'medium',
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log threshold operation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log threshold operation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -231,9 +241,9 @@ export class AuditService {
         order: { createdAt: 'DESC' },
         take: 100,
       });
-      
+
       // Transform AuditLog to KeyUsageRecord interface
-      return auditLogs.map(log => ({
+      return auditLogs.map((log) => ({
         timestamp: log.createdAt,
         operation: log.eventType,
         userId: log.userId,
@@ -243,14 +253,16 @@ export class AuditService {
         details: log.eventData,
       }));
     } catch (error) {
-      this.logger.error(`Failed to get key usage history for user ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get key usage history for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
 
   async logKeyAccess(event: KeyAccessEvent): Promise<void> {
     this.logger.log(`Key access audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -264,17 +276,18 @@ export class AuditService {
         sourceIp: event.sourceIp,
         userAgent: event.userAgent,
       });
-      
+
       await this.auditLogRepository.save(auditLog);
-      
     } catch (error) {
-      this.logger.error(`Failed to log key access: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log key access: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
   async logKeyGeneration(event: KeyGenerationEvent): Promise<void> {
     this.logger.log(`Key generation audit: ${JSON.stringify(event)}`);
-    
+
     try {
       const auditLog = this.auditLogRepository.create({
         userId: event.userId,
@@ -284,10 +297,12 @@ export class AuditService {
         riskScore: 0,
         riskLevel: 'low',
       });
-      
+
       await this.auditLogRepository.save(auditLog);
     } catch (error) {
-      this.logger.error(`Failed to log key generation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log key generation: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -296,7 +311,7 @@ export class AuditService {
   async getRecentSecurityEvents(userId: number, hours: number = 24): Promise<AuditLog[]> {
     const cutoff = new Date();
     cutoff.setHours(cutoff.getHours() - hours);
-    
+
     try {
       return await this.auditLogRepository.find({
         where: {
@@ -306,7 +321,9 @@ export class AuditService {
         order: { createdAt: 'DESC' },
       });
     } catch (error) {
-      this.logger.error(`Failed to get recent security events: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get recent security events: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -314,7 +331,7 @@ export class AuditService {
   async getHighRiskEvents(hours: number = 24): Promise<AuditLog[]> {
     const cutoff = new Date();
     cutoff.setHours(cutoff.getHours() - hours);
-    
+
     try {
       return await this.auditLogRepository.find({
         where: {
@@ -324,7 +341,9 @@ export class AuditService {
         order: { createdAt: 'DESC' },
       });
     } catch (error) {
-      this.logger.error(`Failed to get high risk events: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get high risk events: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -332,7 +351,7 @@ export class AuditService {
   async getFailedKeyAccessAttempts(userId: number, hours: number = 24): Promise<number> {
     const cutoff = new Date();
     cutoff.setHours(cutoff.getHours() - hours);
-    
+
     try {
       return await this.auditLogRepository.count({
         where: {
@@ -343,7 +362,9 @@ export class AuditService {
         },
       });
     } catch (error) {
-      this.logger.error(`Failed to count failed key access attempts: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to count failed key access attempts: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return 0;
     }
   }

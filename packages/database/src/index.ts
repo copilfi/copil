@@ -8,8 +8,13 @@ export * from './entities/token-metadata.entity';
 export * from './entities/token-sentiment.entity';
 export * from './entities/chat-memory.entity';
 export * from './entities/chat-embedding.entity';
+export * from './entities/fee-log.entity';
+
+// Explicit type exports for better TypeScript inference
+export type { UserRole } from './entities/user.entity';
 export * from './types/transaction-job';
 export * from './types/strategy-definition';
+export * from './types/fee.types';
 export * from './constants/queues';
 export * from './types/session-key-permissions';
 export * from './types/common.types';

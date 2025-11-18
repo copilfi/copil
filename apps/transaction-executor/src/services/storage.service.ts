@@ -71,7 +71,7 @@ export class StorageService {
 
   async storeEncryptedKey(
     sessionKeyId: string,
-    encryptedData: Omit<StoredEncryptedKey, 'storedAt' | 'version'>
+    encryptedData: Omit<StoredEncryptedKey, 'storedAt' | 'version'>,
   ): Promise<void> {
     try {
       if (!this.isConnected) {
@@ -87,7 +87,7 @@ export class StorageService {
 
       // Store with 30 days expiry for production
       await this.redis.setex(storageKey, 30 * 24 * 60 * 60, JSON.stringify(storedData));
-      
+
       this.logger.debug(`Successfully stored encrypted key for ${sessionKeyId}`);
     } catch (error) {
       this.logger.error(
@@ -149,7 +149,7 @@ export class StorageService {
 
       // Store with 30 days expiry
       await this.redis.setex(storageKey, 30 * 24 * 60 * 60, JSON.stringify(storedData));
-      
+
       this.logger.debug(`Successfully stored data key for ${keyId}`);
     } catch (error) {
       this.logger.error(
@@ -186,7 +186,7 @@ export class StorageService {
   async markKeyAsRevoked(sessionKeyId: string): Promise<void> {
     try {
       const storedData = await this.retrieveEncryptedKey(sessionKeyId);
-      
+
       if (!storedData) {
         this.logger.warn(`Cannot revoke non-existent key: ${sessionKeyId}`);
         return;
@@ -208,7 +208,7 @@ export class StorageService {
   async retireKey(sessionKeyId: string): Promise<void> {
     try {
       const storedData = await this.retrieveEncryptedKey(sessionKeyId);
-      
+
       if (!storedData) {
         this.logger.warn(`Cannot retire non-existent key: ${sessionKeyId}`);
         return;
@@ -220,7 +220,7 @@ export class StorageService {
       // Store with 7 days expiry for retired keys
       const storageKey = `encrypted_key:${sessionKeyId}`;
       await this.redis.setex(storageKey, 7 * 24 * 60 * 60, JSON.stringify(storedData));
-      
+
       this.logger.debug(`Successfully retired key ${sessionKeyId}`);
     } catch (error) {
       this.logger.error(
@@ -247,7 +247,7 @@ export class StorageService {
 
       const encryptedKeyKey = `encrypted_key:${sessionKeyId}`;
       await this.redis.del(encryptedKeyKey);
-      
+
       this.logger.debug(`Successfully deleted key ${sessionKeyId}`);
     } catch (error) {
       this.logger.error(
@@ -262,7 +262,9 @@ export class StorageService {
       await this.redis.quit();
       this.logger.log('Redis connection closed gracefully');
     } catch (error) {
-      this.logger.error(`Error closing Redis connection: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Error closing Redis connection: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 }

@@ -39,10 +39,10 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
     }
 
     const sessionKeyId = uuidv4();
-    
+
     // Generate key pair using KMS with production Redis storage
     const keyPair = await this.kmsKeyManager.generateKeyPair(sessionKeyId);
-    
+
     // Calculate expiry (SessionKey entity field, not permission field)
     const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours default
 
@@ -96,7 +96,7 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
 
       // Retrieve private key from KMS (production Redis storage)
       const privateKey = await this.kmsKeyManager.getPrivateKey(sessionKeyId);
-      
+
       if (!privateKey) {
         this.logger.warn(`Private key not found for ${sessionKeyId}`);
         return null;
@@ -115,7 +115,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
 
       return privateKey;
     } catch (error) {
-      this.logger.error(`Failed to get private key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get private key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -145,7 +147,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
         isActive: sessionKey.isActive,
       };
     } catch (error) {
-      this.logger.error(`Failed to get session key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get session key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -160,7 +164,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       // Convert hex private key to bytes
       return Buffer.from(privateKey.replace('0x', ''), 'hex');
     } catch (error) {
-      this.logger.error(`Failed to get session key bytes for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get session key bytes for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -180,7 +186,7 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       // Check action permissions
       if (requiredPermissions.actions && requiredPermissions.actions.length > 0) {
         const hasActionPermission = requiredPermissions.actions.every((action: SessionActionType) =>
-          current.actions?.includes(action)
+          current.actions?.includes(action),
         );
         if (!hasActionPermission) {
           return false;
@@ -190,7 +196,7 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       // Check chain permissions
       if (requiredPermissions.chains && requiredPermissions.chains.length > 0) {
         const hasChainPermission = requiredPermissions.chains.every((chain: string) =>
-          current.chains?.includes(chain)
+          current.chains?.includes(chain),
         );
         if (!hasChainPermission) {
           return false;
@@ -199,8 +205,8 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
 
       // Check contract permissions
       if (requiredPermissions.allowedContracts && requiredPermissions.allowedContracts.length > 0) {
-        const hasContractPermission = requiredPermissions.allowedContracts.every((contract: string) =>
-          current.allowedContracts?.includes(contract)
+        const hasContractPermission = requiredPermissions.allowedContracts.every(
+          (contract: string) => current.allowedContracts?.includes(contract),
         );
         if (!hasContractPermission) {
           return false;
@@ -209,7 +215,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
 
       return true;
     } catch (error) {
-      this.logger.error(`Failed to validate permissions for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to validate permissions for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -219,7 +227,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       const sessionKey = await this.getSessionKey(sessionKeyId);
       return sessionKey?.isActive || false;
     } catch (error) {
-      this.logger.error(`Failed to check session key status for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to check session key status for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -227,16 +237,18 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
   async getKeyUsageHistory(userId: number): Promise<KeyUsageRecord[]> {
     try {
       const keyAccessEvents = await this.auditService.getKeyUsageHistory(userId);
-      
+
       // Transform KeyAccessEvent[] to KeyUsageRecord[]
       return keyAccessEvents.map((event: any) => ({
         ...event,
         operation: event.eventType || 'unknown',
         riskScore: event.riskScore || 0,
-        success: true
+        success: true,
       }));
     } catch (error) {
-      this.logger.error(`Failed to get key usage history for user ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get key usage history for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return [];
     }
   }
@@ -244,7 +256,7 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
   async performIntegrityCheck(sessionKeyId: string): Promise<IntegrityCheckResult> {
     try {
       const issues: string[] = [];
-      
+
       // Check if key exists in KMS storage (production Redis)
       const keyExists = await this.kmsKeyManager.keyExists(sessionKeyId);
       if (!keyExists) {
@@ -257,10 +269,14 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
         lastChecked: new Date(),
       };
     } catch (error) {
-      this.logger.error(`Failed to perform integrity check for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to perform integrity check for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return {
         isValid: false,
-        issues: [`Integrity check failed: ${error instanceof Error ? error.message : String(error)}`],
+        issues: [
+          `Integrity check failed: ${error instanceof Error ? error.message : String(error)}`,
+        ],
         lastChecked: new Date(),
       };
     }
@@ -285,7 +301,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       this.logger.log(`Revoked enterprise session key: ${sessionKeyId}`);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to revoke key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to revoke key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -301,17 +319,21 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       // Generate new key
       const newKeyResult = await this.generateSessionKey(
         0, // TODO: Get userId from context
-        originalSessionKey.permissions
+        originalSessionKey.permissions,
       );
 
       // Mark old key for retirement in KMS (skip if private)
       // await this.kmsKeyManager.retireKey(sessionKeyId);
       this.logger.log(`Key retirement skipped - retireKey method is private`);
 
-      this.logger.log(`Rotated enterprise session key from ${sessionKeyId} to ${newKeyResult.sessionKeyId}`);
+      this.logger.log(
+        `Rotated enterprise session key from ${sessionKeyId} to ${newKeyResult.sessionKeyId}`,
+      );
       return newKeyResult;
     } catch (error) {
-      this.logger.error(`Failed to rotate key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to rotate key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -321,7 +343,9 @@ export class EnterpriseKeyManagementService implements IKeyManagementService {
       // Check if key exists in KMS storage (production Redis)
       return await this.kmsKeyManager.keyExists(sessionKeyId);
     } catch (error) {
-      this.logger.error(`Failed to check if key exists ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to check if key exists ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }

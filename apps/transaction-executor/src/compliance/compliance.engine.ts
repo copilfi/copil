@@ -14,7 +14,9 @@ export class ComplianceEngine {
   }
 
   async screenTransaction(transaction: TransactionRequest, provider: string): Promise<any> {
-    this.logger.warn(`ComplianceEngine.screenTransaction - Not implemented for provider: ${provider}`);
+    this.logger.warn(
+      `ComplianceEngine.screenTransaction - Not implemented for provider: ${provider}`,
+    );
     return {
       approved: true,
       riskLevel: 'low' as const,

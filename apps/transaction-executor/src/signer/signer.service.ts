@@ -39,7 +39,16 @@ export interface SignAndSendResult {
 
 // EVM chains for viem
 const chainMap: Record<string, Chain> = {
-  ethereum: mainnet, base, arbitrum, linea, optimism, polygon, bsc, avalanche, sei: seiChain, hyperliquid: hyperliquidChain,
+  ethereum: mainnet,
+  base,
+  arbitrum,
+  linea,
+  optimism,
+  polygon,
+  bsc,
+  avalanche,
+  sei: seiChain,
+  hyperliquid: hyperliquidChain,
 };
 
 const SOLANA_CHAIN_NAME = 'solana';
@@ -47,14 +56,20 @@ const SOLANA_CHAIN_NAME = 'solana';
 @Injectable()
 export class SignerService {
   private readonly logger = new Logger(SignerService.name);
-  private hlAssetCache: { exp: number; map: Map<string, { id: number; szDecimals: number; maxLeverage: number }> } | null = null;
+  private hlAssetCache: {
+    exp: number;
+    map: Map<string, { id: number; szDecimals: number; maxLeverage: number }>;
+  } | null = null;
   private hlOneShotFlags = { agentApproved: false, builderFeeApproved: false };
   private hlMetrics: {
     total: number;
     success: number;
     failed: number;
     lastError?: string;
-    perSymbol: Map<string, { total: number; success: number; failed: number; avgLatencyMs: number }>
+    perSymbol: Map<
+      string,
+      { total: number; success: number; failed: number; avgLatencyMs: number }
+    >;
   } = { total: 0, success: 0, failed: 0, perSymbol: new Map() };
 
   // Simple EVM/Solana metrics for observability
@@ -88,7 +103,7 @@ export class SignerService {
     if (!request.wallet) {
       return { status: 'failed', description: 'Wallet context is required.' };
     }
-    
+
     const intent = request.metadata?.intent as any;
     if (intent?.type === 'open_position' || intent?.type === 'close_position') {
       return this.executeHyperliquidTrade(request);
@@ -107,7 +122,10 @@ export class SignerService {
 
     const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
-      return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
+      return {
+        status: 'failed',
+        description: `Private key for session key ID ${sessionKeyId} not found.`,
+      };
     }
     const sessionKeyAcct = privateKeyToAccount(sessionKey);
     const traderAddr = sessionKeyAcct.address;
@@ -116,7 +134,10 @@ export class SignerService {
     const symbolResolved = this.resolveMarketSymbol(String(intent.market));
     const lockKey = `${request.userId}:${symbolResolved}`;
     if (!this.acquireHlLock(lockKey)) {
-      return { status: 'failed', description: `Another ${symbolResolved} trade is in progress for this user.` };
+      return {
+        status: 'failed',
+        description: `Another ${symbolResolved} trade is in progress for this user.`,
+      };
     }
     try {
       const transport = new HttpTransport();
@@ -141,7 +162,11 @@ export class SignerService {
       }
       const midPx = Number(midPxStr);
       const tob = await this.getTopOfBook(info, symbol);
-      const slip = this.computeAdaptiveSlippage(tob?.bid ?? null, tob?.ask ?? null, Number(intent.slippage));
+      const slip = this.computeAdaptiveSlippage(
+        tob?.bid ?? null,
+        tob?.ask ?? null,
+        Number(intent.slippage),
+      );
       const sideOpen = intent.side === 'long';
 
       // Close vs Open logic
@@ -165,7 +190,16 @@ export class SignerService {
         await this.ensureAgentAndBuilder(exch);
         const chunked = this.isChunkingEnabled();
         if (chunked) {
-          const res = await this.executeChunkedOrders(exch, symbol, asset.id, isBuy, px, qty, asset.szDecimals, true /*reduceOnly*/);
+          const res = await this.executeChunkedOrders(
+            exch,
+            symbol,
+            asset.id,
+            isBuy,
+            px,
+            qty,
+            asset.szDecimals,
+            true /*reduceOnly*/,
+          );
           this.recordHlMetric(symbol, Date.now() - t0, res.status === 'success', res.description);
           return res;
         } else {
@@ -180,12 +214,18 @@ export class SignerService {
       const lev = Number(intent.leverage ?? 1);
       if (lev > 1) {
         if (lev > asset.maxLeverage) {
-          this.logger.warn(`Requested leverage ${lev} exceeds max ${asset.maxLeverage} for ${symbol}. Clamping.`);
+          this.logger.warn(
+            `Requested leverage ${lev} exceeds max ${asset.maxLeverage} for ${symbol}. Clamping.`,
+          );
         }
         const levToSet = Math.min(lev, asset.maxLeverage);
         try {
-          const isCross = (this.configService.get<string>('HL_LEVERAGE_MODE') ?? 'cross').toLowerCase() !== 'isolated';
-          await this.retry(async () => await exch.updateLeverage({ asset: asset.id, isCross, leverage: levToSet }));
+          const isCross =
+            (this.configService.get<string>('HL_LEVERAGE_MODE') ?? 'cross').toLowerCase() !==
+            'isolated';
+          await this.retry(
+            async () => await exch.updateLeverage({ asset: asset.id, isCross, leverage: levToSet }),
+          );
         } catch (e) {
           this.logger.warn(`updateLeverage failed for ${symbol}: ${(e as Error).message}`);
         }
@@ -213,7 +253,16 @@ export class SignerService {
       const chunked = this.isChunkingEnabled();
       let result: SignAndSendResult;
       if (chunked) {
-        result = await this.executeChunkedOrders(exch, symbol, asset.id, isBuy, px, qty, asset.szDecimals, false);
+        result = await this.executeChunkedOrders(
+          exch,
+          symbol,
+          asset.id,
+          isBuy,
+          px,
+          qty,
+          asset.szDecimals,
+          false,
+        );
       } else {
         result = await this.placeOrder(exch, asset.id, isBuy, px, qty, asset.szDecimals, false);
       }
@@ -229,7 +278,10 @@ export class SignerService {
     }
   }
 
-  private async getHyperliquidAssetMeta(info: InfoClient, symbol: string): Promise<{ id: number; szDecimals: number; maxLeverage: number } | null> {
+  private async getHyperliquidAssetMeta(
+    info: InfoClient,
+    symbol: string,
+  ): Promise<{ id: number; szDecimals: number; maxLeverage: number } | null> {
     const now = Date.now();
     if (this.hlAssetCache && this.hlAssetCache.exp > now) {
       const hit = this.hlAssetCache.map.get(symbol.toUpperCase());
@@ -253,9 +305,14 @@ export class SignerService {
     }
   }
 
-  private async getHyperliquidPosition(info: InfoClient, userAddress: string): Promise<Array<{ coin: string; szi: string }>> {
+  private async getHyperliquidPosition(
+    info: InfoClient,
+    userAddress: string,
+  ): Promise<Array<{ coin: string; szi: string }>> {
     try {
-      const data = await this.retry(async () => await info.webData2({ user: userAddress as `0x${string}` }));
+      const data = await this.retry(
+        async () => await info.webData2({ user: userAddress as `0x${string}` }),
+      );
       const positions = (data?.clearinghouseState?.assetPositions ?? []) as Array<any>;
       const mapped = positions
         .map((p) => ({ coin: p?.position?.coin as string, szi: p?.position?.szi as string }))
@@ -273,9 +330,14 @@ export class SignerService {
     return (Math.floor(value * factor) / factor).toFixed(decimals);
   }
 
-  private async getTopOfBook(info: InfoClient, symbol: string): Promise<{ bid: number | null; ask: number | null } | null> {
+  private async getTopOfBook(
+    info: InfoClient,
+    symbol: string,
+  ): Promise<{ bid: number | null; ask: number | null } | null> {
     try {
-      const book = await this.retry(async () => await info.l2Book({ coin: symbol as any, nSigFigs: 2 }));
+      const book = await this.retry(
+        async () => await info.l2Book({ coin: symbol as any, nSigFigs: 2 }),
+      );
       const bids = book.levels[0];
       const asks = book.levels[1];
       const bestBid = bids?.length ? Number(bids[0].px) : null;
@@ -287,7 +349,13 @@ export class SignerService {
     }
   }
 
-  private chooseIocPrice(mid: number, topBid: number | null, topAsk: number | null, slip: number, isBuy: boolean): number {
+  private chooseIocPrice(
+    mid: number,
+    topBid: number | null,
+    topAsk: number | null,
+    slip: number,
+    isBuy: boolean,
+  ): number {
     // Dynamic micro-buffer: configurable caps and multiplier
     const minBps = Number(this.configService.get<string>('HL_MICRO_BUFFER_MIN_BPS') ?? '5');
     const maxBps = Number(this.configService.get<string>('HL_MICRO_BUFFER_MAX_BPS') ?? '20');
@@ -308,7 +376,11 @@ export class SignerService {
     return base;
   }
 
-  private computeAdaptiveSlippage(topBid: number | null, topAsk: number | null, intentSlip?: number): number {
+  private computeAdaptiveSlippage(
+    topBid: number | null,
+    topAsk: number | null,
+    intentSlip?: number,
+  ): number {
     const defaultSlip = Number(this.configService.get<string>('HL_DEFAULT_SLIPPAGE') ?? '0.003');
     if (Number.isFinite(Number(intentSlip))) return Number(intentSlip);
     if (topBid && topAsk && topAsk > 0 && topBid > 0) {
@@ -337,12 +409,19 @@ export class SignerService {
     this.hlLocks.delete(key);
   }
 
-  private async enforceHlPolicy(sessionKeyId: string, intent: any, symbol: string): Promise<SignAndSendResult | null> {
+  private async enforceHlPolicy(
+    sessionKeyId: string,
+    intent: any,
+    symbol: string,
+  ): Promise<SignAndSendResult | null> {
     try {
       const sk = await this.sessionKeyRepository.findOne({ where: { id: String(sessionKeyId) } });
-      const perms = (sk?.permissions as SessionKeyPermissions | undefined) ?? undefined;
+      const perms = sk?.permissions ?? undefined;
       if (!perms) {
-        return { status: 'failed', description: 'Session key missing permissions for Hyperliquid trades.' };
+        return {
+          status: 'failed',
+          description: 'Session key missing permissions for Hyperliquid trades.',
+        };
       }
       // actions check (matches API-side behavior)
       if (perms.actions?.length && !perms.actions.includes(intent.type)) {
@@ -354,16 +433,23 @@ export class SignerService {
       if (Array.isArray(allowedMarkets) && allowedMarkets.length) {
         const set = new Set(allowedMarkets.map((m) => String(m).toUpperCase()));
         if (!set.has(symbol.toUpperCase())) {
-          return { status: 'failed', description: `Market ${symbol} not permitted by session key policy.` };
+          return {
+            status: 'failed',
+            description: `Market ${symbol} not permitted by session key policy.`,
+          };
         }
       }
       if (intent.type === 'open_position') {
         const maxUsd: number | undefined = Number(anyPerms.hlMaxUsdPerTrade ?? NaN);
         if (Number.isFinite(maxUsd)) {
           const usd = Number(intent.size);
-          if (!Number.isFinite(usd) || usd <= 0) return { status: 'failed', description: 'Invalid USD size for open_position.' };
-          if (usd > (maxUsd as number)) {
-            return { status: 'failed', description: `Trade size ${usd} exceeds session key cap ${maxUsd}.` };
+          if (!Number.isFinite(usd) || usd <= 0)
+            return { status: 'failed', description: 'Invalid USD size for open_position.' };
+          if (usd > maxUsd) {
+            return {
+              status: 'failed',
+              description: `Trade size ${usd} exceeds session key cap ${maxUsd}.`,
+            };
           }
         }
       }
@@ -381,15 +467,24 @@ export class SignerService {
         const hit = map[market.toLowerCase()];
         if (hit) return String(hit).toUpperCase();
       } catch (error) {
-        this.logger.warn(`Failed to parse market aliases: ${error instanceof Error ? error.message : 'Invalid JSON'}`);
+        this.logger.warn(
+          `Failed to parse market aliases: ${error instanceof Error ? error.message : 'Invalid JSON'}`,
+        );
       }
     }
     return String(market).toUpperCase();
   }
 
-  private async guardAvailableToTrade(info: InfoClient, user: string, symbol: string, qtyBase: number): Promise<void> {
+  private async guardAvailableToTrade(
+    info: InfoClient,
+    user: string,
+    symbol: string,
+    qtyBase: number,
+  ): Promise<void> {
     try {
-      const a = await this.retry(async () => await info.activeAssetData({ user: user as any, coin: symbol }));
+      const a = await this.retry(
+        async () => await info.activeAssetData({ user: user as any, coin: symbol }),
+      );
       const avail = a?.availableToTrade as [string, string] | undefined;
       if (avail && avail.length === 2) {
         const n0 = Number(avail[0]);
@@ -398,7 +493,9 @@ export class SignerService {
         if (cap.length) {
           const maxAvail = Math.max(...cap);
           if (qtyBase > maxAvail) {
-            throw new Error(`Requested size exceeds available to trade. qty=${qtyBase} > max=${maxAvail}`);
+            throw new Error(
+              `Requested size exceeds available to trade. qty=${qtyBase} > max=${maxAvail}`,
+            );
           }
         }
       }
@@ -429,7 +526,9 @@ export class SignerService {
     const maxFee = this.configService.get<string>('HL_MAX_FEE_RATE'); // e.g. "0.01%"
     if (agent && !this.hlOneShotFlags.agentApproved) {
       try {
-        await this.retry(async () => await exch.approveAgent({ agentAddress: agent as any, agentName }));
+        await this.retry(
+          async () => await exch.approveAgent({ agentAddress: agent as any, agentName }),
+        );
         this.hlOneShotFlags.agentApproved = true;
         this.logger.log(`HL agent approved: ${agent}`);
       } catch (e) {
@@ -438,7 +537,10 @@ export class SignerService {
     }
     if (builder && maxFee && !this.hlOneShotFlags.builderFeeApproved) {
       try {
-        await this.retry(async () => await exch.approveBuilderFee({ builder: builder as any, maxFeeRate: maxFee } as any));
+        await this.retry(
+          async () =>
+            await exch.approveBuilderFee({ builder: builder as any, maxFeeRate: maxFee } as any),
+        );
         this.hlOneShotFlags.builderFeeApproved = true;
         this.logger.log(`HL builder fee approved: ${builder} @ ${maxFee}`);
       } catch (e) {
@@ -466,10 +568,23 @@ export class SignerService {
     return (this.configService.get<string>('HL_CHUNK_ENABLED') ?? 'false') === 'true';
   }
 
-  private getChunkingConfig(midPx: number): { maxOrders: number; targetUsd: number; sleepMs: number } {
-    const maxOrders = Math.max(1, Number(this.configService.get<string>('HL_CHUNK_MAX_ORDERS') ?? '3'));
-    const targetUsd = Math.max(0, Number(this.configService.get<string>('HL_CHUNK_TARGET_USD') ?? '0'));
-    const sleepMs = Math.max(0, Number(this.configService.get<string>('HL_CHUNK_SLEEP_MS') ?? '100'));
+  private getChunkingConfig(midPx: number): {
+    maxOrders: number;
+    targetUsd: number;
+    sleepMs: number;
+  } {
+    const maxOrders = Math.max(
+      1,
+      Number(this.configService.get<string>('HL_CHUNK_MAX_ORDERS') ?? '3'),
+    );
+    const targetUsd = Math.max(
+      0,
+      Number(this.configService.get<string>('HL_CHUNK_TARGET_USD') ?? '0'),
+    );
+    const sleepMs = Math.max(
+      0,
+      Number(this.configService.get<string>('HL_CHUNK_SLEEP_MS') ?? '100'),
+    );
     return { maxOrders, targetUsd, sleepMs };
   }
 
@@ -505,11 +620,17 @@ export class SignerService {
           if (midPxStr) {
             const mid = Number(midPxStr);
             const tob = await this.getTopOfBook(info, symbol);
-            const slip = this.computeAdaptiveSlippage(tob?.bid ?? null, tob?.ask ?? null, undefined);
+            const slip = this.computeAdaptiveSlippage(
+              tob?.bid ?? null,
+              tob?.ask ?? null,
+              undefined,
+            );
             price = this.chooseIocPrice(mid, tob?.bid ?? null, tob?.ask ?? null, slip, isBuy);
           }
         } catch (error) {
-          this.logger.warn(`Failed to fetch adaptive price for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.logger.warn(
+            `Failed to fetch adaptive price for ${symbol}: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
         }
       }
       const res = await this.placeOrder(exch, assetId, isBuy, price, q, szDecimals, reduceOnly);
@@ -531,12 +652,22 @@ export class SignerService {
   ): Promise<SignAndSendResult> {
     const sizeStr = this.formatDecimal(qty, szDecimals);
     const priceStr = this.formatDecimal(px, 6);
-    const res = await this.retry(async () => await exch.order({
-      orders: [
-        { a: assetId, b: isBuy, p: priceStr, s: sizeStr, r: reduceOnly, t: { limit: { tif: 'Ioc' } } },
-      ],
-      grouping: 'na',
-    }));
+    const res = await this.retry(
+      async () =>
+        await exch.order({
+          orders: [
+            {
+              a: assetId,
+              b: isBuy,
+              p: priceStr,
+              s: sizeStr,
+              r: reduceOnly,
+              t: { limit: { tif: 'Ioc' } },
+            },
+          ],
+          grouping: 'na',
+        }),
+    );
     const status = res.response.data.statuses?.[0] as any;
     if (status?.filled || status?.resting) {
       const txh = status?.filled?.oid ? String(status.filled.oid) : undefined;
@@ -548,20 +679,36 @@ export class SignerService {
 
   private recordHlMetric(symbol: string, latencyMs: number, ok: boolean, lastError?: string) {
     this.hlMetrics.total += 1;
-    if (ok) this.hlMetrics.success += 1; else this.hlMetrics.failed += 1;
+    if (ok) this.hlMetrics.success += 1;
+    else this.hlMetrics.failed += 1;
     if (!ok && lastError) this.hlMetrics.lastError = lastError;
     const key = symbol.toUpperCase();
-    const prev = this.hlMetrics.perSymbol.get(key) ?? { total: 0, success: 0, failed: 0, avgLatencyMs: 0 };
+    const prev = this.hlMetrics.perSymbol.get(key) ?? {
+      total: 0,
+      success: 0,
+      failed: 0,
+      avgLatencyMs: 0,
+    };
     const nextTotal = prev.total + 1;
     const nextSuccess = prev.success + (ok ? 1 : 0);
     const nextFailed = prev.failed + (ok ? 0 : 1);
     const nextAvg = prev.avgLatencyMs + (latencyMs - prev.avgLatencyMs) / nextTotal;
-    this.hlMetrics.perSymbol.set(key, { total: nextTotal, success: nextSuccess, failed: nextFailed, avgLatencyMs: nextAvg });
-    this.logger.debug(`HL metrics [${key}]: total=${nextTotal} ok=${nextSuccess} fail=${nextFailed} p95~n/a avg=${nextAvg.toFixed(1)}ms`);
+    this.hlMetrics.perSymbol.set(key, {
+      total: nextTotal,
+      success: nextSuccess,
+      failed: nextFailed,
+      avgLatencyMs: nextAvg,
+    });
+    this.logger.debug(
+      `HL metrics [${key}]: total=${nextTotal} ok=${nextSuccess} fail=${nextFailed} p95~n/a avg=${nextAvg.toFixed(1)}ms`,
+    );
   }
 
   getHyperliquidMetrics() {
-    const perSymbol: Record<string, { total: number; success: number; failed: number; avgLatencyMs: number }> = {};
+    const perSymbol: Record<
+      string,
+      { total: number; success: number; failed: number; avgLatencyMs: number }
+    > = {};
     for (const [k, v] of this.hlMetrics.perSymbol.entries()) {
       perSymbol[k] = v;
     }
@@ -576,13 +723,15 @@ export class SignerService {
 
   private recordEvmMetric(ok: boolean, lastError?: string) {
     this.evmMetrics.total += 1;
-    if (ok) this.evmMetrics.success += 1; else this.evmMetrics.failed += 1;
+    if (ok) this.evmMetrics.success += 1;
+    else this.evmMetrics.failed += 1;
     if (!ok && lastError) this.evmMetrics.lastError = lastError;
   }
 
   private recordSolMetric(ok: boolean, lastError?: string) {
     this.solMetrics.total += 1;
-    if (ok) this.solMetrics.success += 1; else this.solMetrics.failed += 1;
+    if (ok) this.solMetrics.success += 1;
+    else this.solMetrics.failed += 1;
     if (!ok && lastError) this.solMetrics.lastError = lastError;
   }
 
@@ -605,7 +754,7 @@ export class SignerService {
 
     if (chainName === SOLANA_CHAIN_NAME) {
       return this.signAndSendSolana(request);
-    } 
+    }
 
     // Handle EVM-based EOA chains (Sei, Hyperliquid, etc.)
     const chain = chainMap[chainName];
@@ -615,7 +764,6 @@ export class SignerService {
 
     return { status: 'failed', description: `Unsupported EOA chain: ${chainName}` };
   }
-
 
   private async signAndSendEoaEvm(
     chainName: string,
@@ -628,7 +776,10 @@ export class SignerService {
 
     const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
-      return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
+      return {
+        status: 'failed',
+        description: `Private key for session key ID ${sessionKeyId} not found.`,
+      };
     }
 
     try {
@@ -659,8 +810,11 @@ export class SignerService {
 
       this.logger.log(`${chainName} EOA transaction successful with hash: ${txHash}`);
       this.recordEvmMetric(true);
-      return { status: 'success', txHash, description: `${chainName} EOA transaction successfully sent.` };
-
+      return {
+        status: 'success',
+        txHash,
+        description: `${chainName} EOA transaction successfully sent.`,
+      };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       this.logger.error(`${chainName} EOA transaction failed: ${message}`, error);
@@ -677,7 +831,10 @@ export class SignerService {
 
     const sessionKey = await this.getSessionKeyBytes(sessionKeyId);
     if (!sessionKey) {
-      return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found or invalid.` };
+      return {
+        status: 'failed',
+        description: `Private key for session key ID ${sessionKeyId} not found or invalid.`,
+      };
     }
 
     if (quote?.serializedTx) {
@@ -687,7 +844,7 @@ export class SignerService {
         const signer = solana.Keypair.fromSecretKey(sessionKey);
 
         const transaction = solana.Transaction.from(Buffer.from(quote.serializedTx, 'base64'));
-        
+
         // The transaction from Jupiter is already mostly constructed.
         // We just need to sign it.
         transaction.sign(signer);
@@ -697,8 +854,11 @@ export class SignerService {
 
         this.logger.log(`Solana swap transaction successful with hash: ${txHash}`);
         this.recordSolMetric(true);
-        return { status: 'success', txHash, description: `Solana swap transaction successfully sent.` };
-
+        return {
+          status: 'success',
+          txHash,
+          description: `Solana swap transaction successfully sent.`,
+        };
       } catch (error) {
         const message = error instanceof Error ? error.message : 'Unknown error';
         this.logger.error(`Solana swap transaction failed: ${message}`, error);
@@ -706,49 +866,63 @@ export class SignerService {
         return { status: 'failed', description: `Solana swap transaction failed: ${message}` };
       }
     } else {
-        // Fallback or error for non-swap intents if needed, for now we only support swaps via Jupiter
-        this.recordSolMetric(false, 'Only Solana swaps via Jupiter are currently supported.');
-        return { status: 'failed', description: 'Only Solana swaps via Jupiter are currently supported.' };
+      // Fallback or error for non-swap intents if needed, for now we only support swaps via Jupiter
+      this.recordSolMetric(false, 'Only Solana swaps via Jupiter are currently supported.');
+      return {
+        status: 'failed',
+        description: 'Only Solana swaps via Jupiter are currently supported.',
+      };
     }
   }
 
-  private async signAndSendSmartAccount(
-    request: SignAndSendRequest,
-  ): Promise<SignAndSendResult> {
+  private async signAndSendSmartAccount(request: SignAndSendRequest): Promise<SignAndSendResult> {
     const { userId, sessionKeyId, wallet } = request;
     const transaction = request.transaction!;
     if (!transaction) {
-      return { status: 'failed', description: 'Missing transaction payload for Smart Account signing.' };
+      return {
+        status: 'failed',
+        description: 'Missing transaction payload for Smart Account signing.',
+      };
     }
     const chainName = (request.metadata?.chain as string) ?? 'base';
     const chain = chainMap[chainName.toLowerCase()];
 
     if (!wallet || !wallet.smartAccountAddress) {
-      return { status: 'failed', description: `Smart Account for user ${userId} on chain ${chainName} not found.` };
+      return {
+        status: 'failed',
+        description: `Smart Account for user ${userId} on chain ${chainName} not found.`,
+      };
     }
 
     const sessionKey = await this.getSessionKey(sessionKeyId);
     if (!sessionKey) {
-      return { status: 'failed', description: `Private key for session key ID ${sessionKeyId} not found.` };
+      return {
+        status: 'failed',
+        description: `Private key for session key ID ${sessionKeyId} not found.`,
+      };
     }
 
     try {
-      const publicClient = createPublicClient({ 
+      const publicClient = createPublicClient({
         transport: http(this.getRpcUrl(chainName)),
         chain: chain, // Add chain to publicClient
       });
       const sessionKeySigner = privateKeyToAccount(sessionKey);
 
       const safeAccount = await toSafeSmartAccount({
-        client: publicClient, 
-        owners: [sessionKeySigner], 
-        version: '1.4.1', 
+        client: publicClient,
+        owners: [sessionKeySigner],
+        version: '1.4.1',
         entryPoint: { address: entryPoint06Address, version: '0.6' },
         address: wallet.smartAccountAddress as `0x${string}`,
       });
 
       const usePaymaster = this.configService.get<string>('PAYMASTER_ENABLED') === 'true';
-      const baseConfig: any = { account: safeAccount, chain, bundlerTransport: this.bundlerClient.getTransport(chain) };
+      const baseConfig: any = {
+        account: safeAccount,
+        chain,
+        bundlerTransport: this.bundlerClient.getTransport(chain),
+      };
 
       if (usePaymaster) {
         try {
@@ -761,7 +935,9 @@ export class SignerService {
 
       const smartAccountClient = createSmartAccountClient(baseConfig);
 
-      this.logger.log(`Sending UserOperation via Smart Account ${safeAccount.address} on ${chainName}`);
+      this.logger.log(
+        `Sending UserOperation via Smart Account ${safeAccount.address} on ${chainName}`,
+      );
 
       const userOpHash = await smartAccountClient.sendTransaction({
         account: safeAccount,
@@ -780,7 +956,10 @@ export class SignerService {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : 'Unknown error';
-      this.logger.error(`Error sending UserOperation for session key ${sessionKeyId}: ${message}`, error);
+      this.logger.error(
+        `Error sending UserOperation for session key ${sessionKeyId}: ${message}`,
+        error,
+      );
       return { status: 'failed', description: `UserOperation failed: ${message}` };
     }
   }

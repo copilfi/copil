@@ -35,8 +35,9 @@ export function getEnterpriseSecurityConfig(): EnterpriseSecurityConfig {
       kmsKeyId: process.env.AWS_KMS_KEY_ID,
     },
     risk: {
-      suspiciousIps: process.env.RISK_SUSPICIOUS_IPS?.split(',').map(ip => ip.trim()) || [],
-      highRiskDestinations: process.env.RISK_HIGH_RISK_DESTINATIONS?.split(',').map(dest => dest.trim()) || [],
+      suspiciousIps: process.env.RISK_SUSPICIOUS_IPS?.split(',').map((ip) => ip.trim()) || [],
+      highRiskDestinations:
+        process.env.RISK_HIGH_RISK_DESTINATIONS?.split(',').map((dest) => dest.trim()) || [],
     },
     monitoring: {
       alertsEnabled: process.env.SECURITY_ALERTS_ENABLED === 'true',
@@ -51,7 +52,7 @@ export function getEnterpriseSecurityConfig(): EnterpriseSecurityConfig {
 
 export function validateEnterpriseSecurityConfig(): void {
   const config = getEnterpriseSecurityConfig();
-  
+
   if (config.enabled) {
     if (!config.aws.accessKeyId) {
       throw new Error('AWS_ACCESS_KEY_ID is required when enterprise security is enabled');

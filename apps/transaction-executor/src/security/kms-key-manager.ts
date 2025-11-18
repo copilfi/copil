@@ -38,7 +38,7 @@ export class KmsKeyManager {
     private readonly storageService: StorageService,
   ) {
     const kmsProvider = this.configService.get<string>('KMS_PROVIDER', 'aws');
-    
+
     switch (kmsProvider) {
       case 'aws':
         this.kms = new KMSClient({
@@ -50,17 +50,17 @@ export class KmsKeyManager {
         });
         this.masterKeyId = this.configService.get<string>('AWS_KMS_KEY_ID');
         break;
-      
+
       case 'vault':
         this.initializeVaultClient();
         this.masterKeyId = 'transit';
         break;
-        
+
       case 'hsm':
         this.initializeHSMClient();
         this.masterKeyId = 'hsm-default';
         break;
-        
+
       default:
         throw new Error(`Unsupported KMS provider: ${kmsProvider}`);
     }
@@ -91,7 +91,7 @@ export class KmsKeyManager {
       if (!this.kms) {
         throw new Error('KMS not initialized for AWS provider');
       }
-      
+
       const dataKeyCommand = new GenerateDataKeyCommand({
         KeyId: this.masterKeyId,
         KeySpec: 'AES_256',
@@ -101,7 +101,7 @@ export class KmsKeyManager {
           timestamp: new Date().toISOString(),
         },
       });
-      
+
       const dataKeyResponse = await this.kms.send(dataKeyCommand);
       const plaintextKey = dataKeyResponse.Plaintext;
       // Note: encryptedDataKey is stored with the encrypted private key for later decryption
@@ -114,7 +114,7 @@ export class KmsKeyManager {
       // Encrypt private key with envelope encryption
       const encryptedPrivateKey = await this.encryptPrivateKey(
         Buffer.from(wallet.privateKey.slice(2), 'hex'),
-        Buffer.from(plaintextKey)
+        Buffer.from(plaintextKey),
       );
 
       // Store encrypted private key and data key
@@ -130,7 +130,9 @@ export class KmsKeyManager {
         encryptedPrivateKey: encryptedPrivateKey.ciphertext,
       };
     } catch (error) {
-      this.logger.error(`Failed to generate key pair: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to generate key pair: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -145,13 +147,15 @@ export class KmsKeyManager {
 
       // Decrypt data key from KMS
       const dataKey = await this.decryptDataKey(encryptedKey.keyId);
-      
+
       // Decrypt private key
       const privateKey = this.decryptPrivateKey(encryptedKey, dataKey);
-      
+
       return privateKey;
     } catch (error) {
-      this.logger.error(`Failed to retrieve private key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to retrieve private key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
@@ -160,19 +164,23 @@ export class KmsKeyManager {
     try {
       // Schedule key for deletion in KMS
       if (this.kms && this.masterKeyId) {
-        await this.kms.send(new ScheduleKeyDeletionCommand({
-          KeyId: sessionKeyId,
-          PendingWindowInDays: 7,
-        }));
+        await this.kms.send(
+          new ScheduleKeyDeletionCommand({
+            KeyId: sessionKeyId,
+            PendingWindowInDays: 7,
+          }),
+        );
       }
 
       // Mark key as revoked in secure storage
       await this.markKeyAsRevoked(sessionKeyId);
-      
+
       this.logger.log(`Revoked key ${sessionKeyId}`);
       return true;
     } catch (error) {
-      this.logger.error(`Failed to revoke key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to revoke key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return false;
     }
   }
@@ -190,34 +198,40 @@ export class KmsKeyManager {
     try {
       // Generate new key pair
       const newKeyResult = await this.generateKeyPair(`${sessionKeyId}-rotated-${Date.now()}`);
-      
+
       // Mark old key for retirement
       await this.retireKey(sessionKeyId);
-      
+
       this.logger.log(`Rotated key ${sessionKeyId} to ${newKeyResult.keyId}`);
       return newKeyResult;
     } catch (error) {
-      this.logger.error(`Failed to rotate key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to rotate key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
 
   // === Private Methods ===
 
-  private async generateDataKey(sessionKeyId: string): Promise<{ keyId: string; plaintext: Buffer }> {
+  private async generateDataKey(
+    sessionKeyId: string,
+  ): Promise<{ keyId: string; plaintext: Buffer }> {
     if (!this.kms || !this.masterKeyId) {
       throw new Error('KMS not initialized');
     }
 
-    const result = await this.kms.send(new GenerateDataKeyCommand({
-      KeyId: this.masterKeyId,
-      KeySpec: 'AES_256',
-      EncryptionContext: {
-        sessionKeyId,
-        service: 'copil-transaction-executor',
-        timestamp: new Date().toISOString(),
-      },
-    }));
+    const result = await this.kms.send(
+      new GenerateDataKeyCommand({
+        KeyId: this.masterKeyId,
+        KeySpec: 'AES_256',
+        EncryptionContext: {
+          sessionKeyId,
+          service: 'copil-transaction-executor',
+          timestamp: new Date().toISOString(),
+        },
+      }),
+    );
 
     return {
       keyId: result.KeyId!,
@@ -232,13 +246,15 @@ export class KmsKeyManager {
 
     // Retrieve encrypted data key from storage
     const encryptedDataKey = await this.retrieveEncryptedDataKey(keyId);
-    
-    const result = await this.kms.send(new DecryptCommand({
-      CiphertextBlob: Buffer.from(encryptedDataKey, 'base64'),
-      EncryptionContext: {
-        service: 'copil-transaction-executor',
-      },
-    }));
+
+    const result = await this.kms.send(
+      new DecryptCommand({
+        CiphertextBlob: Buffer.from(encryptedDataKey, 'base64'),
+        EncryptionContext: {
+          service: 'copil-transaction-executor',
+        },
+      }),
+    );
 
     return Buffer.from(result.Plaintext!);
   }
@@ -247,12 +263,12 @@ export class KmsKeyManager {
     const iv = crypto.randomBytes(16);
     const cipher = crypto.createCipheriv(this.encryptionAlgorithm, dataKey, iv);
     cipher.setAAD(Buffer.from('private-key'));
-    
+
     let ciphertext = cipher.update(privateKey);
     ciphertext = Buffer.concat([ciphertext, cipher.final()]);
-    
+
     const tag = cipher.getAuthTag();
-    
+
     return {
       ciphertext: ciphertext.toString('base64'),
       iv: iv.toString('base64'),
@@ -265,14 +281,14 @@ export class KmsKeyManager {
     const decipher = crypto.createDecipheriv(
       this.encryptionAlgorithm,
       dataKey,
-      Buffer.from(encryptedData.iv, 'base64')
+      Buffer.from(encryptedData.iv, 'base64'),
     );
     decipher.setAAD(Buffer.from('private-key'));
     decipher.setAuthTag(Buffer.from(encryptedData.tag, 'base64'));
-    
+
     let plaintext = decipher.update(Buffer.from(encryptedData.ciphertext, 'base64'));
     plaintext = Buffer.concat([plaintext, decipher.final()]);
-    
+
     return plaintext.toString();
   }
 
@@ -283,12 +299,15 @@ export class KmsKeyManager {
     return '0x' + address.toString('hex');
   }
 
-  private async storeEncryptedKey(sessionKeyId: string, encryptedData: EncryptedData): Promise<void> {
+  private async storeEncryptedKey(
+    sessionKeyId: string,
+    encryptedData: EncryptedData,
+  ): Promise<void> {
     try {
       this.logger.debug(`Storing encrypted key for ${sessionKeyId} using production Redis storage`);
-      
+
       await this.storageService.storeEncryptedKey(sessionKeyId, encryptedData);
-      
+
       this.logger.debug(`Successfully stored encrypted key for ${sessionKeyId}`);
     } catch (error) {
       this.logger.error(
@@ -300,8 +319,10 @@ export class KmsKeyManager {
 
   private async retrieveEncryptedKey(sessionKeyId: string): Promise<EncryptedData | null> {
     try {
-      this.logger.debug(`Retrieving encrypted key for ${sessionKeyId} using production Redis storage`);
-      
+      this.logger.debug(
+        `Retrieving encrypted key for ${sessionKeyId} using production Redis storage`,
+      );
+
       const storedData = await this.storageService.retrieveEncryptedKey(sessionKeyId);
 
       if (!storedData) {
@@ -317,15 +338,19 @@ export class KmsKeyManager {
         revoked: storedData.revoked,
       };
     } catch (error) {
-      this.logger.error(`Failed to retrieve encrypted key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to retrieve encrypted key for ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return null;
     }
   }
 
   private async retrieveEncryptedDataKey(keyId: string): Promise<string> {
     try {
-      this.logger.debug(`Retrieving encrypted data key for ${keyId} using production Redis storage`);
-      
+      this.logger.debug(
+        `Retrieving encrypted data key for ${keyId} using production Redis storage`,
+      );
+
       const encryptedDataKey = await this.storageService.retrieveDataKey(keyId);
 
       if (!encryptedDataKey) {
@@ -334,20 +359,26 @@ export class KmsKeyManager {
 
       return encryptedDataKey;
     } catch (error) {
-      this.logger.error(`Failed to retrieve encrypted data key ${keyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to retrieve encrypted data key ${keyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
 
   private async markKeyAsRevoked(sessionKeyId: string): Promise<void> {
     try {
-      this.logger.debug(`Marking key as revoked for ${sessionKeyId} using production Redis storage`);
-      
+      this.logger.debug(
+        `Marking key as revoked for ${sessionKeyId} using production Redis storage`,
+      );
+
       await this.storageService.markKeyAsRevoked(sessionKeyId);
-      
+
       this.logger.debug(`Successfully marked key ${sessionKeyId} as revoked`);
     } catch (error) {
-      this.logger.error(`Failed to mark key ${sessionKeyId} as revoked: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to mark key ${sessionKeyId} as revoked: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -355,12 +386,14 @@ export class KmsKeyManager {
   private async retireKey(sessionKeyId: string): Promise<void> {
     try {
       this.logger.debug(`Retiring key for ${sessionKeyId} using production Redis storage`);
-      
+
       await this.storageService.retireKey(sessionKeyId);
-      
+
       this.logger.debug(`Successfully retired key ${sessionKeyId}`);
     } catch (error) {
-      this.logger.error(`Failed to retire key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to retire key ${sessionKeyId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }

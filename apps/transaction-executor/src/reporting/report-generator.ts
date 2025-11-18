@@ -18,15 +18,15 @@ export class ReportGenerator {
   async generateReport(
     standard: ComplianceTag['standard'],
     events: AuditEvent[],
-    options: any
+    options: any,
   ): Promise<ReportData> {
     this.logger.warn(`ReportGenerator.generateReport - Not implemented for standard: ${standard}`);
-    
+
     return {
       summary: {
         totalEvents: events.length,
-        criticalEvents: events.filter(e => e.severity === 'critical').length,
-        highRiskEvents: events.filter(e => e.severity === 'high').length,
+        criticalEvents: events.filter((e) => e.severity === 'critical').length,
+        highRiskEvents: events.filter((e) => e.severity === 'high').length,
         complianceScore: 95,
         riskLevel: 'low',
         keyMetrics: {},

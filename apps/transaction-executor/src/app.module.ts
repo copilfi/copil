@@ -6,7 +6,7 @@ import { ThrottlerModule } from '@nestjs/throttler';
 import { ScheduleModule } from '@nestjs/schedule';
 
 // Database entities
-import { User, Wallet, Strategy, TransactionLog, SessionKey } from '@copil/database';
+import { User, Wallet, Strategy, TransactionLog, SessionKey, FeeLog } from '@copil/database';
 
 // Services
 import { SignerService } from './signer/signer.service';
@@ -17,6 +17,8 @@ import { AuditService } from './audit/audit.service';
 import { RiskEngine } from './risk/risk-engine';
 import { KmsKeyManager } from './security/kms-key-manager';
 import { StorageService } from './services/storage.service';
+import { TransactionSecurityService } from './services/transaction-security.service';
+import { DynamicFeeService } from './services/dynamic-fee.service';
 
 // Constants
 const TRANSACTION_QUEUE = 'transactions';
@@ -33,13 +35,13 @@ const TRANSACTION_QUEUE = 'transactions';
         username: configService.get<string>('DB_USERNAME'),
         password: configService.get<string>('DB_PASSWORD'),
         database: configService.get<string>('DB_DATABASE'),
-        entities: [User, Wallet, Strategy, TransactionLog, SessionKey],
+        entities: [User, Wallet, Strategy, TransactionLog, SessionKey, FeeLog],
         synchronize: configService.get<string>('NODE_ENV') !== 'production',
         logging: configService.get<string>('NODE_ENV') === 'development',
       }),
       inject: [ConfigService],
     }),
-    TypeOrmModule.forFeature([Strategy, TransactionLog, SessionKey, Wallet]),
+    TypeOrmModule.forFeature([Strategy, TransactionLog, SessionKey, Wallet, FeeLog]),
     BullModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: async (configService: ConfigService) => ({
@@ -58,6 +60,10 @@ const TRANSACTION_QUEUE = 'transactions';
   providers: [
     ExecutionService,
     SignerService,
+    // NEW: Transaction Security Service
+    TransactionSecurityService,
+    // NEW: Dynamic Fee Service
+    DynamicFeeService,
     // Production Storage Service
     StorageService,
     // Enterprise Security Services (always available, but only used when enterprise mode is enabled)
@@ -71,15 +77,18 @@ const TRANSACTION_QUEUE = 'transactions';
       useFactory: (
         configService: ConfigService,
         enterpriseService: EnterpriseKeyManagementService,
-        mockService: MockKeyManagementService
+        mockService: MockKeyManagementService,
       ) => {
-        const enterpriseSecurityEnabled = configService.get<string>('ENTERPRISE_SECURITY_ENABLED') === 'true';
-        
+        const enterpriseSecurityEnabled =
+          configService.get<string>('ENTERPRISE_SECURITY_ENABLED') === 'true';
+
         if (enterpriseSecurityEnabled) {
           console.log('🔐 Enterprise Security Mode Enabled - Using EnterpriseKeyManagementService');
           return enterpriseService;
         } else {
-          console.log('  Development Mode - Using MockKeyManagementService (NOT SECURE FOR PRODUCTION)');
+          console.log(
+            '  Development Mode - Using MockKeyManagementService (NOT SECURE FOR PRODUCTION)',
+          );
           return mockService;
         }
       },

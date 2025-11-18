@@ -27,10 +27,9 @@ export class PaymasterClient {
     return http(url, {
       fetchOptions: {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
       },
     });
   }
 }
-

@@ -137,8 +137,10 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
       }
 
       // Check if batch is ready for anchoring
-      if (this.pendingEvents.length >= this.batchSize || 
-          (Date.now() - this.lastAnchorTime) > this.anchorInterval * 1000) {
+      if (
+        this.pendingEvents.length >= this.batchSize ||
+        Date.now() - this.lastAnchorTime > this.anchorInterval * 1000
+      ) {
         await this.anchorPendingBatch();
       }
 
@@ -146,22 +148,22 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
       return event.id;
     } catch (error) {
-      this.logger.error(`Failed to log audit event: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log audit event: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
 
   async logBatch(events: AuditEvent[]): Promise<string[]> {
     const eventIds: string[] = [];
-    
+
     try {
       // Process events in parallel with rate limiting
       const batchSize = 50;
       for (let i = 0; i < events.length; i += batchSize) {
         const batch = events.slice(i, i + batchSize);
-        const batchResults = await Promise.allSettled(
-          batch.map(event => this.logEvent(event))
-        );
+        const batchResults = await Promise.allSettled(batch.map((event) => this.logEvent(event)));
 
         for (const result of batchResults) {
           if (result.status === 'fulfilled') {
@@ -174,7 +176,9 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
       return eventIds;
     } catch (error) {
-      this.logger.error(`Failed to log audit batch: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to log audit batch: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -199,7 +203,9 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
         generatedAt: new Date(),
       };
     } catch (error) {
-      this.logger.error(`Failed to get audit trail: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get audit trail: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -255,18 +261,22 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
         issues,
       };
     } catch (error) {
-      this.logger.error(`Failed to verify audit integrity: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to verify audit integrity: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return {
         eventId,
         valid: false,
         verificationTimestamp: new Date(),
-        issues: [{
-          type: 'verification_error',
-          severity: 'critical' as const,
-          description: `Verification failed: ${error instanceof Error ? error.message : String(error)}`,
-          detectedAt: new Date(),
-          affectedEvents: [eventId],
-        }],
+        issues: [
+          {
+            type: 'verification_error',
+            severity: 'critical' as const,
+            description: `Verification failed: ${error instanceof Error ? error.message : String(error)}`,
+            detectedAt: new Date(),
+            affectedEvents: [eventId],
+          },
+        ],
       };
     }
   }
@@ -278,17 +288,15 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
     try {
       // Get events for the batch
-      const events = await Promise.all(
-        eventIds.map(id => this.getAuditEvent(id))
-      );
-      const validEvents = events.filter(e => e !== null) as AuditEvent[];
+      const events = await Promise.all(eventIds.map((id) => this.getAuditEvent(id)));
+      const validEvents = events.filter((e) => e !== null);
 
       if (validEvents.length === 0) {
         throw new Error('No valid events to anchor');
       }
 
       // Create Merkle tree
-      const leaves = validEvents.map(e => (e as any).hash);
+      const leaves = validEvents.map((e) => (e as any).hash);
       const tree = new MerkleTree(leaves, crypto.createHash('sha256'), { sortPairs: true });
       const merkleRoot = tree.getHexRoot();
 
@@ -299,8 +307,8 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
         timestamp: new Date(),
         metadata: {
           eventCount: validEvents.length,
-          categories: [...new Set(validEvents.map(e => e.category))],
-          severities: [...new Set(validEvents.map(e => e.severity))],
+          categories: [...new Set(validEvents.map((e) => e.category))],
+          severities: [...new Set(validEvents.map((e) => e.severity))],
         },
       });
 
@@ -326,7 +334,9 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
       return anchorProof;
     } catch (error) {
-      this.logger.error(`Failed to anchor audit batch: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to anchor audit batch: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -347,7 +357,7 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
         {
           includeEvidence: request.includeEvidence,
           format: request.format,
-        }
+        },
       );
 
       // Sign report if requested
@@ -382,7 +392,9 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
       return report;
     } catch (error) {
-      this.logger.error(`Failed to generate compliance report: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to generate compliance report: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -412,7 +424,9 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
 
       return monitor;
     } catch (error) {
-      this.logger.error(`Failed to create monitor: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to create monitor: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -506,13 +520,18 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
           await this.triggerMonitorAlert(monitor, event);
         }
       } catch (error) {
-        this.logger.error(`Monitor ${monitor.id} evaluation failed: ${error instanceof Error ? error.message : String(error)}`);
+        this.logger.error(
+          `Monitor ${monitor.id} evaluation failed: ${error instanceof Error ? error.message : String(error)}`,
+        );
         monitor.errorCount++;
       }
     }
   }
 
-  private async evaluateMonitorCondition(config: MonitorConfig, event: AuditEvent): Promise<boolean> {
+  private async evaluateMonitorCondition(
+    config: MonitorConfig,
+    event: AuditEvent,
+  ): Promise<boolean> {
     // Implementation to evaluate monitor conditions
     return false; // Placeholder
   }
@@ -557,14 +576,18 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
     }
 
     try {
-      const eventIds = this.pendingEvents.map(e => e.id).filter((id): id is string => id !== undefined);
+      const eventIds = this.pendingEvents
+        .map((e) => e.id)
+        .filter((id): id is string => id !== undefined);
       await this.anchorAuditBatch(eventIds);
-      
+
       // Clear pending events
       this.pendingEvents.length = 0;
       this.lastAnchorTime = Date.now();
     } catch (error) {
-      this.logger.error(`Failed to anchor pending batch: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to anchor pending batch: ${error instanceof Error ? error.message : String(error)}`,
+      );
     }
   }
 
@@ -575,19 +598,25 @@ export class EnterpriseAuditService implements IAuditMonitoringService {
     }, this.anchorInterval * 1000);
 
     // Archive old data periodically
-    setInterval(async () => {
-      await this.performDataArchival();
-    }, 24 * 60 * 60 * 1000); // Daily
+    setInterval(
+      async () => {
+        await this.performDataArchival();
+      },
+      24 * 60 * 60 * 1000,
+    ); // Daily
 
     // Cleanup expired data
-    setInterval(async () => {
-      await this.performDataCleanup();
-    }, 7 * 24 * 60 * 60 * 1000); // Weekly
+    setInterval(
+      async () => {
+        await this.performDataCleanup();
+      },
+      7 * 24 * 60 * 60 * 1000,
+    ); // Weekly
   }
 
   private loadRetentionPolicies(): Map<EventCategory, RetentionPolicy> {
     const policies = new Map<EventCategory, RetentionPolicy>();
-    
+
     // Default retention policies
     policies.set(EventCategory.AUTHENTICATION, {
       category: EventCategory.AUTHENTICATION,

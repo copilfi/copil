@@ -20,7 +20,7 @@ export class CryptographicHasher {
       resource: event.resource,
       outcome: event.outcome,
     });
-    
+
     return crypto.createHash('sha256').update(eventString).digest('hex');
   }
 

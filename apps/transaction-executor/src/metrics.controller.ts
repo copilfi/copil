@@ -20,4 +20,3 @@ export class MetricsController {
     return this.signer.getHyperliquidMetrics();
   }
 }
-

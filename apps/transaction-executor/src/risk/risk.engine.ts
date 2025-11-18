@@ -14,7 +14,10 @@ export class RiskEngine {
 
   constructor(private readonly configService: ConfigService) {}
 
-  async assessTransactionRisk(transaction: TransactionRequest, wallet: MPCWallet): Promise<RiskAssessment> {
+  async assessTransactionRisk(
+    transaction: TransactionRequest,
+    wallet: MPCWallet,
+  ): Promise<RiskAssessment> {
     this.logger.warn('RiskEngine.assessTransactionRisk - Not implemented');
     return {
       riskLevel: 'low',

@@ -47,7 +47,10 @@ export interface IKeyManagementService {
   getSessionKeyBytes(sessionKeyId: string): Promise<Buffer | null>;
 
   // Permission and validation
-  validatePermissions(sessionKeyId: string, requiredPermissions: SessionKeyPermissions): Promise<boolean>;
+  validatePermissions(
+    sessionKeyId: string,
+    requiredPermissions: SessionKeyPermissions,
+  ): Promise<boolean>;
   isSessionKeyActive(sessionKeyId: string): Promise<boolean>;
 
   // Enterprise security features

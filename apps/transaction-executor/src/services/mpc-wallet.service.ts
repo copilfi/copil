@@ -1,14 +1,20 @@
-import { Injectable, Logger, NotFoundException, UnauthorizedException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  UnauthorizedException,
+  BadRequestException,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
-import { 
-  IMPCWalletService, 
-  MPCWallet, 
+import {
+  IMPCWalletService,
+  MPCWallet,
   MPCWalletInfo,
-  MPCWalletConfig, 
-  TransactionRequest, 
-  TransactionOperation, 
+  MPCWalletConfig,
+  TransactionRequest,
+  TransactionOperation,
   TransactionStatus,
   HotColdBalance,
   KeyRotationOperation,
@@ -21,7 +27,7 @@ import {
   RecoverySettings,
   PartialSignature,
   RebalanceOperation,
-  EmergencyRecoveryOperation
+  EmergencyRecoveryOperation,
 } from '@copil/database';
 import { User, TransactionLog } from '@copil/database';
 import { MPCClient } from '../mpc/mpc-client';
@@ -63,13 +69,19 @@ export class MPCWalletService implements IMPCWalletService {
     private readonly notificationService: NotificationService,
   ) {
     // Initialize Web3 provider for blockchain balance queries
-    const rpcUrl = this.configService.get<string>('ETHEREUM_RPC_URL') || 'https://eth-mainnet.alchemyapi.io/v2/demo';
+    const rpcUrl =
+      this.configService.get<string>('ETHEREUM_RPC_URL') ||
+      'https://eth-mainnet.alchemyapi.io/v2/demo';
     this.web3Provider = new ethers.JsonRpcProvider(rpcUrl);
-    
+
     // Initialize mock wallet addresses (in production, these come from MPC provider)
-    this.hotWalletAddress = this.configService.get<string>('HOT_WALLET_ADDRESS') || '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
-    this.coldWalletAddress = this.configService.get<string>('COLD_WALLET_ADDRESS') || '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
-    
+    this.hotWalletAddress =
+      this.configService.get<string>('HOT_WALLET_ADDRESS') ||
+      '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+    this.coldWalletAddress =
+      this.configService.get<string>('COLD_WALLET_ADDRESS') ||
+      '0x742d35Cc6634C0532925a3b844Bc454e4438f44e';
+
     this.mpcClient = new MPCClient(configService);
     this.complianceEngine = new ComplianceEngine(configService);
     this.riskEngine = new RiskEngine(configService);
@@ -85,8 +97,14 @@ export class MPCWalletService implements IMPCWalletService {
     };
 
     this.maxKeyRotationDays = this.configService.get<number>('MAX_KEY_ROTATION_DAYS', 90);
-    this.emergencyRecoveryThreshold = this.configService.get<number>('EMERGENCY_RECOVERY_THRESHOLD', 2);
-    this.complianceProviders = this.configService.get<string[]>('COMPLIANCE_PROVIDERS', ['chainalysis', 'trm']);
+    this.emergencyRecoveryThreshold = this.configService.get<number>(
+      'EMERGENCY_RECOVERY_THRESHOLD',
+      2,
+    );
+    this.complianceProviders = this.configService.get<string[]>('COMPLIANCE_PROVIDERS', [
+      'chainalysis',
+      'trm',
+    ]);
   }
 
   async createMPCWallet(config: MPCWalletConfig): Promise<MPCWallet> {
@@ -103,7 +121,7 @@ export class MPCWalletService implements IMPCWalletService {
       const mpcKeyResult = await this.mpcClient.generateThresholdKey(
         config.threshold,
         config.totalParticipants,
-        config.participants.map(p => p.id) // Map MPCParticipant[] to string[]
+        config.participants.map((p) => p.id), // Map MPCParticipant[] to string[]
       );
 
       // Create wallet record
@@ -150,11 +168,15 @@ export class MPCWalletService implements IMPCWalletService {
       // Notify participants
       await this.notificationService.notifyWalletCreation(wallet, config.participants);
 
-      this.logger.log(`Created MPC wallet ${wallet.id} for user ${config.userId} with ${config.totalParticipants}/${config.threshold} scheme`);
+      this.logger.log(
+        `Created MPC wallet ${wallet.id} for user ${config.userId} with ${config.totalParticipants}/${config.threshold} scheme`,
+      );
 
       return wallet;
     } catch (error) {
-      this.logger.error(`Failed to create MPC wallet: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to create MPC wallet: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -176,7 +198,9 @@ export class MPCWalletService implements IMPCWalletService {
       // Compliance validation
       const complianceResult = await this.validateTransactionCompliance(request);
       if (!complianceResult.approved) {
-        throw new BadRequestException(`Transaction not compliant: ${complianceResult.flags.map(f => f.description).join(', ')}`);
+        throw new BadRequestException(
+          `Transaction not compliant: ${complianceResult.flags.map((f) => f.description).join(', ')}`,
+        );
       }
 
       // Check hot/cold balance
@@ -188,10 +212,14 @@ export class MPCWalletService implements IMPCWalletService {
       }
 
       // Check withdrawal limits
-      await this.validateWithdrawalLimits(request.walletId, request.value, request.metadata?.userId || 0);
+      await this.validateWithdrawalLimits(
+        request.walletId,
+        request.value,
+        request.metadata?.userId || 0,
+      );
 
       // Check if destination is whitelisted
-      if (!await this.isWhitelistedAddress(request.walletId, request.to)) {
+      if (!(await this.isWhitelistedAddress(request.walletId, request.to))) {
         // Apply timelock for new addresses
         const timelockPeriod = this.configService.get<number>('NEW_ADDRESS_TIMELOCK_HOURS', 24);
         if (request.metadata) {
@@ -223,7 +251,7 @@ export class MPCWalletService implements IMPCWalletService {
       const signatureRequest = {
         messageHash: ethers.keccak256(ethers.toUtf8Bytes(JSON.stringify(request))),
         shares: [], // Will be populated during signature collection
-        threshold: wallet.threshold
+        threshold: wallet.threshold,
       };
       await this.mpcClient.initiateSignatureCollection(signatureRequest);
 
@@ -238,16 +266,23 @@ export class MPCWalletService implements IMPCWalletService {
         timestamp: new Date(),
       });
 
-      this.logger.log(`Initiated transaction ${operation.operationId} for wallet ${request.walletId}`);
+      this.logger.log(
+        `Initiated transaction ${operation.operationId} for wallet ${request.walletId}`,
+      );
 
       return operation;
     } catch (error) {
-      this.logger.error(`Failed to initiate transaction: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to initiate transaction: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
 
-  async submitTransactionShare(operationId: string, share: PartialSignature): Promise<TransactionStatus> {
+  async submitTransactionShare(
+    operationId: string,
+    share: PartialSignature,
+  ): Promise<TransactionStatus> {
     try {
       const operation = await this.getTransactionOperation(operationId);
       if (!operation) {
@@ -266,7 +301,10 @@ export class MPCWalletService implements IMPCWalletService {
 
       // Add share to operation
       operation.collectedShares.push(share);
-      operation.status = operation.collectedShares.length >= operation.requiredShares ? 'ready_to_sign' : 'collecting_shares';
+      operation.status =
+        operation.collectedShares.length >= operation.requiredShares
+          ? 'ready_to_sign'
+          : 'collecting_shares';
 
       // Update operation
       await this.updateTransactionOperation(operation);
@@ -275,7 +313,7 @@ export class MPCWalletService implements IMPCWalletService {
       if (operation.status === 'ready_to_sign') {
         const finalSignature = await this.thresholdSignature.combinePartialSignatures(
           operation.collectedShares,
-          operation.transaction
+          operation.transaction,
         );
 
         // Submit transaction to blockchain
@@ -301,7 +339,9 @@ export class MPCWalletService implements IMPCWalletService {
         timestamp: new Date(),
       };
     } catch (error) {
-      this.logger.error(`Failed to submit transaction share: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to submit transaction share: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -317,7 +357,8 @@ export class MPCWalletService implements IMPCWalletService {
       const lastRotation = wallet.lastKeyRotation;
       if (lastRotation) {
         const daysSinceRotation = (Date.now() - lastRotation.getTime()) / (1000 * 60 * 60 * 24);
-        if (daysSinceRotation < 7) { // Minimum 7 days between rotations
+        if (daysSinceRotation < 7) {
+          // Minimum 7 days between rotations
           throw new BadRequestException('Key rotation too frequent');
         }
       }
@@ -341,9 +382,9 @@ export class MPCWalletService implements IMPCWalletService {
 
       // Initiate MPC key refresh (proactive share rotation without changing address)
       await this.mpcClient.initiateKeyRefresh(
-        walletId, 
-        wallet.participants.map(p => p.id), // Map MPCParticipant[] to string[]
-        operation.operationId
+        walletId,
+        wallet.participants.map((p) => p.id), // Map MPCParticipant[] to string[]
+        operation.operationId,
       );
 
       // Audit key rotation
@@ -358,7 +399,9 @@ export class MPCWalletService implements IMPCWalletService {
 
       return operation;
     } catch (error) {
-      this.logger.error(`Failed to initiate key rotation: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to initiate key rotation: ${error instanceof Error ? error.message : String(error)}`,
+      );
       throw error;
     }
   }
@@ -377,15 +420,16 @@ export class MPCWalletService implements IMPCWalletService {
       const totalBalance = hotBalance + coldBalance;
 
       // Calculate hot wallet percentage
-      const hotPercentage = totalBalance > 0n ? Number((hotBalance * 10000n) / totalBalance) / 100 : 0;
+      const hotPercentage =
+        totalBalance > 0n ? Number((hotBalance * 10000n) / totalBalance) / 100 : 0;
 
       // Get last rebalance timestamp from database or use default
       const lastRebalance = new Date(); // In production, this would come from database
 
       this.logger.log(
         `Real blockchain balances - Hot: ${ethers.formatEther(hotBalance)} ETH, ` +
-        `Cold: ${ethers.formatEther(coldBalance)} ETH, ` +
-        `Total: ${ethers.formatEther(totalBalance)} ETH`
+          `Cold: ${ethers.formatEther(coldBalance)} ETH, ` +
+          `Total: ${ethers.formatEther(totalBalance)} ETH`,
       );
 
       return {
@@ -397,7 +441,7 @@ export class MPCWalletService implements IMPCWalletService {
       };
     } catch (error) {
       this.logger.error(
-        `Failed to get blockchain balances: ${error instanceof Error ? error.message : String(error)}`
+        `Failed to get blockchain balances: ${error instanceof Error ? error.message : String(error)}`,
       );
 
       // Fallback to zero balances for system stability
@@ -413,7 +457,7 @@ export class MPCWalletService implements IMPCWalletService {
 
   async rebalanceHotCold(targetHotAmount: bigint, reason: string): Promise<RebalanceOperation> {
     const currentBalance = await this.getHotColdBalance();
-    
+
     let type: 'hot_to_cold' | 'cold_to_hot';
     let amount: bigint;
 
@@ -448,13 +492,14 @@ export class MPCWalletService implements IMPCWalletService {
     try {
       // Multi-provider compliance screening
       const screeningResults = await Promise.all(
-        this.complianceProviders.map(provider => 
-          this.complianceEngine.screenTransaction(tx, provider)
-        )
+        this.complianceProviders.map((provider) =>
+          this.complianceEngine.screenTransaction(tx, provider),
+        ),
       );
 
       // Aggregate results
-      const aggregatedResult = await this.complianceEngine.aggregateScreeningResults(screeningResults);
+      const aggregatedResult =
+        await this.complianceEngine.aggregateScreeningResults(screeningResults);
 
       // Check against wallet-specific rules
       const wallet = await this.getWalletInfo(tx.walletId);
@@ -466,22 +511,27 @@ export class MPCWalletService implements IMPCWalletService {
         riskLevel: this.getHighestRiskLevel(aggregatedResult.riskLevel, ruleValidation.riskLevel),
         flags: [...aggregatedResult.flags, ...ruleValidation.flags],
         screeningResult: aggregatedResult.screeningResult,
-        recommendation: aggregatedResult.recommendation === 'reject' || ruleValidation.recommendation === 'reject' 
-          ? 'reject' 
-          : 'manual_review',
+        recommendation:
+          aggregatedResult.recommendation === 'reject' || ruleValidation.recommendation === 'reject'
+            ? 'reject'
+            : 'manual_review',
       };
 
       return finalResult;
     } catch (error) {
-      this.logger.error(`Compliance validation failed: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Compliance validation failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return {
         approved: false,
         riskLevel: 'critical',
-        flags: [{
-          type: 'suspicious_pattern',
-          severity: 'critical',
-          description: `Compliance system error: ${error instanceof Error ? error.message : String(error)}`,
-        }],
+        flags: [
+          {
+            type: 'suspicious_pattern',
+            severity: 'critical',
+            description: `Compliance system error: ${error instanceof Error ? error.message : String(error)}`,
+          },
+        ],
         recommendation: 'reject',
       };
     }
@@ -507,7 +557,7 @@ export class MPCWalletService implements IMPCWalletService {
     }
 
     // Validate participant jurisdictions
-    const jurisdictions = config.participants.map(p => p.jurisdiction);
+    const jurisdictions = config.participants.map((p) => p.jurisdiction);
     const uniqueJurisdictions = [...new Set(jurisdictions)];
     if (uniqueJurisdictions.length < 2) {
       throw new BadRequestException('Participants must be in at least 2 different jurisdictions');
@@ -540,13 +590,19 @@ export class MPCWalletService implements IMPCWalletService {
     this.logger.debug(`Updating transaction operation ${operation.operationId}`);
   }
 
-  private async submitTransactionToChain(tx: TransactionRequest, signature: string): Promise<string> {
+  private async submitTransactionToChain(
+    tx: TransactionRequest,
+    signature: string,
+  ): Promise<string> {
     // Implementation to submit signed transaction to blockchain
     this.logger.debug(`Submitting transaction to chain for wallet ${tx.walletId}`);
     return '0x' + crypto.randomBytes(32).toString('hex'); // Placeholder
   }
 
-  private async createTransactionLog(operation: TransactionOperation, txHash: string): Promise<void> {
+  private async createTransactionLog(
+    operation: TransactionOperation,
+    txHash: string,
+  ): Promise<void> {
     const log = this.transactionLogRepository.create({
       userId: operation.transaction.metadata?.userId || 0,
       description: `MPC transaction to ${operation.transaction.to}`,
@@ -574,7 +630,10 @@ export class MPCWalletService implements IMPCWalletService {
     this.logger.debug(`Storing rebalance operation ${operation.operationId}`);
   }
 
-  private async validateAgainstWalletRules(tx: TransactionRequest, wallet: MPCWallet): Promise<any> {
+  private async validateAgainstWalletRules(
+    tx: TransactionRequest,
+    wallet: MPCWallet,
+  ): Promise<any> {
     // Implementation to validate against wallet-specific rules
     return {
       approved: true,
@@ -584,11 +643,14 @@ export class MPCWalletService implements IMPCWalletService {
     };
   }
 
-  private getHighestRiskLevel(level1: string, level2: string): 'low' | 'medium' | 'high' | 'critical' {
+  private getHighestRiskLevel(
+    level1: string,
+    level2: string,
+  ): 'low' | 'medium' | 'high' | 'critical' {
     const levels = { low: 0, medium: 1, high: 2, critical: 3 };
-    return (levels[level1 as keyof typeof levels] >= levels[level2 as keyof typeof levels]) 
-      ? level1 as any 
-      : level2 as any;
+    return levels[level1 as keyof typeof levels] >= levels[level2 as keyof typeof levels]
+      ? (level1 as any)
+      : (level2 as any);
   }
 
   private async isWhitelistedAddress(walletId: string, address: string): Promise<boolean> {
@@ -596,14 +658,20 @@ export class MPCWalletService implements IMPCWalletService {
     return false; // Placeholder
   }
 
-  private async validateWithdrawalLimits(walletId: string, amount: bigint, userId: number): Promise<void> {
+  private async validateWithdrawalLimits(
+    walletId: string,
+    amount: bigint,
+    userId: number,
+  ): Promise<void> {
     // Implementation to validate against withdrawal limits
     this.logger.debug(`Validating withdrawal limits for wallet ${walletId}`);
   }
 
   private async initiateColdToHotTransfer(walletId: string, amount: bigint): Promise<void> {
     // Implementation to initiate transfer from cold to hot wallet
-    this.logger.debug(`Initiating cold to hot transfer of ${amount.toString()} for wallet ${walletId}`);
+    this.logger.debug(
+      `Initiating cold to hot transfer of ${amount.toString()} for wallet ${walletId}`,
+    );
   }
 
   // === Interface Implementation (remaining methods) ===
@@ -643,12 +711,19 @@ export class MPCWalletService implements IMPCWalletService {
     throw new Error('Not implemented');
   }
 
-  async addWhitelistedAddress(walletId: string, address: string, cooldownPeriod?: number): Promise<boolean> {
+  async addWhitelistedAddress(
+    walletId: string,
+    address: string,
+    cooldownPeriod?: number,
+  ): Promise<boolean> {
     // Implementation to add whitelisted address
     throw new Error('Not implemented');
   }
 
-  async initiateEmergencyRecovery(walletId: string, reason: string): Promise<EmergencyRecoveryOperation> {
+  async initiateEmergencyRecovery(
+    walletId: string,
+    reason: string,
+  ): Promise<EmergencyRecoveryOperation> {
     // Implementation to initiate emergency recovery
     throw new Error('Not implemented');
   }

@@ -48,19 +48,24 @@ export class RiskEngine {
     // Load suspicious IPs from config
     const suspiciousIps = this.configService.get<string>('RISK_SUSPICIOUS_IPS', '');
     if (suspiciousIps) {
-      suspiciousIps.split(',').forEach(ip => this.suspiciousIps.add(ip.trim()));
+      suspiciousIps.split(',').forEach((ip) => this.suspiciousIps.add(ip.trim()));
     }
 
     // Load high-risk destinations from config
     const riskyDests = this.configService.get<string>('RISK_HIGH_RISK_DESTINATIONS', '');
     if (riskyDests) {
-      riskyDests.split(',').forEach(dest => this.highRiskDestinations.add(dest.trim()));
+      riskyDests.split(',').forEach((dest) => this.highRiskDestinations.add(dest.trim()));
     }
 
-    this.logger.log(`Risk engine initialized with ${this.suspiciousIps.size} suspicious IPs and ${this.highRiskDestinations.size} high-risk destinations`);
+    this.logger.log(
+      `Risk engine initialized with ${this.suspiciousIps.size} suspicious IPs and ${this.highRiskDestinations.size} high-risk destinations`,
+    );
   }
 
-  async assessTransactionRisk(request: TransactionRiskRequest, wallet?: any): Promise<RiskAssessmentResult> {
+  async assessTransactionRisk(
+    request: TransactionRiskRequest,
+    wallet?: any,
+  ): Promise<RiskAssessmentResult> {
     this.logger.debug(`Assessing transaction risk for user ${request.userId}`);
 
     let riskScore = 0;
@@ -69,11 +74,13 @@ export class RiskEngine {
 
     // Amount-based risk assessment
     const amount = parseFloat(request.amount);
-    if (amount > 100000) { // > $100k
+    if (amount > 100000) {
+      // > $100k
       riskScore += 40;
       factors.push('high_amount_transaction');
       additionalChecks.push('manual_review_required');
-    } else if (amount > 10000) { // > $10k
+    } else if (amount > 10000) {
+      // > $10k
       riskScore += 20;
       factors.push('elevated_amount_transaction');
     }
@@ -109,7 +116,8 @@ export class RiskEngine {
 
     // New user risk
     const userAge = await this.getUserAccountAge(request.userId);
-    if (userAge < 7) { // less than 7 days
+    if (userAge < 7) {
+      // less than 7 days
       riskScore += 20;
       factors.push('new_user_account');
     }
@@ -153,8 +161,8 @@ export class RiskEngine {
     if (request.userAgent) {
       const suspiciousUAs = ['bot', 'crawler', 'scraper', 'automated'];
       const uaLower = request.userAgent.toLowerCase();
-      
-      if (suspiciousUAs.some(sus => uaLower.includes(sus))) {
+
+      if (suspiciousUAs.some((sus) => uaLower.includes(sus))) {
         riskScore += 30;
         factors.push('suspicious_user_agent');
       }
@@ -202,7 +210,10 @@ export class RiskEngine {
     return 'low';
   }
 
-  private getRecommendedAction(level: 'low' | 'medium' | 'high' | 'critical', score: number): 'allow' | 'manual_review' | 'block' {
+  private getRecommendedAction(
+    level: 'low' | 'medium' | 'high' | 'critical',
+    score: number,
+  ): 'allow' | 'manual_review' | 'block' {
     if (level === 'critical' || score >= 90) return 'block';
     if (level === 'high' || score >= 60) return 'manual_review';
     return 'allow';
@@ -211,24 +222,26 @@ export class RiskEngine {
   private getRecentTransactionCount(userId: number, seconds: number): number {
     const now = new Date();
     const cutoff = new Date(now.getTime() - seconds * 1000);
-    
+
     const userRequests = this.recentUserRequests.get(userId) || [];
-    return userRequests.filter(timestamp => timestamp > cutoff).length;
+    return userRequests.filter((timestamp) => timestamp > cutoff).length;
   }
 
   private async getRecentKeyAccessCount(userId: number, seconds: number): Promise<number> {
     try {
       // Query audit logs for recent key access events
       const cutoffTime = new Date(Date.now() - seconds * 1000);
-      
+
       // This would integrate with AuditService for real implementation
       // For now, we'll implement a basic version using the existing request tracking
       const recentRequests = this.recentUserRequests.get(userId) || [];
-      const recentAccessCount = recentRequests.filter(timestamp => timestamp > cutoffTime).length;
-      
+      const recentAccessCount = recentRequests.filter((timestamp) => timestamp > cutoffTime).length;
+
       return recentAccessCount;
     } catch (error) {
-      this.logger.error(`Failed to get recent key access count for user ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get recent key access count for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return 0;
     }
   }
@@ -237,7 +250,7 @@ export class RiskEngine {
     try {
       // Query database for user creation date
       const user = await this.userRepository.findOne({ where: { id: userId } });
-      
+
       if (!user) {
         this.logger.warn(`User ${userId} not found for account age calculation`);
         return 0;
@@ -245,10 +258,12 @@ export class RiskEngine {
 
       const accountAgeMs = Date.now() - user.createdAt.getTime();
       const accountAgeDays = Math.floor(accountAgeMs / (1000 * 60 * 60 * 24));
-      
+
       return accountAgeDays;
     } catch (error) {
-      this.logger.error(`Failed to get account age for user ${userId}: ${error instanceof Error ? error.message : String(error)}`);
+      this.logger.error(
+        `Failed to get account age for user ${userId}: ${error instanceof Error ? error.message : String(error)}`,
+      );
       return 0;
     }
   }
@@ -261,7 +276,7 @@ export class RiskEngine {
   private isHighRiskGeolocation(ip: string): boolean {
     // Simplified geolocation risk - in production would use GeoIP database
     const highRiskRanges = ['10.0.0.', '192.168.1.'];
-    return highRiskRanges.some(range => ip.startsWith(range));
+    return highRiskRanges.some((range) => ip.startsWith(range));
   }
 
   // Public method to record user requests for velocity checking
@@ -269,11 +284,11 @@ export class RiskEngine {
     const now = new Date();
     const requests = this.recentUserRequests.get(userId) || [];
     requests.push(now);
-    
+
     // Keep only last hour of requests
     const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000);
-    const filtered = requests.filter(timestamp => timestamp > oneHourAgo);
-    
+    const filtered = requests.filter((timestamp) => timestamp > oneHourAgo);
+
     this.recentUserRequests.set(userId, filtered);
   }
 }

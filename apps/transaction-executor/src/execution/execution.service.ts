@@ -1,12 +1,21 @@
 import { Injectable, Logger, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Strategy, TransactionLog, SessionKey, SessionKeyPermissions, Wallet } from '@copil/database';
+import {
+  Strategy,
+  TransactionLog,
+  SessionKey,
+  SessionKeyPermissions,
+  Wallet,
+  FeeCalculationResult,
+} from '@copil/database';
 import { Repository, MoreThan } from 'typeorm';
 import { QueryDeepPartialEntity } from 'typeorm/query-builder/QueryPartialEntity';
 import { ExecutionResult, TransactionJobData } from './types';
 import { SignerService } from '../signer/signer.service';
 import { Job } from 'bullmq';
 import { ChainAbstractionClient } from '@copil/chain-abstraction-client';
+import { TransactionSecurityService } from '../services/transaction-security.service';
+import { DynamicFeeService } from '../services/dynamic-fee.service';
 
 class RetryableExecutionError extends Error {
   constructor(message: string) {
@@ -30,6 +39,8 @@ export class ExecutionService {
     private readonly walletRepository: Repository<Wallet>,
     private readonly signerService: SignerService,
     private readonly chainAbstractionClient: ChainAbstractionClient, // Injected the new client
+    private readonly transactionSecurityService: TransactionSecurityService,
+    private readonly dynamicFeeService: DynamicFeeService,
   ) {}
 
   async execute(job: TransactionJobData, queueJob?: Job<TransactionJobData>): Promise<void> {
@@ -40,11 +51,15 @@ export class ExecutionService {
 
     // Validate strategy ownership if strategyId is provided
     if (job.strategyId) {
-      const strategy = await this.strategyRepository.findOne({ 
-        where: { id: job.strategyId, userId: job.userId } 
+      const strategy = await this.strategyRepository.findOne({
+        where: { id: job.strategyId, userId: job.userId },
       });
       if (!strategy) {
-        await this.recordLog(job, 'failed', `Strategy ${job.strategyId} not found or not owned by user ${job.userId}`);
+        await this.recordLog(
+          job,
+          'failed',
+          `Strategy ${job.strategyId} not found or not owned by user ${job.userId}`,
+        );
         return;
       }
     }
@@ -55,6 +70,39 @@ export class ExecutionService {
       return;
     }
 
+    // NEW: Transaction Security Validation
+    const securityValidation = await this.transactionSecurityService.validateTransaction(
+      job.intent as any, // Convert to TransactionRequest format
+      job.userId,
+      job.sessionKeyId || '',
+    );
+
+    if (!securityValidation.valid) {
+      await this.recordLog(
+        job,
+        'failed',
+        `Security validation failed: ${securityValidation.reason}`,
+      );
+      return;
+    }
+
+    // NEW: Apply Fee Collection if applicable
+    let modifiedJob = job;
+    if (securityValidation.feeCalculation) {
+      modifiedJob = await this.applyFeeCollection(job, securityValidation.feeCalculation);
+
+      // Log fee collection for analytics
+      await this.dynamicFeeService.logFeeCollection({
+        userId: job.userId,
+        chain: this.extractChainFromJob(job),
+        transactionType: job.intent.type,
+        originalAmount: BigInt(job.quote.fromAmount || '0'),
+        feeAmount: securityValidation.feeCalculation.feeAmount,
+        feePercentage: securityValidation.feeCalculation.feePercentage,
+        roleDiscount: securityValidation.feeCalculation.feeBreakdown.roleDiscount,
+      });
+    }
+
     const pendingLog = await this.recordLog(
       job,
       'pending',
@@ -63,7 +111,7 @@ export class ExecutionService {
 
     try {
       // The new, simplified execution flow
-      const result = await this.executeTransaction(job);
+      const result = await this.executeTransaction(modifiedJob);
 
       const updateParams: QueryDeepPartialEntity<TransactionLog> = {
         status: result.status,
@@ -85,14 +133,15 @@ export class ExecutionService {
             }
           }
         } catch (error) {
-          this.logger.warn(`Failed to update session key usage telemetry: ${error instanceof Error ? error.message : 'Unknown error'}`);
+          this.logger.warn(
+            `Failed to update session key usage telemetry: ${error instanceof Error ? error.message : 'Unknown error'}`,
+          );
         }
       } else {
         this.logger.error(
           `Job for ${jobDescription} action failed. ${result.description ?? 'No details provided.'}`,
         );
       }
-
     } catch (error) {
       const message =
         error instanceof Error ? error.message : 'Unknown error occurred during execution.';
@@ -115,13 +164,21 @@ export class ExecutionService {
 
     // Hyperliquid intents are executed directly by the signer service without a quote
     if (intent.type === 'open_position' || intent.type === 'close_position') {
-      const wallet = await this.walletRepository.findOne({ where: { userId, chain: 'hyperliquid' } })
+      const wallet = await this.walletRepository
+        .findOne({ where: { userId, chain: 'hyperliquid' } })
         .catch((error) => {
-          this.logger.warn(`Failed to fetch hyperliquid wallet for user ${userId}: ${error.message}`);
+          this.logger.warn(
+            `Failed to fetch hyperliquid wallet for user ${userId}: ${error.message}`,
+          );
           return null;
         });
       // Provide a lightweight fallback wallet; signer derives the actual HL address from session key
-      const fallback: any = wallet ?? { userId, chain: 'hyperliquid', address: '0x0000000000000000000000000000000000000000', type: 'eoa' };
+      const fallback: any = wallet ?? {
+        userId,
+        chain: 'hyperliquid',
+        address: '0x0000000000000000000000000000000000000000',
+        type: 'eoa',
+      };
       return this.signerService.signAndSend({
         userId,
         sessionKeyId,
@@ -132,7 +189,11 @@ export class ExecutionService {
 
     const { quote } = job as any;
     if (!quote?.transactionRequest && !quote?.serializedTx) {
-      return { status: 'failed', description: 'No transactionRequest or serializedTx found in the job payload from the quote.' };
+      return {
+        status: 'failed',
+        description:
+          'No transactionRequest or serializedTx found in the job payload from the quote.',
+      };
     }
 
     let chainName: string;
@@ -144,19 +205,30 @@ export class ExecutionService {
       chainName = (job.metadata as any)?.chain;
     }
 
-    let wallet = await this.walletRepository.findOne({ where: { userId: job.userId, chain: chainName } });
+    let wallet = await this.walletRepository.findOne({
+      where: { userId: job.userId, chain: chainName },
+    });
     if (!wallet) {
       // Allow Solana executions without a persisted wallet entry; signer uses session key directly
       if ((chainName || '').toLowerCase() === 'solana') {
-        wallet = { userId: job.userId, chain: 'solana', address: 'solana:session-key', type: 'eoa' } as any;
+        wallet = {
+          userId: job.userId,
+          chain: 'solana',
+          address: 'solana:session-key',
+          type: 'eoa',
+        } as any;
       } else {
-        throw new NotFoundException(`Wallet for user ${job.userId} on chain ${chainName} not found.`);
+        throw new NotFoundException(
+          `Wallet for user ${job.userId} on chain ${chainName} not found.`,
+        );
       }
     }
 
     // Enforce session key on-chain-like policy at app layer (defense-in-depth)
-    const sessionKey = await this.sessionKeyRepository.findOne({ where: { id: job.sessionKeyId! } });
-    const perms = sessionKey?.permissions as SessionKeyPermissions | undefined;
+    const sessionKey = await this.sessionKeyRepository.findOne({
+      where: { id: job.sessionKeyId },
+    });
+    const perms = sessionKey?.permissions;
 
     // Reject empty or null permissions
     if (!perms || Object.keys(perms).length === 0) {
@@ -207,13 +279,22 @@ export class ExecutionService {
     // allowedContracts: the destination contract of main tx (and optional approval tx) must be whitelisted if provided
     if (perms?.allowedContracts?.length) {
       const allowed = new Set(perms.allowedContracts.map((a: string) => a.toLowerCase()));
-      const mainToOk = typeof quote.transactionRequest?.to === 'string' && allowed.has((quote.transactionRequest.to as string).toLowerCase());
-      const approvalToOk = !quote.approvalTransactionRequest || (typeof quote.approvalTransactionRequest?.to === 'string' && allowed.has((quote.approvalTransactionRequest.to as string).toLowerCase()));
+      const mainToOk =
+        typeof quote.transactionRequest?.to === 'string' &&
+        allowed.has((quote.transactionRequest.to as string).toLowerCase());
+      const approvalToOk =
+        !quote.approvalTransactionRequest ||
+        (typeof quote.approvalTransactionRequest?.to === 'string' &&
+          allowed.has((quote.approvalTransactionRequest.to as string).toLowerCase()));
       if (!mainToOk || !approvalToOk) {
         return {
           status: 'failed',
           description: 'Destination contract not permitted by session key policy.',
-          metadata: { sessionKeyId: job.sessionKeyId, to: quote.transactionRequest?.to, approvalTo: quote.approvalTransactionRequest?.to },
+          metadata: {
+            sessionKeyId: job.sessionKeyId,
+            to: quote.transactionRequest?.to,
+            approvalTo: quote.approvalTransactionRequest?.to,
+          },
         };
       }
     }
@@ -230,11 +311,19 @@ export class ExecutionService {
             const amt = BigInt(amount);
             const cap = BigInt(lim.maxAmount);
             if (amt > cap) {
-              return { status: 'failed', description: 'Requested amount exceeds session key spend limit.', metadata: { token, amount, cap: lim.maxAmount } };
+              return {
+                status: 'failed',
+                description: 'Requested amount exceeds session key spend limit.',
+                metadata: { token, amount, cap: lim.maxAmount },
+              };
             }
           } catch {
             // If parsing fails, fail closed
-            return { status: 'failed', description: 'Invalid amount or spend limit in policy.', metadata: { token, amount, limit: lim.maxAmount } };
+            return {
+              status: 'failed',
+              description: 'Invalid amount or spend limit in policy.',
+              metadata: { token, amount, limit: lim.maxAmount },
+            };
           }
         }
       }
@@ -245,7 +334,7 @@ export class ExecutionService {
       // EOA wallets may also need approvals for token spending
       const approveRes = await this.signerService.signAndSend({
         userId: job.userId,
-        sessionKeyId: job.sessionKeyId!,
+        sessionKeyId: job.sessionKeyId,
         transaction: quote.approvalTransactionRequest,
         wallet: wallet, // Pass wallet context
         metadata: { intent: job.intent, quoteId: quote.id, purpose: 'approval', chain: chainName },
@@ -261,7 +350,7 @@ export class ExecutionService {
 
     const signerResult = await this.signerService.signAndSend({
       userId: job.userId,
-      sessionKeyId: job.sessionKeyId!,
+      sessionKeyId: job.sessionKeyId,
       transaction: quote.transactionRequest, // This will be null for Solana, handled by signerService
       wallet: wallet, // Pass wallet context
       metadata: { intent: job.intent, quote: quote, chain: chainName }, // include chain for EOA/Sol
@@ -275,6 +364,53 @@ export class ExecutionService {
     };
   }
   // ... (recordLog, validateSessionKey, etc. remain the same)
+
+  /**
+   * Apply fee collection to transaction job
+   * Creates modified job with fee deduction
+   */
+  private async applyFeeCollection(
+    job: TransactionJobData,
+    feeCalculation: FeeCalculationResult,
+  ): Promise<TransactionJobData> {
+    if (feeCalculation.feeAmount === 0n) {
+      return job; // No fee to apply
+    }
+
+    // Create modified quote with fee deducted
+    const originalAmount = BigInt(job.quote.fromAmount || '0');
+    const netAmount = originalAmount - feeCalculation.feeAmount;
+
+    const modifiedQuote = {
+      ...job.quote,
+      fromAmount: netAmount.toString(),
+    };
+
+    return {
+      ...job,
+      quote: modifiedQuote,
+      metadata: {
+        ...job.metadata,
+        feeCollected: feeCalculation.feeAmount.toString(),
+        feePercentage: feeCalculation.feePercentage,
+      },
+    };
+  }
+
+  /**
+   * Extract chain from transaction job
+   */
+  private extractChainFromJob(job: TransactionJobData): string {
+    // Extract from intent based on transaction type
+    if (job.intent.type === 'swap' || job.intent.type === 'bridge') {
+      return job.intent.fromChain;
+    } else if (job.intent.type === 'transfer') {
+      return job.intent.chain;
+    } else if (job.intent.type === 'custom') {
+      return (job.intent.parameters as any)?.chain || 'ethereum';
+    }
+    return 'ethereum'; // Default fallback
+  }
 
   private async recordLog(
     job: TransactionJobData,
@@ -298,7 +434,9 @@ export class ExecutionService {
     try {
       (newLog as any).details = { intent: job.intent, ...(job as any).metadata };
     } catch (error) {
-      this.logger.warn(`Failed to set transaction log details: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      this.logger.warn(
+        `Failed to set transaction log details: ${error instanceof Error ? error.message : 'Unknown error'}`,
+      );
     }
 
     if (job.strategyId) {
@@ -308,7 +446,9 @@ export class ExecutionService {
     return this.transactionLogRepository.save(newLog);
   }
 
-  private async validateSessionKey(job: TransactionJobData): Promise<{ valid: boolean; reason?: string }> {
+  private async validateSessionKey(
+    job: TransactionJobData,
+  ): Promise<{ valid: boolean; reason?: string }> {
     if (!job.sessionKeyId) {
       return {
         valid: false,
@@ -361,11 +501,16 @@ export class ExecutionService {
     }
 
     // Windowed spend limits: sum of successful executions within windowSec + current intent must not exceed cap
-    if (permissions?.spendLimits?.length && (job.intent.type === 'swap' || job.intent.type === 'bridge')) {
+    if (
+      permissions?.spendLimits?.length &&
+      (job.intent.type === 'swap' || job.intent.type === 'bridge')
+    ) {
       const token = (job.intent as any)?.fromToken as string | undefined;
       const amountStr = (job.intent as any)?.fromAmount as string | undefined;
       if (token && amountStr) {
-        const limit = permissions.spendLimits.find((l: any) => l.token.toLowerCase() === token.toLowerCase());
+        const limit = permissions.spendLimits.find(
+          (l: any) => l.token.toLowerCase() === token.toLowerCase(),
+        );
         if (limit && typeof limit.windowSec === 'number' && limit.windowSec > 0) {
           const since = new Date(Date.now() - limit.windowSec * 1000);
           const logs = await this.transactionLogRepository.find({
@@ -378,7 +523,11 @@ export class ExecutionService {
             const t = intent?.fromToken as string | undefined;
             const a = intent?.fromAmount as string | undefined;
             if (t && a && t.toLowerCase() === token.toLowerCase()) {
-              try { spent += BigInt(a); } catch { /* ignore malformed */ }
+              try {
+                spent += BigInt(a);
+              } catch {
+                /* ignore malformed */
+              }
             }
           }
           try {
@@ -391,7 +540,10 @@ export class ExecutionService {
               };
             }
           } catch {
-            return { valid: false, reason: 'Invalid amount or spend limit while enforcing windowed policy.' };
+            return {
+              valid: false,
+              reason: 'Invalid amount or spend limit while enforcing windowed policy.',
+            };
           }
         }
       }

@@ -20,7 +20,7 @@ export class BundlerClient {
     return http(bundlerUrl, {
       fetchOptions: {
         headers: {
-          'Authorization': `Bearer ${apiKey}`,
+          Authorization: `Bearer ${apiKey}`,
         },
       },
     });
