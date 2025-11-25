@@ -20,6 +20,8 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
       ignoreExpiration: false,
       passReqToCallback: true,
+      // Support both ES256 (Privy) and HS256 (internal JWT)
+      algorithms: ['ES256', 'HS256'],
       secretOrKeyProvider: async (_req: any, rawJwtToken: string, done: (err: any, secret?: string | Buffer) => void) => {
         try {
           const secret = await this.resolveSecretOrKey(rawJwtToken);
@@ -48,8 +50,12 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
 
   private async resolveSecretOrKey(rawJwtToken: string): Promise<string | Buffer> {
     const { header, payload } = this.decodeJwt(rawJwtToken);
+    this.logger.debug(`JWT header: ${JSON.stringify(header)}`);
+    this.logger.debug(`JWT payload issuer: ${payload?.iss}, sub: ${payload?.sub}, aud: ${payload?.aud}`);
     const issuer: string | undefined = typeof payload?.iss === 'string' ? payload.iss : undefined;
-    const isPrivy = Boolean(issuer && issuer.includes('auth.privy.io'));
+    // Support both old (auth.privy.io) and new (privy.io) issuer formats
+    const isPrivy = Boolean(issuer && (issuer.includes('privy.io')));
+    this.logger.debug(`Is Privy token: ${isPrivy}`);
 
     // Prefer Privy PEM if available for tokens issued by Privy
     if (isPrivy) {
@@ -145,11 +151,11 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     // Privy tokens: strict validation with no bypass
     const issuer = payload?.iss;
 
-    // Strict issuer validation - must be exactly from Privy
-    const validIssuers = ['https://auth.privy.io', 'auth.privy.io'];
-    if (!(typeof issuer === 'string' && validIssuers.some(valid => issuer === valid || issuer === `https://${valid}`))) {
+    // Strict issuer validation - must be from Privy (supports both old and new formats)
+    const validIssuers = ['https://auth.privy.io', 'auth.privy.io', 'privy.io', 'https://privy.io'];
+    if (!(typeof issuer === 'string' && validIssuers.some(valid => issuer === valid || issuer.includes('privy.io')))) {
       this.logger.error(`Invalid token issuer: ${issuer}`);
-      throw new Error('Invalid token issuer - must be from auth.privy.io');
+      throw new Error('Invalid token issuer - must be from privy.io');
     }
 
     // Verify audience matches our app

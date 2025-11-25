@@ -34,8 +34,15 @@ logs/
 # Docker
 *.pid
 docker-data/
+docker-compose.dev.yml
+docker-compose.full.yml
+docker-compose.minimal.yml
+docker-compose.prod.yml
+Dockerfile
+Dockerfile.migration
 
 # Project-specific exclusions
 Copil.md
 onebalance.txt
 web/
+docs/PRD.md

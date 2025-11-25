@@ -3,6 +3,10 @@ import { AppModule } from './app.module';
 import { HealthService } from './health.service';
 import * as http from 'http';
 import { validateRequiredEnv } from './env.validation';
+import * as dotenv from 'dotenv';
+
+// Load environment variables
+dotenv.config();
 
 async function bootstrap() {
   validateRequiredEnv();
