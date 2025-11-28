@@ -20,14 +20,27 @@ export class AuthService {
     private readonly smartAccountService: SmartAccountService,
   ) {}
 
-  async findOrCreateUser(privyDid: string, email: string, walletAddress?: string): Promise<User> {
+  async findOrCreateUser(privyDid: string, email: string | undefined, walletAddress?: string): Promise<User> {
+    // First try to find by privyDid (the primary identifier)
     let user = await this.userRepository.findOne({
       where: { privyDid },
       relations: ['wallets'],
     });
 
-    if (!user) {
-      this.logger.log(`Creating new user for privy DID ${privyDid}`);
+    if (user) {
+      // Update email if changed
+      if (email && user.email !== email) {
+        this.logger.log(`Updating email for user ${user.id} from ${user.email} to ${email}`);
+        user.email = email;
+        user = await this.userRepository.save(user);
+      }
+      return user;
+    }
+
+    // User not found, create new one
+    this.logger.log(`Creating new user for privy DID ${privyDid}`);
+
+    try {
       const newUser = this.userRepository.create({ privyDid, email });
       user = await this.userRepository.save(newUser);
 
@@ -35,11 +48,27 @@ export class AuthService {
       if (walletAddress) {
         await this.createWalletsForUser(user, walletAddress);
       }
+
       // Re-fetch user with wallets
       user = await this.userRepository.findOne({
         where: { id: user.id },
         relations: ['wallets'],
       });
+    } catch (error: unknown) {
+      // Handle race condition - user might have been created by another request
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      if (errorMessage.includes('duplicate key') || errorMessage.includes('unique constraint')) {
+        this.logger.warn(`Race condition detected for privyDid ${privyDid}, fetching existing user`);
+        user = await this.userRepository.findOne({
+          where: { privyDid },
+          relations: ['wallets'],
+        });
+        if (!user) {
+          throw error; // Re-throw if we still can't find the user
+        }
+      } else {
+        throw error;
+      }
     }
 
     return user!;

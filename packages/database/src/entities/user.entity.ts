@@ -11,8 +11,8 @@ export class User {
   @PrimaryGeneratedColumn()
   id!: number;
 
-  @Column({ type: 'text', unique: true })
-  email!: string;
+  @Column({ type: 'text', nullable: true })
+  email?: string;
 
   @Column({ type: 'text', unique: true, name: 'privyDid' })
   privyDid!: string;

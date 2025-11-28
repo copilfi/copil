@@ -7,7 +7,7 @@ pnpm-debug.log
 # Environment files
 .env
 .env.*
-!.env.example
+.env.example
 
 # Build outputs
 dist/
