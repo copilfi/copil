@@ -1,6 +1,7 @@
 {
   "compilerOptions": {
-    "target": "ES2020",
+    "target": "ES2022",
+    "lib": ["ES2022"],
     "module": "commonjs",
     "declaration": true,
     "strict": true,
@@ -10,6 +11,8 @@
     "experimentalDecorators": true,
     "emitDecoratorMetadata": true,
     "composite": true,
-    "sourceMap": true
+    "sourceMap": true,
+    "moduleResolution": "node",
+    "types": ["node"]
   }
 }

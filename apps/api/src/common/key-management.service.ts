@@ -179,7 +179,7 @@ export class KeyManagementService implements OnModuleInit {
         return undefined;
       }
 
-      const data = await response.json();
+      const data = await response.json() as { data: { data: { privateKey: string } } };
       const privateKey = data?.data?.data?.privateKey;
 
       if (!privateKey) {

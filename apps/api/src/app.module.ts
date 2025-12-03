@@ -39,18 +39,17 @@ import { MarketModule } from './market/market.module';
     }),
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
+      useFactory: () => ({
         type: 'postgres',
-        host: configService.get<string>('DB_HOST'),
-        port: configService.get<number>('DB_PORT'),
-        username: configService.get<string>('DB_USERNAME'),
-        password: configService.get<string>('DB_PASSWORD'),
-        database: configService.get<string>('DB_DATABASE'),
+        host: process.env.DB_HOST,
+        port: parseInt(process.env.DB_PORT || '5432', 10),
+        username: process.env.DB_USERNAME,
+        password: process.env.DB_PASSWORD,
+        database: process.env.DB_DATABASE,
         entities: [User, Wallet, Strategy, TransactionLog, TokenPrice, SessionKey, TokenMetadata, ChatMemory, ChatEmbedding],
         migrations: [__dirname + '/database/migrations/*{.ts,.js}'],
         synchronize: false, // Disable auto-schema sync, we will use migrations
       }),
-      inject: [ConfigService],
     }),
     BullModule.forRoot({
       url: `redis://${process.env.REDIS_HOST || 'localhost'}:${process.env.REDIS_PORT || '6379'}`,

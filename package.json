@@ -4,6 +4,10 @@
   "scripts": {
     "build": "turbo build",
     "dev": "turbo dev",
+    "dev:api": "turbo dev --filter=api",
+    "dev:strategy-evaluator": "turbo dev --filter=strategy-evaluator",
+    "dev:transaction-executor": "turbo dev --filter=transaction-executor",
+    "dev:data-ingestor": "turbo dev --filter=data-ingestor",
     "lint": "turbo lint",
     "format": "prettier --write \"**/*.{ts,tsx,md}\"",
     "e2e:smoke": "node scripts/e2e-smoke.mjs",

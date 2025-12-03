@@ -1,0 +1,4 @@
+# Prevent .env files from being copied into Docker containers
+**/.env
+apps/**/.env
+.env*

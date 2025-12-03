@@ -16,14 +16,19 @@ import { ConfigService } from '@nestjs/config';
     AddressService,
     {
       provide: ChainAbstractionClient,
-      useFactory: (configService: ConfigService) => {
-        const apiKey = configService.get<string>('ONEBALANCE_API_KEY');
+      useFactory: () => {
+        console.log('=== DEBUGGING process.env ===');
+        console.log('ONEBALANCE_API_KEY:', process.env.ONEBALANCE_API_KEY);
+        console.log('DB_HOST:', process.env.DB_HOST);
+        console.log('All env vars with ONEBALANCE:', Object.keys(process.env).filter(k => k.includes('ONEBALANCE')));
+        console.log('=== END DEBUGGING ===');
+        
+        const apiKey = process.env.ONEBALANCE_API_KEY;
         if (!apiKey) {
           throw new Error('ONEBALANCE_API_KEY is not defined in environment variables.');
         }
         return new ChainAbstractionClient(apiKey);
       },
-      inject: [ConfigService],
     },
   ],
   exports: [PortfolioService, ChainAbstractionClient],

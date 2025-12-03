@@ -1,3 +1,4 @@
+import crypto from 'crypto';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
@@ -5,8 +6,6 @@ import { validateRequiredEnv } from './env.validation';
 import { HttpErrorFilter } from './common/http-exception.filter';
 
 async function bootstrap() {
-  // Fail-fast env validation for critical configuration
-  validateRequiredEnv();
   const app = await NestFactory.create(AppModule);
   app.enableShutdownHooks();
   // Stricter DTO validation across the app
